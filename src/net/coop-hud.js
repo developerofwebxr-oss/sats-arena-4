@@ -1,0 +1,273 @@
+/**
+ * coop-hud.js — Co-op session panel (join by numeric code).
+ *
+ * Completely independent of the existing HUD. Creates a slide-out panel at
+ * the bottom-left. Calls room.js for all networking.
+ */
+
+import {
+  joinSession,
+  leaveSession,
+  onPeerJoin,
+  onPeerLeave,
+  getParticipantCount,
+  getRoomName,
+  setMicEnabled,
+} from './room.js';
+
+let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
+let currentMode = 'flat';
+let joined = false;
+let muted = false;
+
+// Called from main.js when the XR mode changes.
+export function setCoopMode(mode) {
+  currentMode = mode; // 'flat' | 'vr' | 'ar'
+}
+
+export function setupCoopHud() {
+  injectStyles();
+
+  // Toggle button (always visible, bottom-left)
+  const toggle = document.createElement('button');
+  toggle.id = 'coop-toggle';
+  toggle.textContent = '👥 CO-OP';
+  toggle.addEventListener('click', () => {
+    panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
+  });
+  document.body.appendChild(toggle);
+
+  // Panel
+  panel = document.createElement('div');
+  panel.id = 'coop-panel';
+  panel.style.display = 'none';
+
+  panel.innerHTML = `
+    <div id="coop-title">CO-OP SESSION</div>
+    <div class="coop-row">
+      <label class="coop-label">SESSION CODE</label>
+      <div class="coop-code-row">
+        <input id="coop-code" type="text" inputmode="numeric" pattern="[0-9]*"
+               maxlength="6" placeholder="1234" autocomplete="off" spellcheck="false" />
+        <button id="coop-gen" title="Generate random code">⟳</button>
+      </div>
+    </div>
+    <div class="coop-row">
+      <label class="coop-label">YOUR NAME</label>
+      <input id="coop-name" type="text" maxlength="20" placeholder="Player" autocomplete="off" />
+    </div>
+    <div class="coop-btn-row">
+      <button id="coop-join">JOIN</button>
+      <button id="coop-leave" style="display:none">LEAVE</button>
+      <button id="coop-mute" style="display:none">🎙 MUTE</button>
+    </div>
+    <div id="coop-status"></div>
+    <div id="coop-active" style="display:none">
+      <div id="coop-code-display"></div>
+      <div id="coop-count">Players: 1</div>
+    </div>
+  `;
+
+  document.body.appendChild(panel);
+
+  codeInput   = panel.querySelector('#coop-code');
+  nameInput   = panel.querySelector('#coop-name');
+  joinBtn     = panel.querySelector('#coop-join');
+  statusEl    = panel.querySelector('#coop-status');
+  countEl     = panel.querySelector('#coop-count');
+  codeDisplay = panel.querySelector('#coop-code-display');
+  muteBtn     = panel.querySelector('#coop-mute');
+  const leaveBtn = panel.querySelector('#coop-leave');
+  const genBtn   = panel.querySelector('#coop-gen');
+
+  // Load saved name
+  nameInput.value = localStorage.getItem('coopName') || '';
+
+  genBtn.addEventListener('click', () => {
+    codeInput.value = String(Math.floor(1000 + Math.random() * 9000));
+  });
+
+  joinBtn.addEventListener('click', handleJoin);
+  leaveBtn.addEventListener('click', handleLeave);
+  muteBtn.addEventListener('click', handleMute);
+
+  // Peer events
+  onPeerJoin((identity, displayName) => {
+    setStatus(`${displayName} joined`, 'ok');
+    refreshCount();
+  });
+  onPeerLeave((identity) => {
+    setStatus('A player left', 'warn');
+    refreshCount();
+  });
+}
+
+async function handleJoin() {
+  const code = codeInput.value.trim();
+  const name = nameInput.value.trim() || 'Player';
+
+  if (!code || !/^\d+$/.test(code)) {
+    setStatus('Enter a numeric session code', 'err');
+    return;
+  }
+
+  localStorage.setItem('coopName', name);
+  joinBtn.disabled = true;
+  setStatus('Connecting…', '');
+
+  try {
+    await joinSession(code, { name, mode: currentMode });
+    joined = true;
+    showJoined(code);
+    setStatus('Connected!', 'ok');
+    refreshCount();
+  } catch (err) {
+    console.error('[coop]', err);
+    setStatus(err.message, 'err');
+    joinBtn.disabled = false;
+  }
+}
+
+async function handleLeave() {
+  await leaveSession();
+  joined = false;
+  showDisconnected();
+  setStatus('Left session', '');
+}
+
+async function handleMute() {
+  muted = !muted;
+  await setMicEnabled(!muted);
+  muteBtn.textContent = muted ? '🔇 UNMUTE' : '🎙 MUTE';
+}
+
+function showJoined(code) {
+  panel.querySelector('#coop-join').style.display  = 'none';
+  panel.querySelector('#coop-leave').style.display = 'inline-block';
+  muteBtn.style.display = 'inline-block';
+  panel.querySelector('#coop-active').style.display = 'block';
+  codeDisplay.textContent = `CODE: ${code}`;
+}
+
+function showDisconnected() {
+  joinBtn.style.display  = 'inline-block';
+  joinBtn.disabled = false;
+  panel.querySelector('#coop-leave').style.display = 'none';
+  muteBtn.style.display = 'none';
+  panel.querySelector('#coop-active').style.display = 'none';
+  muted = false;
+  muteBtn.textContent = '🎙 MUTE';
+}
+
+function refreshCount() {
+  const n = getParticipantCount();
+  countEl.textContent = `Players: ${n}`;
+}
+
+function setStatus(msg, level) {
+  statusEl.textContent = msg;
+  statusEl.className = level === 'err' ? 'coop-err' : level === 'ok' ? 'coop-ok' : '';
+}
+
+function injectStyles() {
+  const s = document.createElement('style');
+  s.textContent = `
+    #coop-toggle {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      z-index: 9000;
+      background: rgba(0,0,0,0.75);
+      color: #7df;
+      border: 1px solid #7df;
+      border-radius: 6px;
+      padding: 8px 14px;
+      font: 700 13px/1 monospace;
+      cursor: pointer;
+      letter-spacing: .08em;
+    }
+    #coop-toggle:hover { background: rgba(0,120,180,0.4); }
+
+    #coop-panel {
+      position: fixed;
+      bottom: 54px;
+      left: 16px;
+      z-index: 9000;
+      background: rgba(0,0,0,0.88);
+      border: 1px solid #7df;
+      border-radius: 10px;
+      padding: 14px 16px 12px;
+      width: 240px;
+      flex-direction: column;
+      gap: 10px;
+      font-family: monospace;
+      color: #ddf;
+    }
+    #coop-title {
+      font: 700 12px/1 monospace;
+      letter-spacing: .15em;
+      color: #7df;
+      margin-bottom: 2px;
+    }
+    .coop-row { display: flex; flex-direction: column; gap: 4px; }
+    .coop-label { font-size: 10px; letter-spacing: .12em; color: #7df; opacity:.7; }
+    .coop-code-row { display: flex; gap: 6px; }
+    .coop-code-row input { flex: 1; }
+
+    #coop-panel input {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid #7df6;
+      border-radius: 5px;
+      color: #eef;
+      font: 15px monospace;
+      padding: 6px 8px;
+      width: 100%;
+      box-sizing: border-box;
+      letter-spacing: .08em;
+    }
+    #coop-gen {
+      background: rgba(0,0,0,0.5);
+      border: 1px solid #7df6;
+      border-radius: 5px;
+      color: #7df;
+      font: 700 14px monospace;
+      cursor: pointer;
+      padding: 0 10px;
+      flex-shrink: 0;
+    }
+    .coop-btn-row { display: flex; gap: 8px; align-items: center; }
+    #coop-join, #coop-leave {
+      flex: 1;
+      padding: 8px 0;
+      border-radius: 6px;
+      border: none;
+      font: 700 12px monospace;
+      letter-spacing: .1em;
+      cursor: pointer;
+    }
+    #coop-join { background: #7df; color: #003; }
+    #coop-join:disabled { opacity: .5; cursor: default; }
+    #coop-leave { background: #433; color: #faa; border: 1px solid #f66; }
+    #coop-mute  {
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #7df6;
+      background: rgba(0,0,0,.5);
+      color: #adf;
+      font: 12px monospace;
+      cursor: pointer;
+    }
+    #coop-status { font-size: 11px; min-height: 14px; }
+    .coop-err { color: #f88; }
+    .coop-ok  { color: #8f8; }
+    #coop-active { border-top: 1px solid #7df3; padding-top: 8px; }
+    #coop-code-display {
+      font: 700 18px monospace;
+      letter-spacing: .2em;
+      color: #ffe;
+      text-align: center;
+    }
+    #coop-count { font-size: 11px; color: #adf; text-align: center; margin-top: 4px; }
+  `;
+  document.head.appendChild(s);
+}

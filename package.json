@@ -8,6 +8,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "livekit-client": "^2.20.0",
     "qrcode": "^1.5.4",
     "three": "^0.167.0"
   },

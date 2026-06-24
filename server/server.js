@@ -18,6 +18,7 @@
 
 import express from 'express';
 import cors from 'cors';
+import { AccessToken } from 'livekit-server-sdk';
 
 // ── Config (all from env; sensible defaults for everything except the secret) ──
 const PORT           = process.env.PORT || 8080;
@@ -28,6 +29,14 @@ const INVOICE_AMOUNT = parseInt(process.env.INVOICE_AMOUNT || '21', 10);
 // Add http(s)://localhost:5173 here in Railway while testing from a dev server.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'https://developerofwebxr-oss.github.io')
   .split(',').map((s) => s.trim()).filter(Boolean);
+
+// ── LiveKit config ─────────────────────────────────────────────────────────────
+const LK_API_KEY    = process.env.LIVEKIT_API_KEY    || '';
+const LK_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
+
+if (!LK_API_KEY || !LK_API_SECRET) {
+  console.warn('⚠  LIVEKIT_API_KEY and/or LIVEKIT_API_SECRET are not set — /token will fail.');
+}
 
 if (!LNBITS_URL || !INVOICE_KEY) {
   console.warn('⚠  LNBITS_URL and/or LNBITS_INVOICE_KEY are not set — invoice routes will fail until they are.');
@@ -93,6 +102,31 @@ app.use(cors({
 
 app.get('/', (_req, res) => res.type('text').send('Sats Arena backend — ok'));
 app.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Issue a LiveKit JWT. The browser calls this with a room name (= session code)
+// and a display identity; gets back a short-lived token it passes to the LiveKit
+// client SDK. The API key/secret never leave this server.
+app.post('/token', async (req, res) => {
+  const { room, identity } = req.body || {};
+  if (!room || !identity) {
+    return res.status(400).json({ error: 'room and identity are required' });
+  }
+  if (!LK_API_KEY || !LK_API_SECRET) {
+    return res.status(500).json({ error: 'LiveKit credentials not configured on server' });
+  }
+  try {
+    const at = new AccessToken(LK_API_KEY, LK_API_SECRET, {
+      identity,
+      ttl: '4h',
+    });
+    at.addGrant({ roomJoin: true, room, canPublish: true, canSubscribe: true });
+    const token = await at.toJwt();
+    res.json({ token });
+  } catch (err) {
+    console.error('token error', err.message);
+    res.status(500).json({ error: 'failed to generate token' });
+  }
+});
 
 // Create a new session → returns its 4-char code.
 app.post('/session', (_req, res) => {

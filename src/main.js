@@ -14,6 +14,9 @@ import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
 import { setupLightning } from './lightning.js';
 import { setupVrUI } from './vrui.js';
+import { setupCoopHud, setCoopMode } from './net/coop-hud.js';
+import { setupPeerAvatars } from './net/peer-avatars.js';
+import { setupPosePublisher } from './net/pose-publisher.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -50,7 +53,20 @@ setupARMode({ renderer, scene, environment, weapon, setSpawnMode });
 // Unified SCREEN / VR / AR mode switcher (replaces the separate VR/AR buttons).
 // Returns the mode controller; a future in-world 3D switcher can reuse its
 // enterVR / enterAR / exitToScreen methods.
-setupModeSwitcher(renderer);
+const modeCtrl = setupModeSwitcher(renderer);
+
+// Keep the co-op module aware of the current XR mode so it publishes the right
+// pose joints (VR: head+2 hands; flat/AR: head+aim marker).
+modeCtrl.subscribe((state) => setCoopMode(state.activeMode));
+
+// Co-op HUD (bottom-left toggle panel — join by numeric code).
+setupCoopHud();
+
+// Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
+const { updatePeers } = setupPeerAvatars(scene);
+
+// Local pose publisher — throttled to ~15 Hz over the LiveKit lossy channel.
+const publishPose = setupPosePublisher(renderer, camera, modeCtrl);
 
 // Real Lightning (behind VITE_LIGHTNING). Creates/rehydrates a session + polls
 // paidCount; the HUD charge model banks payments and the player activates them.
@@ -91,6 +107,8 @@ renderer.setAnimationLoop(function animate() {
   updateUpgrade(delta);   // tick the rapid-fire countdown
   updateRapidFireHUD();   // refresh countdown + upgrade button state
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
+  updatePeers(delta);     // interpolate peer avatar positions
+  publishPose(delta);     // broadcast local pose ~15 Hz
 
   renderer.render(scene, camera);
 });
