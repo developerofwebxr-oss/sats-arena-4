@@ -27,9 +27,11 @@ export default defineConfig(({ command }) => ({
   // HTTPS is required for WebXR — browsers refuse immersive-vr sessions on plain HTTP.
   // basicSsl generates a self-signed cert automatically; you'll see a browser warning
   // on first load — just click "proceed anyway". (Dev server only; ignored by build.)
-  plugins: [basicSsl()],
+  // Set VITE_NO_HTTPS=1 to serve HTTP-only (useful for automated verification where
+  // self-signed cert warnings block the tool; WebXR won't work but the UI will).
+  plugins: process.env.VITE_NO_HTTPS ? [] : [basicSsl()],
   server: {
-    https: true,
+    https: process.env.VITE_NO_HTTPS ? false : true,
     // Expose to local network so you can test on a Quest headset on the same WiFi.
     host: true,
   },

@@ -1,6 +1,6 @@
 /**
  * pose-publisher.js — reads local head + hand pose every frame and
- * throttles sendPose() to ~15 Hz over the LiveKit lossy data channel.
+ * throttles sendPose() to ~15 Hz over the lossy data channel.
  *
  * VR:   head = XR camera, hands = controller[0,1]
  * flat: head = flat camera, "hand" = aim point 1m in front of camera
@@ -17,6 +17,9 @@ const INTERVAL = 1 / HZ;
 const _vec3 = new THREE.Vector3();
 const _quat = new THREE.Quaternion();
 const _fwd  = new THREE.Vector3();
+
+// Monotonic sequence counter — included in every packet for stale-packet guard.
+let _seq = 0;
 
 function objToJoint(obj) {
   obj.getWorldPosition(_vec3);
@@ -67,6 +70,6 @@ export function setupPosePublisher(renderer, camera, modeCtrl) {
       hands = [aimJoint(camera)];
     }
 
-    sendPose({ mode: currentMode, head, hands });
+    sendPose({ seq: ++_seq, mode: currentMode, head, hands });
   };
 }
