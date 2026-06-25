@@ -25,7 +25,14 @@
 import { Room, RoomEvent } from 'livekit-client';
 import { MockTransport, BCTransport } from './mockTransport.js';
 
-const BACKEND = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/+$/, '');
+// Normalize: add https:// if the env var was set without a protocol prefix
+// (e.g. "sats-arena-4-production.up.railway.app" → relative URL → 405 on Pages).
+function _normalizeBackend(raw) {
+  if (!raw) return '';
+  const s = raw.replace(/\/+$/, '');
+  return s.startsWith('http') ? s : `https://${s}`;
+}
+const BACKEND = _normalizeBackend(import.meta.env.VITE_BACKEND_URL);
 const LK_URL  = import.meta.env.VITE_LIVEKIT_URL || '';
 
 // ── Transport selection ───────────────────────────────────────────────────────

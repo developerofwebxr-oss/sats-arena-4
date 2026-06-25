@@ -22,8 +22,15 @@
  */
 
 const LIGHTNING_ON = import.meta.env.VITE_LIGHTNING === 'on';
-const BACKEND_URL  = (import.meta.env.VITE_BACKEND_URL
-  || 'https://sats-arena-4-production.up.railway.app').replace(/\/+$/, '');
+// Normalize: add https:// if env var was set without protocol (avoids relative-URL fetch).
+function _normalizeBackend(raw, fallback) {
+  const s = (raw || fallback).replace(/\/+$/, '');
+  return s.startsWith('http') ? s : `https://${s}`;
+}
+const BACKEND_URL = _normalizeBackend(
+  import.meta.env.VITE_BACKEND_URL,
+  'https://sats-arena-4-production.up.railway.app',
+);
 
 const POLL_MS = 2500;
 
