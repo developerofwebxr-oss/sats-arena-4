@@ -1,7 +1,7 @@
 import QRCode from 'qrcode';
 import { playReloadSound } from './audio.js';
 import { grantRapidFire, isRapidFire, getRemainingSeconds } from './upgrade.js';
-import { isLightningEnabled, getSessionCode, getPaidCount, createInvoice, validateCode, createInvoiceForCode } from './lightning.js';
+import { isLightningEnabled, getSessionCode, getPaidCount, createInvoice } from './lightning.js';
 import { getScore } from './score.js';
 
 /**
@@ -19,42 +19,27 @@ import { getScore } from './score.js';
 const RAPID_FIRE_PRICE = 21; // sats — display + (later) the Lightning invoice amount
 
 let countdownEl;
-let scoreEl;        // running SCORE (top-centre)
+let scoreEl;        // running SCORE
 let lastShownScore = -1;
-let codeEl;         // session code (top-left)
-let activatePrompt; // "✓ PAID — ACTIVATE RAPID FIRE" button
 let upgradeBtn;
 
-// Charge model: payments are banked, not auto-fired.
-let activatedCount = 0;   // charges the player has activated (persisted per code)
-let activatedFor   = '';  // which code activatedCount belongs to
-let shownCode      = '';  // last code rendered in the HUD
-let lastPaid       = 0;   // last paidCount seen (to detect a fresh payment)
+// Session upgrade model (Phase 2):
+//   One payment per session upgrades ALL players. paidCount comes from the
+//   server poll in lightning.js. When paidCount rises, we auto-grant rapid-fire
+//   and disable the pay button so no second charge is issued.
+let lastPaid       = 0;   // last paidCount seen (detect a fresh payment)
+let sessionGranted = false; // rapid-fire already granted this session
 
-function activatedStorageKey(code) { return `satsArena_activated_${code}`; }
-
-// Load the persisted activatedCount for a code (so reloads don't re-grant).
-function loadActivated(code) {
-  activatedFor = code;
-  activatedCount = parseInt(localStorage.getItem(activatedStorageKey(code)) || '0', 10);
-}
-function saveActivated() {
-  if (activatedFor) localStorage.setItem(activatedStorageKey(activatedFor), String(activatedCount));
-}
 let payModal;        // payment QR overlay
-let payModalQr;      // <img> for the QR
-let payModalCode;    // session code line
-let payModalStatus;  // "waiting…" / error line
-let payModalOpenLink; // <a href="lightning:..."> open-in-wallet button
-let payModalCopyBtn;  // copy-invoice button
-let currentInvoice = ''; // the active BOLT11 string
-let chooser;          // "pay for this device / a headset" panel
-let chooserInput;     // headset session-code input
-let chooserStatus;    // chooser status line
-let upgradeDefaultHTML = ''; // RAPID FIRE button's normal markup (restored after loading)
-let purchasing = false;      // guards against double-taps while creating an invoice
+let payModalQr;
+let payModalCode;
+let payModalStatus;
+let payModalOpenLink;
+let payModalCopyBtn;
+let currentInvoice = '';
+let upgradeDefaultHTML = '';
+let purchasing = false; // guard against double-taps
 
-// Toggle the RAPID FIRE button between its normal label and a "creating…" spinner.
 function setUpgradeLoading(loading) {
   purchasing = loading;
   if (loading) {
@@ -143,14 +128,12 @@ export function createHUD(onShoot) {
   hud.append(countdownEl);
   document.body.appendChild(hud);
 
-  // ── SCORE (top-left, under the session code) ────────────────────────────────
-  // Left column avoids the top-centre collision with the payment button on a
-  // narrow portrait phone. (In-VR 3D score position is separate, in vrui.js.)
+  // ── SCORE (top-left, below the SESSION chip from coop-hud.js) ─────────────────
   scoreEl = document.createElement('div');
   scoreEl.id = 'score';
   scoreEl.style.cssText = `
     position: fixed;
-    top: 68px;
+    top: 44px;
     left: 16px;
     font-family: monospace;
     font-size: 16px;
@@ -163,63 +146,16 @@ export function createHUD(onShoot) {
   scoreEl.textContent = 'SCORE 0';
   document.body.appendChild(scoreEl);
 
-  // ── Session code (top-left, under the countdown) ────────────────────────────
-  // Shown so it can be read and typed into pay.html on another device.
-  codeEl = document.createElement('div');
-  codeEl.id = 'session-code';
-  codeEl.style.cssText = `
-    position: fixed;
-    top: 44px;
-    left: 16px;
-    font-family: monospace;
-    font-size: 13px;
-    letter-spacing: 0.18em;
-    color: #00e5ff;
-    text-shadow: 0 0 8px #00e5ff;
-    pointer-events: none;
-    user-select: none;
-    display: none;
-  `;
-  document.body.appendChild(codeEl);
-
-  // ── Activate prompt (centre) — appears when a payment is banked ─────────────
-  activatePrompt = document.createElement('button');
-  activatePrompt.id = 'activate-prompt';
-  activatePrompt.style.cssText = `
-    display: none;
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 18px 30px;
-    background: rgba(0,0,0,0.85);
-    color: #b14bff;
-    border: 1px solid #b14bff;
-    font-family: monospace;
-    font-size: 18px;
-    letter-spacing: 0.1em;
-    cursor: pointer;
-    text-shadow: 0 0 10px #b14bff;
-    box-shadow: 0 0 24px rgba(177,75,255,0.5);
-    z-index: 250;
-  `;
-  activatePrompt.addEventListener('click', (e) => {
-    e.stopPropagation();
-    activateCharge();
-    activatePrompt.blur();
-  });
-  document.body.appendChild(activatePrompt);
-
   // ── RAPID FIRE purchase button (top-right) ──────────────────────────────────
-  // One tap = buy 60s of rapid-fire. Shows the price. Top-right keeps it clear of
-  // the countdown (top-left), the mode switcher (bottom-centre) and the crosshair.
+  // Tap = buy 60s of rapid-fire for the whole session. Hidden when not in a session
+  // or after the session has already been upgraded.
   upgradeBtn = document.createElement('button');
   upgradeBtn.id = 'upgrade-btn';
   upgradeBtn.innerHTML = `
     <div style="font-size:18px; letter-spacing:0.12em;">⚡ RAPID FIRE</div>
     <div style="font-size:12px; letter-spacing:0.16em; margin-top:5px; opacity:0.8;">${RAPID_FIRE_PRICE} sats &nbsp;·&nbsp; 60s</div>
   `;
-  upgradeDefaultHTML = upgradeBtn.innerHTML; // saved so the loading state can restore it
+  upgradeDefaultHTML = upgradeBtn.innerHTML;
   upgradeBtn.style.cssText = `
     position: fixed;
     top: 16px;
@@ -236,13 +172,13 @@ export function createHUD(onShoot) {
   `;
 
   upgradeBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); // don't let the click reach the canvas shoot handler
-    openChooser();       // choose: pay for this device, or for a headset's code
-    upgradeBtn.blur();   // drop focus so SPACE shoots instead of re-clicking this
+    e.stopPropagation();
+    purchaseRapidFire();
+    upgradeBtn.blur();
   });
 
-  // No Lightning backend → no purchase path → hide the button (no dead button).
-  if (!isLightningEnabled()) upgradeBtn.style.display = 'none';
+  // Hidden until joined (getSessionCode() returns non-null) and Lightning is on.
+  upgradeBtn.style.display = 'none';
 
   document.body.appendChild(upgradeBtn);
 
@@ -294,117 +230,6 @@ export function createHUD(onShoot) {
   document.body.appendChild(shootBtn);
 
   buildPaymentModal();
-  buildChooserPanel();
-}
-
-// ── Chooser panel: pay for THIS device, or for a VR/AR headset's code ─────────
-function buildChooserPanel() {
-  chooser = document.createElement('div');
-  chooser.id = 'pay-chooser';
-  chooser.style.cssText = `
-    display: none;
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.9);
-    z-index: 300;
-    flex-direction: column; align-items: center; justify-content: center; gap: 18px;
-    font-family: monospace; color: #f7931a; text-align: center; padding: 24px;
-  `;
-
-  const title = document.createElement('div');
-  title.textContent = '⚡ RAPID FIRE — 21 sats';
-  title.style.cssText = 'font-size: 20px; letter-spacing: 0.12em; text-shadow: 0 0 8px #f7931a;';
-
-  // ── Choice 1: this device ──
-  const thisBtn = document.createElement('button');
-  thisBtn.innerHTML = `<div style="font-size:17px; letter-spacing:0.1em;">▶ PAY FOR THIS DEVICE</div>
-    <div style="font-size:12px; opacity:0.75; margin-top:5px; letter-spacing:0.12em;">play right here</div>`;
-  thisBtn.style.cssText = chooserBtnCss('#f7931a') + 'min-width:280px;';
-  thisBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeChooser();
-    purchaseRapidFire(); // existing same-device flow
-  });
-
-  // ── Divider ──
-  const orLine = document.createElement('div');
-  orLine.textContent = '— or —';
-  orLine.style.cssText = 'font-size: 12px; opacity: 0.5; letter-spacing: 0.2em;';
-
-  // ── Choice 2: a VR/AR headset's code ──
-  const headsetLabel = document.createElement('div');
-  headsetLabel.innerHTML = `Paying for a <b>VR/AR headset?</b><br>Enter the session code it's showing:`;
-  headsetLabel.style.cssText = 'font-size: 14px; letter-spacing: 0.06em; line-height: 1.5; color: #00e5ff; text-shadow: 0 0 8px #00e5ff;';
-
-  chooserInput = document.createElement('input');
-  chooserInput.maxLength = 4;
-  chooserInput.autocomplete = 'off';
-  chooserInput.setAttribute('autocapitalize', 'characters');
-  chooserInput.placeholder = 'CODE';
-  chooserInput.style.cssText = `
-    font-family: monospace; font-size: 24px; letter-spacing: 0.3em; text-align: center;
-    text-transform: uppercase; width: 170px; padding: 10px; background: #111;
-    color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px;
-  `;
-  chooserInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleHeadsetPay(); });
-
-  const getInvoiceBtn = document.createElement('button');
-  getInvoiceBtn.textContent = 'GET INVOICE';
-  getInvoiceBtn.style.cssText = chooserBtnCss('#00e5ff');
-  getInvoiceBtn.addEventListener('click', (e) => { e.stopPropagation(); handleHeadsetPay(); });
-
-  chooserStatus = document.createElement('div');
-  chooserStatus.style.cssText = 'font-size: 13px; min-height: 18px; letter-spacing: 0.06em;';
-
-  const cancelBtn = document.createElement('button');
-  cancelBtn.textContent = 'CANCEL';
-  cancelBtn.style.cssText = 'margin-top:4px; padding:10px 20px; background:transparent; color:#888; border:1px solid #555; font-family:monospace; letter-spacing:0.1em; cursor:pointer;';
-  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeChooser(); });
-
-  chooser.append(title, thisBtn, orLine, headsetLabel, chooserInput, getInvoiceBtn, chooserStatus, cancelBtn);
-  document.body.appendChild(chooser);
-}
-
-function chooserBtnCss(color) {
-  return `padding:14px 24px; background:rgba(0,0,0,0.6); color:${color}; border:1px solid ${color};
-    font-family:monospace; text-align:center; cursor:pointer; text-shadow:0 0 8px ${color};`;
-}
-
-function openChooser() {
-  chooserInput.value = '';
-  chooserStatus.textContent = '';
-  chooser.style.display = 'flex';
-}
-function closeChooser() {
-  chooser.style.display = 'none';
-}
-
-// Validate the entered headset code, create an invoice for IT, show the modal.
-// The payer does not poll the code — the headset (which owns it) does.
-async function handleHeadsetPay() {
-  const code = (chooserInput.value || '').trim().toUpperCase();
-  if (!/^[A-Z0-9]{4}$/.test(code)) {
-    chooserStatus.textContent = 'enter the 4-character code';
-    chooserStatus.style.color = '#ffaa00';
-    return;
-  }
-  chooserStatus.textContent = 'checking session…';
-  chooserStatus.style.color = '#f7931a';
-
-  if (!await validateCode(code)) {
-    chooserStatus.textContent = 'session not found or expired — check the code';
-    chooserStatus.style.color = '#ff4444';
-    return;
-  }
-
-  chooserStatus.textContent = 'creating invoice…';
-  try {
-    const { payment_request } = await createInvoiceForCode(code);
-    closeChooser();
-    showPaymentModal(payment_request, code);
-  } catch {
-    chooserStatus.textContent = 'could not reach payment server — try again';
-    chooserStatus.style.color = '#ff4444';
-  }
 }
 
 // ── Payment modal (QR) ──────────────────────────────────────────────────────
@@ -514,13 +339,13 @@ function closePaymentModal() {
 }
 
 // ── purchaseRapidFire ───────────────────────────────────────────────────────
-// One path everywhere: create a 21-sat invoice → show the QR → wait. The poll
-// detects payment, closes the modal, and banks a charge to ACTIVATE. There is no
-// auto-fire — paying never starts rapid-fire directly; activation does.
+// Creates a 21-sat invoice for the shared session code → shows QR to pay.
+// Payment detection happens in updateRapidFireHUD() via the server poll.
 async function purchaseRapidFire() {
-  if (purchasing) return; // already creating an invoice — ignore repeat taps
+  if (purchasing) return;
+  if (getPaidCount() >= 1) return; // session already upgraded
 
-  setUpgradeLoading(true); // immediate feedback while the invoice is created (~2-3s)
+  setUpgradeLoading(true);
   try {
     const { payment_request } = await createInvoice();
     setUpgradeLoading(false);
@@ -534,18 +359,13 @@ async function purchaseRapidFire() {
   }
 }
 
-// ── charge API (used by the DOM prompt and the in-world VR panel) ────────────
-/** Banked, not-yet-activated charges. */
+// ── charge API (VR UI panel still needs getAvailableCharges / activateCharge) ─
 export function getAvailableCharges() {
-  return Math.max(0, getPaidCount() - activatedCount);
+  return (getPaidCount() >= 1 && !sessionGranted) ? 1 : 0;
 }
-
-// Consume one banked charge → start rapid-fire. grantRapidFire() stays the single
-// entry point. activatedCount is persisted so a reload can't re-grant the same charge.
 export function activateCharge() {
-  if (getAvailableCharges() <= 0) return;
-  activatedCount += 1;
-  saveActivated();
+  if (sessionGranted) return;
+  sessionGranted = true;
   grantRapidFire();
   playReloadSound();
 }
@@ -575,39 +395,49 @@ export function updateRapidFireHUD() {
     }
     countdownEl.style.display = 'block';
   } else if (lastShownSecond !== -1) {
-    // Just expired — hide once.
     lastShownSecond = -1;
     countdownEl.style.display = 'none';
   }
 
-  // ── Session code + charge model (Lightning only) ───────────────────────────
+  // ── Session-shared Lightning upgrade ────────────────────────────────────────
+  // Show the buy button only when joined (code set) and session not yet paid.
+  // Once paidCount >= 1, auto-grant rapid-fire and lock out further purchases —
+  // one payment upgrades all players for the session.
   if (!isLightningEnabled()) return;
 
   const code = getSessionCode();
-  if (code && code !== shownCode) {
-    shownCode = code;
-    loadActivated(code);          // restore banked-vs-activated for this code
-    lastPaid = getPaidCount();    // baseline so we don't flash "paid" for old payments
-    codeEl.textContent = `SESSION ${code}`;
-    codeEl.style.display = 'block';
+  if (!code) {
+    // Not in a session yet — hide the button.
+    upgradeBtn.style.display = 'none';
+    return;
   }
-  if (!code) return;
 
-  // A fresh payment arrived → close the pay-QR modal (if the player paid here).
   const paid = getPaidCount();
+
   if (paid > lastPaid) {
+    // Fresh payment — auto-grant rapid-fire (server-authoritative: both clients
+    // poll the same session and each independently calls grantRapidFire()).
     lastPaid = paid;
     closePaymentModal();
+    if (!sessionGranted) {
+      sessionGranted = true;
+      grantRapidFire();
+    }
   }
 
-  // Banked, unactivated charges → show the ACTIVATE prompt (unless already firing).
-  const available = paid - activatedCount;
-  if (available > 0 && !active) {
-    activatePrompt.textContent = available > 1
-      ? `✓ PAID ×${available} — ACTIVATE RAPID FIRE`
-      : '✓ PAID — ACTIVATE RAPID FIRE';
-    activatePrompt.style.display = 'block';
+  if (sessionGranted || paid >= 1) {
+    // Session already upgraded — disable buy button.
+    upgradeBtn.innerHTML = `<div style="font-size:15px; letter-spacing:0.1em;">⚡ SESSION UPGRADED ✓</div>`;
+    upgradeBtn.style.cursor = 'default';
+    upgradeBtn.style.display = 'block';
+    upgradeBtn.disabled = true;
+    upgradeBtn.style.opacity = '0.6';
   } else {
-    activatePrompt.style.display = 'none';
+    // Joinable session, not yet paid.
+    if (upgradeBtn.innerHTML !== upgradeDefaultHTML) upgradeBtn.innerHTML = upgradeDefaultHTML;
+    upgradeBtn.disabled = false;
+    upgradeBtn.style.opacity = '1';
+    upgradeBtn.style.cursor = 'pointer';
+    upgradeBtn.style.display = 'block';
   }
 }

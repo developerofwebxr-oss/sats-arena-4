@@ -12,7 +12,6 @@ import { setupARMode } from './armode.js';
 import { setSpawnMode } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
-import { setupLightning } from './lightning.js';
 import { setupVrUI } from './vrui.js';
 import { setupCoopHud, setCoopMode } from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
@@ -78,11 +77,6 @@ const publishPose = setupPosePublisher(renderer, camera, modeCtrl);
 
 // Dev panel (only renders in mock/bc transport; no-op for LiveKit).
 setupMockDevPanel();
-
-// Real Lightning (behind VITE_LIGHTNING). Creates/rehydrates a session + polls
-// paidCount; the HUD charge model banks payments and the player activates them.
-// No-op when the flag is off.
-setupLightning();
 
 // Wire mouse click and touch tap → onShoot (flat / non-VR mode).
 // In VR mode, xr.js handles shooting via selectstart on the controllers.

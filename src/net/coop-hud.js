@@ -14,8 +14,10 @@ import {
   getRoomName,
   setMicEnabled,
 } from './room.js';
+import { isLightningEnabled, activateWithCode, deactivate as deactivateLightning } from '../lightning.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
+let sessionChip; // fixed top-left chip showing SESSION ####
 let currentMode = 'flat';
 let joined = false;
 let muted = false;
@@ -70,6 +72,17 @@ export function setupCoopHud() {
 
   document.body.appendChild(panel);
 
+  // Persistent SESSION chip — top-left, shown only while joined.
+  sessionChip = document.createElement('div');
+  sessionChip.id = 'session-chip';
+  sessionChip.style.cssText = `
+    position: fixed; top: 16px; left: 16px; z-index: 8000;
+    font: 700 13px/1 monospace; letter-spacing: .18em;
+    color: #7df; text-shadow: 0 0 8px #7df;
+    pointer-events: none; user-select: none; display: none;
+  `;
+  document.body.appendChild(sessionChip);
+
   codeInput   = panel.querySelector('#coop-code');
   nameInput   = panel.querySelector('#coop-name');
   joinBtn     = panel.querySelector('#coop-join');
@@ -121,6 +134,8 @@ async function handleJoin() {
     showJoined(code);
     setStatus('Connected!', 'ok');
     refreshCount();
+    // Unify Lightning session with the coop room code so one payment upgrades all.
+    if (isLightningEnabled()) activateWithCode(code);
   } catch (err) {
     console.error('[coop]', err);
     setStatus(err.message, 'err');
@@ -133,6 +148,7 @@ async function handleLeave() {
   joined = false;
   showDisconnected();
   setStatus('Left session', '');
+  if (isLightningEnabled()) deactivateLightning();
 }
 
 async function handleMute() {
@@ -147,6 +163,8 @@ function showJoined(code) {
   muteBtn.style.display = 'inline-block';
   panel.querySelector('#coop-active').style.display = 'block';
   codeDisplay.textContent = `CODE: ${code}`;
+  sessionChip.textContent = `SESSION ${code}`;
+  sessionChip.style.display = 'block';
 }
 
 function showDisconnected() {
@@ -155,6 +173,7 @@ function showDisconnected() {
   panel.querySelector('#coop-leave').style.display = 'none';
   muteBtn.style.display = 'none';
   panel.querySelector('#coop-active').style.display = 'none';
+  sessionChip.style.display = 'none';
   muted = false;
   muteBtn.textContent = '🎙 MUTE';
 }

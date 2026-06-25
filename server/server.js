@@ -128,12 +128,42 @@ app.post('/token', async (req, res) => {
   }
 });
 
-// Create a new session → returns its 4-char code.
+// Create a new session with a server-generated code → returns { code }.
+// Kept for backward-compat; new clients use PUT /session/:code instead.
 app.post('/session', (_req, res) => {
   const code = makeCode();
   const now = Date.now();
   sessions.set(code, { code, createdAt: now, lastSeen: now, paidCount: 0, openInvoices: [] });
   res.json({ code });
+});
+
+// Create-or-touch a session with a client-chosen code (e.g. the coop room code).
+// Idempotent: calling it again for an existing session just refreshes lastSeen.
+app.put('/session/:code', (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  if (!code) return res.status(400).json({ error: 'code required' });
+  let session = sessions.get(code);
+  if (!session) {
+    const now = Date.now();
+    session = { code, createdAt: now, lastSeen: now, paidCount: 0, openInvoices: [] };
+    sessions.set(code, session);
+  } else {
+    session.lastSeen = Date.now();
+  }
+  res.json({ code, paidCount: session.paidCount });
+});
+
+// Dev-only: increment paidCount directly, bypassing LNbits.
+// Lets the simulate-paid button in the dev panel test upgrade propagation
+// without spending real sats. Both polling clients see the bump.
+app.post('/session/:code/simulate-payment', (req, res) => {
+  const code = String(req.params.code || '').toUpperCase();
+  const session = sessions.get(code);
+  if (!session) return res.status(404).json({ error: 'session not found' });
+  session.paidCount += 1;
+  session.lastSeen = Date.now();
+  console.log(`[dev] simulate-payment for ${code} → paidCount=${session.paidCount}`);
+  res.json({ code, paidCount: session.paidCount });
 });
 
 // Poll a session's status. Side-effect: checks LNbits for any open invoices and
@@ -174,10 +204,15 @@ app.get('/session/:code', async (req, res) => {
 });
 
 // Create a 21-sat invoice tied to a session code.
+// Auto-creates the session if it doesn't exist yet (robustness for late PUT).
 app.post('/session/:code/invoice', async (req, res) => {
   const code = String(req.params.code || '').toUpperCase();
-  const session = sessions.get(code);
-  if (!session) return res.status(404).json({ error: 'session not found' });
+  let session = sessions.get(code);
+  if (!session) {
+    const now = Date.now();
+    session = { code, createdAt: now, lastSeen: now, paidCount: 0, openInvoices: [] };
+    sessions.set(code, session);
+  }
 
   try {
     const inv = await lnbitsCreateInvoice(INVOICE_AMOUNT, `Sats Arena rapid-fire (${code})`);

@@ -1,122 +1,93 @@
 /**
- * lightning.js — real Lightning payment controller (frontend side).
+ * lightning.js — Lightning payment controller (frontend side).
  *
- * Talks to the Sats Arena backend (which holds the LNbits Invoice key — never
- * here). Session-centric: a device gets a short code on load, creates invoices
- * against it, and polls the backend for the session's settled-payment count.
+ * Session model (Phase 2):
+ *   The session code is the SAME code the players share for co-op presence.
+ *   Call activateWithCode(roomCode) from coop-hud.js after a successful join.
+ *   This registers the code on the server (PUT /session/:code) and starts
+ *   polling paidCount. Both players poll the same code → server-authoritative
+ *   upgrade propagation with no LiveKit data-channel plumbing.
  *
- * It only TRACKS payments (getPaidCount). The charge/activation model in hud.js
- * decides when to grant rapid-fire — payments are banked, not auto-fired.
- *
- * Gated by the VITE_LIGHTNING flag.
+ * One payment per session upgrades ALL players. Once paidCount >= 1, the HUD
+ * disables the pay button and grants rapid-fire to every client on their next poll.
  *
  * Public API:
- *   isLightningEnabled()   — is the flag on?
- *   getSessionCode()       — current 4-char code (or null)
- *   getPaidCount()         — total settled payments the backend has seen for this code
- *   setupLightning()       — create/rehydrate session + start polling
- *   createInvoice()        — POST a 21-sat invoice, returns { payment_request, payment_hash }
+ *   isLightningEnabled()    — is VITE_LIGHTNING=on?
+ *   getSessionCode()        — current code (the coop room code, or null)
+ *   getPaidCount()          — settled payments for this session
+ *   activateWithCode(code)  — register the coop code + start polling (call after join)
+ *   deactivate()            — stop polling (call on leave)
+ *   createInvoice()         — POST a 21-sat invoice, returns { payment_request, payment_hash }
+ *   getBackendUrl()         — for dev simulate-payment button
  */
 
 const LIGHTNING_ON = import.meta.env.VITE_LIGHTNING === 'on';
 const BACKEND_URL  = (import.meta.env.VITE_BACKEND_URL
-  || 'https://sats-arena-production.up.railway.app').replace(/\/+$/, '');
+  || 'https://sats-arena-4-production.up.railway.app').replace(/\/+$/, '');
 
-const POLL_MS     = 2500;
-const STORAGE_KEY = 'satsArena_sessionCode';
+const POLL_MS = 2500;
 
 let code      = null;
-let paidCount = 0; // latest from the backend for this code
+let paidCount = 0;
+let _pollTimer = null;
 
 export function isLightningEnabled() { return LIGHTNING_ON; }
-export function getSessionCode() { return code; }
-export function getPaidCount() { return paidCount; }
+export function getSessionCode()     { return code; }
+export function getPaidCount()       { return paidCount; }
+export function getBackendUrl()      { return BACKEND_URL; }
 
-/** setupLightning() — call once at startup. Creates/rehydrates a session + polls. */
-export async function setupLightning() {
+/**
+ * activateWithCode(roomCode) — call from coop-hud.js after joinSession() succeeds.
+ * Registers the coop room code as the Lightning session on the server, then
+ * starts polling paidCount. Idempotent: safe to call if already active.
+ */
+export async function activateWithCode(roomCode) {
   if (!LIGHTNING_ON) return;
+  if (_pollTimer !== null) deactivate(); // clean up any prior poll
 
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored && await sessionExists(stored)) {
-    code = stored;
-  } else {
-    code = await createSession();
-    if (code) localStorage.setItem(STORAGE_KEY, code);
+  try {
+    const res  = await fetch(`${BACKEND_URL}/session/${roomCode}`, { method: 'PUT' });
+    const data = await res.json();
+    code      = roomCode;
+    paidCount = data.paidCount || 0;
+    startPolling();
+  } catch (err) {
+    console.warn('[lightning] session activate failed', err);
   }
+}
 
-  if (code) startPolling();
+/** Stop polling and clear state (called on leave). */
+export function deactivate() {
+  if (_pollTimer !== null) {
+    clearTimeout(_pollTimer);
+    _pollTimer = null;
+  }
+  code      = null;
+  paidCount = 0;
 }
 
 export async function createInvoice() {
-  if (!code) throw new Error('no session');
+  if (!code) throw new Error('no session — join a co-op room first');
   const res = await fetch(`${BACKEND_URL}/session/${code}/invoice`, { method: 'POST' });
   if (!res.ok) throw new Error(`invoice failed (${res.status})`);
   return res.json(); // { payment_hash, payment_request }
 }
 
-// ── Pay for ANOTHER device's session (cross-device: a VR/AR headset's code) ────
-// The payer does NOT poll the code — the owning device does (no-double-poll safety).
-
-/** True if the code is a live session on the backend. */
-export async function validateCode(c) {
-  try {
-    const res = await fetch(`${BACKEND_URL}/session/${c}`);
-    const data = await res.json();
-    return !!data.exists;
-  } catch {
-    return false;
-  }
-}
-
-/** Create a 21-sat invoice for an arbitrary session code (not this device's). */
-export async function createInvoiceForCode(c) {
-  const res = await fetch(`${BACKEND_URL}/session/${c}/invoice`, { method: 'POST' });
-  if (!res.ok) throw new Error(`invoice failed (${res.status})`);
-  return res.json();
-}
-
 // ── Internals ──────────────────────────────────────────────────────────────────
 
-async function createSession() {
-  try {
-    const res = await fetch(`${BACKEND_URL}/session`, { method: 'POST' });
-    const data = await res.json();
-    paidCount = 0;
-    return data.code;
-  } catch (err) {
-    console.warn('Lightning: session create failed', err);
-    return null;
-  }
-}
-
-// Returns true if the code is still live; seeds paidCount from the backend.
-async function sessionExists(c) {
-  try {
-    const res = await fetch(`${BACKEND_URL}/session/${c}`);
-    const data = await res.json();
-    if (data.exists) paidCount = data.paidCount || 0;
-    return !!data.exists;
-  } catch {
-    return false;
-  }
-}
-
 function startPolling() {
-  // Non-overlapping loop: wait POLL_MS AFTER each poll resolves before the next,
-  // so a slow request can never overlap the next one (which would otherwise hit
-  // the backend concurrently for the same code). setTimeout-after-completion
-  // instead of setInterval.
   const tick = async () => {
+    if (!code) return; // deactivated while awaiting
     try {
-      const res = await fetch(`${BACKEND_URL}/session/${code}`);
+      const res  = await fetch(`${BACKEND_URL}/session/${code}`);
       const data = await res.json();
       if (data.exists && typeof data.paidCount === 'number') {
         paidCount = data.paidCount;
       }
     } catch {
-      // transient — try again next tick
+      // transient — retry next tick
     } finally {
-      setTimeout(tick, POLL_MS);
+      if (code) _pollTimer = setTimeout(tick, POLL_MS);
     }
   };
   tick();

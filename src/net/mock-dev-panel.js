@@ -6,11 +6,16 @@
  * Import and call setupMockDevPanel() from main.js after the animation loop starts.
  */
 
-import { getActiveTransportType, getActiveTransport } from './room.js';
+import { getActiveTransportType, getActiveTransport, getRoomName } from './room.js';
+import { isLightningEnabled, getBackendUrl } from '../lightning.js';
+
+const DEV_MODE = new URLSearchParams(location.search).has('dev');
 
 export function setupMockDevPanel() {
+  if (!DEV_MODE) return; // hidden unless ?dev is in the URL
+
   const type = getActiveTransportType();
-  if (type === 'livekit') return; // hidden in live builds
+  if (type === 'livekit') return; // hidden in live builds (no dev controls for real transport)
 
   const transport = getActiveTransport();
   const ctrl = transport?.getDevControls?.();
@@ -59,6 +64,14 @@ function buildPanel(type, ctrl) {
       </div>
       ` : ''}
 
+      ${isLightningEnabled() ? `
+      <div class="mp-section">LIGHTNING (DEV)</div>
+      <button id="mp-simpay" style="width:100%;padding:6px;font:11px monospace;background:#1a0a00;border:1px solid #f7931a;color:#f7931a;border-radius:3px;cursor:pointer;">
+        ⚡ Simulate payment confirmed
+      </button>
+      <div id="mp-simpay-status" style="font-size:10px;color:#678;margin-top:2px;"></div>
+      ` : ''}
+
       <div class="mp-section">STATUS</div>
       <div id="mp-status">—</div>
     </div>
@@ -101,6 +114,26 @@ function buildPanel(type, ctrl) {
       const on = !ctrl.isSpeaking();
       ctrl.setSpeaking(on);
       speakBtn.textContent = `Speaking: ${on ? 'on' : 'off'}`;
+    });
+  }
+
+  // ── Simulate payment (Lightning dev only) ─────────────────────────────────
+  if (isLightningEnabled()) {
+    const simBtn    = document.getElementById('mp-simpay');
+    const simStatus = document.getElementById('mp-simpay-status');
+    simBtn?.addEventListener('click', async () => {
+      const code = getRoomName();
+      if (!code) { simStatus.textContent = 'join a session first'; return; }
+      simStatus.textContent = 'sending…';
+      try {
+        const res  = await fetch(`${getBackendUrl()}/session/${code}/simulate-payment`, { method: 'POST' });
+        const data = await res.json();
+        simStatus.textContent = res.ok
+          ? `✓ paidCount → ${data.paidCount} (both clients will upgrade on next poll)`
+          : `error: ${data.error}`;
+      } catch (e) {
+        simStatus.textContent = `failed: ${e.message}`;
+      }
     });
   }
 
