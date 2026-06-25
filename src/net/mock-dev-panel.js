@@ -15,7 +15,13 @@ export function setupMockDevPanel() {
   if (!DEV_MODE) return; // hidden unless ?dev is in the URL
 
   const type = getActiveTransportType();
-  if (type === 'livekit') return; // hidden in live builds (no dev controls for real transport)
+
+  // When using LiveKit in dev mode, show only the Lightning testing section
+  // (impairment/bot controls are irrelevant — they belong to MockTransport).
+  if (type === 'livekit') {
+    if (isLightningEnabled()) buildLightningOnlyPanel();
+    return;
+  }
 
   const transport = getActiveTransport();
   const ctrl = transport?.getDevControls?.();
@@ -249,4 +255,55 @@ function injectStyles() {
     }
   `;
   document.head.appendChild(s);
+}
+
+// ── Lightning-only panel (LiveKit + DEV_MODE) ─────────────────────────────────
+// Shown on the live URL when ?dev is set and VITE_LIGHTNING=on, so testers can
+// call simulate-payment without switching to the mock transport.
+
+function buildLightningOnlyPanel() {
+  injectStyles();
+
+  const panel = document.createElement('div');
+  panel.id = 'mock-panel';
+  panel.innerHTML = `
+    <div id="mp-header">
+      <span>DEV · LIVEKIT</span>
+      <button id="mp-toggle">▾</button>
+    </div>
+    <div id="mp-body">
+      <div class="mp-section">LIGHTNING (DEV)</div>
+      <button id="mp-simpay" style="width:100%;padding:6px;font:11px monospace;
+        background:#1a0a00;border:1px solid #f7931a;color:#f7931a;border-radius:3px;cursor:pointer;">
+        ⚡ Simulate payment confirmed
+      </button>
+      <div id="mp-simpay-status" style="font-size:10px;color:#678;margin-top:2px;"></div>
+    </div>
+  `;
+  document.body.appendChild(panel);
+
+  const simBtn    = document.getElementById('mp-simpay');
+  const simStatus = document.getElementById('mp-simpay-status');
+  simBtn.addEventListener('click', async () => {
+    const code = getRoomName();
+    if (!code) { simStatus.textContent = 'join a session first'; return; }
+    simStatus.textContent = 'sending…';
+    try {
+      const res  = await fetch(`${getBackendUrl()}/session/${code}/simulate-payment`, { method: 'POST' });
+      const data = await res.json();
+      simStatus.textContent = res.ok
+        ? `✓ paidCount → ${data.paidCount}`
+        : `error: ${data.error}`;
+    } catch (e) {
+      simStatus.textContent = `failed: ${e.message}`;
+    }
+  });
+
+  let collapsed = false;
+  const body = document.getElementById('mp-body');
+  document.getElementById('mp-toggle').addEventListener('click', () => {
+    collapsed = !collapsed;
+    body.style.display = collapsed ? 'none' : '';
+    document.getElementById('mp-toggle').textContent = collapsed ? '▸' : '▾';
+  });
 }
