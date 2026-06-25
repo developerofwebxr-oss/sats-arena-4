@@ -30,6 +30,14 @@ const INVOICE_AMOUNT = parseInt(process.env.INVOICE_AMOUNT || '21', 10);
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'https://developerofwebxr-oss.github.io')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
+// ── Dev-only endpoints ─────────────────────────────────────────────────────────
+// ENABLE_DEV_ENDPOINTS=true in Railway env → POST /session/:code/simulate-payment
+// is active. Leave OFF (unset) for public launches — anyone with the URL can
+// otherwise grant free upgrades without paying.
+// HUMAN ACTION REQUIRED: set this to false / remove it in Railway before going public.
+const DEV_ENDPOINTS = process.env.ENABLE_DEV_ENDPOINTS === 'true';
+if (DEV_ENDPOINTS) console.warn('⚠  ENABLE_DEV_ENDPOINTS=true — dev simulate-payment endpoint is ACTIVE');
+
 // ── LiveKit config ─────────────────────────────────────────────────────────────
 const LK_API_KEY    = process.env.LIVEKIT_API_KEY    || '';
 const LK_API_SECRET = process.env.LIVEKIT_API_SECRET || '';
@@ -48,8 +56,12 @@ const sessions = new Map();
 // payment_hash → code (handy for debugging / a future webhook path)
 const paymentToCode = new Map();
 
-const TTL_MS       = 2 * 60 * 60 * 1000; // 2h of inactivity before a session is dropped
-const SWEEP_MS     = 60 * 1000;          // run the cleanup once a minute
+// 30-minute idle TTL: prevents a paid session code being reused by a different
+// game session within the same numeric range (9000 possible 4-digit codes).
+// Active sessions refresh lastSeen every 2.5s (client poll) so they stay alive
+// as long as any client is connected; only truly idle sessions are purged.
+const TTL_MS       = 30 * 60 * 1000; // 30 min idle → purge
+const SWEEP_MS     = 60 * 1000;      // sweep once a minute
 
 // 4-char codes from an unambiguous alphabet (no 0/O/1/I/L). ~31^4 ≈ 920k codes.
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -154,9 +166,10 @@ app.put('/session/:code', (req, res) => {
 });
 
 // Dev-only: increment paidCount directly, bypassing LNbits.
-// Lets the simulate-paid button in the dev panel test upgrade propagation
-// without spending real sats. Both polling clients see the bump.
+// Active only when ENABLE_DEV_ENDPOINTS=true in the Railway env.
+// Returns 404 when off so the path reveals nothing about the endpoint's existence.
 app.post('/session/:code/simulate-payment', (req, res) => {
+  if (!DEV_ENDPOINTS) return res.status(404).json({ error: 'not found' });
   const code = String(req.params.code || '').toUpperCase();
   const session = sessions.get(code);
   if (!session) return res.status(404).json({ error: 'session not found' });
