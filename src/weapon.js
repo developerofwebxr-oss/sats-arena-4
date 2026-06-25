@@ -77,6 +77,20 @@ const dracoLoader = new DRACOLoader();
 dracoLoader.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
 gltfLoader.setDRACOLoader(dracoLoader);
 
+// ── Peer-gun clone API ────────────────────────────────────────────────────────
+// peer-avatars.js calls cloneGun() to get a clone of the loaded model scene for
+// a peer's right hand. Resolves once the GLB has loaded; safe to call before load.
+// NEVER returns the original — always a deep clone so per-peer material changes
+// or disposal never affect the player's own weapon.
+let _gunLoadedResolve;
+const _gunLoadedPromise = new Promise((r) => { _gunLoadedResolve = r; });
+let _loadedGunScene = null; // set in the gltfLoader success callback below
+
+export async function cloneGun() {
+  await _gunLoadedPromise;
+  return _loadedGunScene.clone(true); // deep clone: own Object3D hierarchy, shared geometry buffers
+}
+
 export function setupWeapon(camera, renderer) {
   // ── Muzzle flash ────────────────────────────────────────────────────────────
   // A billboarded SPRITE carrying a jagged star-burst texture — reads as an energy
@@ -126,6 +140,11 @@ export function setupWeapon(camera, renderer) {
   gltfLoader.load(
     gunModelUrl,
     (gltf) => {
+      // Snapshot the raw scene BEFORE applying player-weapon transforms so
+      // cloneGun() gives peers a clean, unpositioned copy they can place freely.
+      _loadedGunScene = gltf.scene.clone(true);
+      _gunLoadedResolve();
+
       const model = gltf.scene;
 
       // ── DIAGNOSTICS ──────────────────────────────────────────────────────────
