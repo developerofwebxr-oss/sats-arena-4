@@ -103,10 +103,17 @@ export function setupCoopHud() {
     genBtn.disabled = false;
   });
 
+  // Uppercase whatever the user types so 'ab3k' joins the same room as 'AB3K'.
+  codeInput.addEventListener('input', () => {
+    const pos = codeInput.selectionStart;
+    codeInput.value = codeInput.value.toUpperCase();
+    codeInput.setSelectionRange(pos, pos);
+  });
+
   // Pre-fill with a unique code on load (async — doesn't block render).
   _generateUniqueCode().then((code) => {
     if (!codeInput.value) codeInput.value = code; // don't overwrite if user already typed
-    codeInput.placeholder = '0000';
+    codeInput.placeholder = 'AB3K';
   });
 
   joinBtn.addEventListener('click', handleJoin);
@@ -124,12 +131,21 @@ export function setupCoopHud() {
   });
 }
 
-// Pick a random 4-digit code that isn't already an active server session.
+// Alphanumeric alphabet — uppercase only, visually unambiguous (no 0/O/1/I/L).
+const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function _randomCode() {
+  let s = '';
+  for (let i = 0; i < 4; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+  return s;
+}
+
+// Pick a 4-char alphanumeric code that isn't already an active server session.
 // Falls back to the candidate immediately if the server is unreachable.
 async function _generateUniqueCode() {
   const backend = getBackendUrl();
   for (let i = 0; i < 10; i++) {
-    const candidate = String(1000 + Math.floor(Math.random() * 9000));
+    const candidate = _randomCode();
     try {
       const r = await fetch(`${backend}/session/${candidate}`);
       const d = await r.json();
@@ -138,15 +154,15 @@ async function _generateUniqueCode() {
       return candidate; // server unreachable — use candidate
     }
   }
-  return String(1000 + Math.floor(Math.random() * 9000));
+  return _randomCode();
 }
 
 async function handleJoin() {
-  const code = codeInput.value.trim();
+  const code = codeInput.value.trim().toUpperCase();
   const name = nameInput.value.trim() || 'Player';
 
-  if (!code || !/^\d+$/.test(code)) {
-    setStatus('Enter a numeric session code', 'err');
+  if (!code || !/^[A-Z0-9]{1,8}$/.test(code)) {
+    setStatus('Enter a session code', 'err');
     return;
   }
 
