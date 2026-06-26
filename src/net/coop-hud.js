@@ -49,8 +49,8 @@ export function setupCoopHud() {
     <div class="coop-row">
       <label class="coop-label">SESSION CODE</label>
       <div class="coop-code-row">
-        <input id="coop-code" type="text" inputmode="numeric" pattern="[0-9]*"
-               maxlength="6" placeholder="…" autocomplete="off" spellcheck="false" />
+        <input id="coop-code" type="text" inputmode="text" autocapitalize="characters"
+               maxlength="8" placeholder="…" autocomplete="off" spellcheck="false" />
         <button id="coop-gen" title="Generate new unique code">⟳</button>
       </div>
       <div class="coop-hint">Share your code, or enter a friend's to join them.</div>
@@ -99,20 +99,28 @@ export function setupCoopHud() {
 
   genBtn.addEventListener('click', async () => {
     genBtn.disabled = true;
-    codeInput.value = await _generateUniqueCode();
+    const code = await _generateUniqueCode();
+    codeInput.value = code;
+    _updateChip(code);
     genBtn.disabled = false;
   });
 
   // Uppercase whatever the user types so 'ab3k' joins the same room as 'AB3K'.
+  // Also update the chip so it mirrors whatever code is in the field.
   codeInput.addEventListener('input', () => {
     const pos = codeInput.selectionStart;
     codeInput.value = codeInput.value.toUpperCase();
     codeInput.setSelectionRange(pos, pos);
+    _updateChip(codeInput.value);
   });
 
   // Pre-fill with a unique code on load (async — doesn't block render).
+  // Falls back to a locally-generated code if the server is unreachable (no blank).
   _generateUniqueCode().then((code) => {
-    if (!codeInput.value) codeInput.value = code; // don't overwrite if user already typed
+    if (!codeInput.value) {
+      codeInput.value = code;
+      _updateChip(code); // show chip as soon as a code is available, before joining
+    }
     codeInput.placeholder = 'AB3K';
   });
 
@@ -155,6 +163,17 @@ async function _generateUniqueCode() {
     }
   }
   return _randomCode();
+}
+
+// Show the SESSION chip whenever there's a valid code — pre-join (hosting) or joined.
+// Hides the chip only when the field is empty or invalid.
+function _updateChip(code) {
+  if (code && /^[A-Z0-9]{1,8}$/.test(code)) {
+    sessionChip.textContent = `SESSION ${code}`;
+    sessionChip.style.display = 'block';
+  } else {
+    sessionChip.style.display = 'none';
+  }
 }
 
 async function handleJoin() {
@@ -205,8 +224,7 @@ function showJoined(code) {
   muteBtn.style.display = 'inline-block';
   panel.querySelector('#coop-active').style.display = 'block';
   codeDisplay.textContent = `CODE: ${code}`;
-  sessionChip.textContent = `SESSION ${code}`;
-  sessionChip.style.display = 'block';
+  _updateChip(code);
 }
 
 function showDisconnected() {
@@ -215,9 +233,10 @@ function showDisconnected() {
   panel.querySelector('#coop-leave').style.display = 'none';
   muteBtn.style.display = 'none';
   panel.querySelector('#coop-active').style.display = 'none';
-  sessionChip.style.display = 'none';
   muted = false;
   muteBtn.textContent = '🎙 MUTE';
+  // Restore chip to whatever code is in the field (pre-join hosting state).
+  _updateChip(codeInput.value);
 }
 
 function refreshCount() {
