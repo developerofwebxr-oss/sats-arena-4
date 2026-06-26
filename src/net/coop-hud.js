@@ -51,7 +51,7 @@ export function setupCoopHud() {
       <label class="coop-label">FRIEND'S CODE</label>
       <input id="coop-code" type="text" inputmode="text" autocapitalize="characters"
              maxlength="8" placeholder="Enter friend's code" autocomplete="off" spellcheck="false" />
-      <div class="coop-hint">Your code is top-left. Enter a friend's here to connect.</div>
+      <div class="coop-hint">Your code's up top — enter a friend's to connect.</div>
     </div>
     <div class="coop-row">
       <label class="coop-label">YOUR NAME</label>
@@ -260,6 +260,11 @@ function injectStyles() {
       letter-spacing: .08em;
     }
     #coop-toggle:hover { background: rgba(0,120,180,0.4); }
+    /* Mobile only: lift CO-OP button above the SCREEN/VR/AR row (bottom ~67px). */
+    @media (max-width: 480px) {
+      #coop-toggle { bottom: 80px; }
+      #coop-panel  { bottom: 118px; }
+    }
 
     #coop-panel {
       position: fixed;
@@ -299,6 +304,7 @@ function injectStyles() {
       box-sizing: border-box;
       letter-spacing: .08em;
     }
+    #coop-code::placeholder { font-size: 11px; letter-spacing: .03em; }
     #coop-gen {
       background: rgba(0,0,0,0.5);
       border: 1px solid #7df6;
