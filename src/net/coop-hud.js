@@ -51,7 +51,7 @@ export function setupCoopHud() {
       <label class="coop-label">FRIEND'S CODE</label>
       <input id="coop-code" type="text" inputmode="text" autocapitalize="characters"
              maxlength="8" placeholder="Enter friend's code" autocomplete="off" spellcheck="false" />
-      <div class="coop-hint">Your code's up top — enter a friend's to connect.</div>
+      <div class="coop-hint">Your code's up top. Enter a friend's code to connect and play together.</div>
     </div>
     <div class="coop-row">
       <label class="coop-label">YOUR NAME</label>
