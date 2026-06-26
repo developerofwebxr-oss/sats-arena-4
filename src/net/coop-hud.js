@@ -14,7 +14,7 @@ import {
   getRoomName,
   setMicEnabled,
 } from './room.js';
-import { isLightningEnabled, activateWithCode, deactivate as deactivateLightning } from '../lightning.js';
+import { isLightningEnabled, activateWithCode, deactivate as deactivateLightning, getBackendUrl } from '../lightning.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
 let sessionChip; // fixed top-left chip showing SESSION ####
@@ -50,9 +50,10 @@ export function setupCoopHud() {
       <label class="coop-label">SESSION CODE</label>
       <div class="coop-code-row">
         <input id="coop-code" type="text" inputmode="numeric" pattern="[0-9]*"
-               maxlength="6" placeholder="1234" autocomplete="off" spellcheck="false" />
-        <button id="coop-gen" title="Generate random code">⟳</button>
+               maxlength="6" placeholder="…" autocomplete="off" spellcheck="false" />
+        <button id="coop-gen" title="Generate new unique code">⟳</button>
       </div>
+      <div class="coop-hint">Share your code, or enter a friend's to join them.</div>
     </div>
     <div class="coop-row">
       <label class="coop-label">YOUR NAME</label>
@@ -96,8 +97,16 @@ export function setupCoopHud() {
   // Load saved name
   nameInput.value = localStorage.getItem('coopName') || '';
 
-  genBtn.addEventListener('click', () => {
-    codeInput.value = String(Math.floor(1000 + Math.random() * 9000));
+  genBtn.addEventListener('click', async () => {
+    genBtn.disabled = true;
+    codeInput.value = await _generateUniqueCode();
+    genBtn.disabled = false;
+  });
+
+  // Pre-fill with a unique code on load (async — doesn't block render).
+  _generateUniqueCode().then((code) => {
+    if (!codeInput.value) codeInput.value = code; // don't overwrite if user already typed
+    codeInput.placeholder = '0000';
   });
 
   joinBtn.addEventListener('click', handleJoin);
@@ -113,6 +122,23 @@ export function setupCoopHud() {
     setStatus('A player left', 'warn');
     refreshCount();
   });
+}
+
+// Pick a random 4-digit code that isn't already an active server session.
+// Falls back to the candidate immediately if the server is unreachable.
+async function _generateUniqueCode() {
+  const backend = getBackendUrl();
+  for (let i = 0; i < 10; i++) {
+    const candidate = String(1000 + Math.floor(Math.random() * 9000));
+    try {
+      const r = await fetch(`${backend}/session/${candidate}`);
+      const d = await r.json();
+      if (!d.exists) return candidate;
+    } catch {
+      return candidate; // server unreachable — use candidate
+    }
+  }
+  return String(1000 + Math.floor(Math.random() * 9000));
 }
 
 async function handleJoin() {
@@ -232,6 +258,7 @@ function injectStyles() {
     .coop-label { font-size: 10px; letter-spacing: .12em; color: #7df; opacity:.7; }
     .coop-code-row { display: flex; gap: 6px; }
     .coop-code-row input { flex: 1; }
+    .coop-hint { font-size: 9px; color: #7df; opacity: .55; letter-spacing: .03em; }
 
     #coop-panel input {
       background: rgba(255,255,255,0.07);
