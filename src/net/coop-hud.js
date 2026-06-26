@@ -21,6 +21,7 @@ let sessionChip; // fixed top-left chip showing SESSION ####
 let currentMode = 'flat';
 let joined = false;
 let muted = false;
+let ownCode = null; // this device's own generated code (never changes after load)
 
 // Called from main.js when the XR mode changes.
 export function setCoopMode(mode) {
@@ -47,13 +48,10 @@ export function setupCoopHud() {
   panel.innerHTML = `
     <div id="coop-title">CO-OP SESSION</div>
     <div class="coop-row">
-      <label class="coop-label">SESSION CODE</label>
-      <div class="coop-code-row">
-        <input id="coop-code" type="text" inputmode="text" autocapitalize="characters"
-               maxlength="8" placeholder="…" autocomplete="off" spellcheck="false" />
-        <button id="coop-gen" title="Generate new unique code">⟳</button>
-      </div>
-      <div class="coop-hint">Share your code, or enter a friend's to join them.</div>
+      <label class="coop-label">FRIEND'S CODE</label>
+      <input id="coop-code" type="text" inputmode="text" autocapitalize="characters"
+             maxlength="8" placeholder="Enter friend's code" autocomplete="off" spellcheck="false" />
+      <div class="coop-hint">Your code is top-left. Enter a friend's here to connect.</div>
     </div>
     <div class="coop-row">
       <label class="coop-label">YOUR NAME</label>
@@ -92,36 +90,31 @@ export function setupCoopHud() {
   codeDisplay = panel.querySelector('#coop-code-display');
   muteBtn     = panel.querySelector('#coop-mute');
   const leaveBtn = panel.querySelector('#coop-leave');
-  const genBtn   = panel.querySelector('#coop-gen');
 
   // Load saved name
   nameInput.value = localStorage.getItem('coopName') || '';
 
-  genBtn.addEventListener('click', async () => {
-    genBtn.disabled = true;
-    const code = await _generateUniqueCode();
-    codeInput.value = code;
-    _updateChip(code);
-    genBtn.disabled = false;
-  });
-
-  // Uppercase whatever the user types so 'ab3k' joins the same room as 'AB3K'.
-  // Also update the chip so it mirrors whatever code is in the field.
+  // Uppercase whatever the user types (friend's code field).
   codeInput.addEventListener('input', () => {
     const pos = codeInput.selectionStart;
     codeInput.value = codeInput.value.toUpperCase();
     codeInput.setSelectionRange(pos, pos);
-    _updateChip(codeInput.value);
   });
 
-  // Pre-fill with a unique code on load (async — doesn't block render).
-  // Falls back to a locally-generated code if the server is unreachable (no blank).
-  _generateUniqueCode().then((code) => {
-    if (!codeInput.value) {
-      codeInput.value = code;
-      _updateChip(code); // show chip as soon as a code is available, before joining
+  // Generate this device's own code on load, show it in the top-left chip, and
+  // immediately auto-join that room so a friend typing our code finds us there.
+  // Falls back to a locally-generated code if the server is unreachable — never blank.
+  _generateUniqueCode().then(async (code) => {
+    ownCode = code;
+    _updateChip(code);
+    const savedName = localStorage.getItem('coopName') || nameInput.value || 'Player';
+    try {
+      await joinSession(code, { name: savedName, mode: currentMode });
+      joined = true;
+      if (isLightningEnabled()) activateWithCode(code);
+    } catch (e) {
+      console.warn('[coop] auto-join own room failed', e);
     }
-    codeInput.placeholder = 'AB3K';
   });
 
   joinBtn.addEventListener('click', handleJoin);
@@ -181,7 +174,7 @@ async function handleJoin() {
   const name = nameInput.value.trim() || 'Player';
 
   if (!code || !/^[A-Z0-9]{1,8}$/.test(code)) {
-    setStatus('Enter a session code', 'err');
+    setStatus('Enter your friend\'s code', 'err');
     return;
   }
 
@@ -235,8 +228,8 @@ function showDisconnected() {
   panel.querySelector('#coop-active').style.display = 'none';
   muted = false;
   muteBtn.textContent = '🎙 MUTE';
-  // Restore chip to whatever code is in the field (pre-join hosting state).
-  _updateChip(codeInput.value);
+  // Restore chip to own code (device is no longer in any friend's room).
+  if (ownCode) _updateChip(ownCode);
 }
 
 function refreshCount() {
