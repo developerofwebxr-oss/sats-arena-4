@@ -123,20 +123,30 @@ export function setupCoopHud() {
     codeInput.setSelectionRange(pos, pos);
   });
 
-  // On load: claim own code → store ownerToken → auto-join own room → start owner poll.
+  // On load: claim own code → store ownerToken → start owner polling immediately
+  // (decoupled from room join) → then auto-join own LiveKit room.
+  // Polling and chip are live from the moment of claim — room join failure is
+  // non-fatal (host can still approve/deny; they just won't have presence/audio).
   _claimUniqueCode().then(async ({ code, ownerToken: tok }) => {
-    ownCode     = code;
-    ownerToken  = tok;
+    ownCode    = code;
+    ownerToken = tok;
     _updateChip(code);
-    setOwnerToken(tok); // thread to lightning.js for gated payment-status poll
+    setOwnerToken(tok);
+
+    // Start polling BEFORE auto-join so knock requests are visible even if
+    // the room connection is slow or temporarily fails.
+    _startOwnerPolling();
+
+    if (!tok) return; // claim failed after retries — chip-only mode, no /token call
+
     const savedName = localStorage.getItem('coopName') || nameInput.value || 'Player';
     try {
       await joinSession(code, { name: savedName, mode: currentMode, ownerToken: tok });
       joined = true;
       if (isLightningEnabled()) activateWithCode(code);
-      _startOwnerPolling(); // listen for incoming knock requests
     } catch (e) {
       console.warn('[coop] auto-join own room failed', e);
+      // Polling continues — host can still approve/deny
     }
   });
 
@@ -163,21 +173,27 @@ function _randomCode() {
   return s;
 }
 
-// Claim a unique code via POST /session/:code/claim.
-// Returns { code, ownerToken }. ownerToken may be null if server is unreachable.
+// Claim a unique code via POST /session/:code/claim. Retries with backoff until
+// a code is successfully owned. Falls back to null ownerToken only after 30 failed
+// attempts (server permanently down), so the chip still shows.
 async function _claimUniqueCode() {
   const backend = getBackendUrl();
-  for (let i = 0; i < 10; i++) {
+  let delay = 0;
+  for (let attempt = 0; attempt < 30; attempt++) {
+    if (delay > 0) await new Promise(r => setTimeout(r, delay));
     const candidate = _randomCode();
     try {
-      const res  = await fetch(`${backend}/session/${candidate}/claim`, { method: 'POST' });
+      const res = await fetch(`${backend}/session/${candidate}/claim`, { method: 'POST' });
+      if (!res.ok) { delay = Math.min((delay || 1000) + 1000, 6000); continue; }
       const data = await res.json();
       if (!data.taken) return { code: candidate, ownerToken: data.ownerToken };
+      // Code already claimed — try a different candidate without delay
     } catch {
-      // Server unreachable — use candidate without ownerToken (graceful degradation).
-      return { code: candidate, ownerToken: null };
+      // Network error (cold start, flaky connection) — back off and retry
+      delay = Math.min((delay || 1000) * 2, 8000);
     }
   }
+  console.warn('[coop] claim failed after 30 attempts — chip-only mode');
   return { code: _randomCode(), ownerToken: null };
 }
 
@@ -252,7 +268,15 @@ async function handleJoin() {
     if (isLightningEnabled()) activateWithCode(code);
   } catch (err) {
     console.error('[coop]', err);
-    setStatus(err.message, 'err');
+    const msg = err.message || '';
+    // Map low-level errors to user-friendly messages so "Token fetch failed: 403"
+    // never reaches the user — that would indicate a bypass of the knock flow.
+    const friendly = /403|Token fetch|Not authorized/i.test(msg) ? 'Could not connect — check the code and try again'
+                   : /404|not found/i.test(msg)                  ? 'Session not found — check the code'
+                   : /denied/i.test(msg)                         ? 'Request declined'
+                   : /timed out|expired/i.test(msg)              ? 'Request timed out — try again'
+                   : msg;
+    setStatus(friendly, 'err');
     joinBtn.disabled = false;
   }
 }
@@ -305,9 +329,24 @@ function _stopOwnerPolling() {
 }
 
 // Render / diff incoming request cards inside #coop-requests.
+// Also manages a red badge on the toggle button so the host knows someone
+// is knocking even when the panel is closed.
 function _renderPendingRequests(list) {
   const container = panel.querySelector('#coop-requests');
   if (!container) return;
+
+  // Badge on the CO-OP toggle button
+  const toggle = document.getElementById('coop-toggle');
+  if (toggle) {
+    const existing = toggle.querySelector('.coop-badge');
+    if (list.length > 0 && !existing) {
+      const b = document.createElement('span');
+      b.className = 'coop-badge';
+      toggle.appendChild(b);
+    } else if (list.length === 0 && existing) {
+      existing.remove();
+    }
+  }
 
   const seen = new Set(list.map(r => r.requestId));
 
@@ -437,6 +476,17 @@ function injectStyles() {
       letter-spacing: .08em;
     }
     #coop-toggle:hover { background: rgba(0,120,180,0.4); }
+    /* Red dot alert when someone is knocking and the panel is closed */
+    .coop-badge {
+      position: absolute; top: -5px; right: -5px;
+      width: 10px; height: 10px; border-radius: 50%;
+      background: #f44; border: 1.5px solid #111;
+      animation: coop-pulse 1.2s ease-in-out infinite;
+    }
+    @keyframes coop-pulse {
+      0%,100% { transform: scale(1); opacity: 1; }
+      50%      { transform: scale(1.35); opacity: .7; }
+    }
     /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row,
        centered horizontally over the SCREEN button (left third of mode switcher).
        RECENTER has an inline bottom:90px so we need !important to push it up. */
