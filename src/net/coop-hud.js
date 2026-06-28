@@ -277,13 +277,21 @@ function injectStyles() {
       letter-spacing: .08em;
     }
     #coop-toggle:hover { background: rgba(0,120,180,0.4); }
-    /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row.
-       RECENTER has an inline bottom:90px so we need !important to push it up,
-       creating a 35px gap (105px − 70px mode-top) for the 29px CO-OP button. */
+    /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row,
+       centered horizontally over the SCREEN button (left third of mode switcher).
+       Mode switcher: centered, width=min(100vw-28px,360px), gap=6px → each btn
+       width=(mode_width-12px)/3. CO-OP shares the same left edge + that width.
+       RECENTER has an inline bottom:90px so we need !important to push it up. */
     @media (max-width: 480px) {
       #recenter-btn { bottom: 110px !important; }
-      #coop-toggle  { bottom: 73px; }
-      #coop-panel   { bottom: 112px; }
+      #coop-toggle  {
+        bottom: 73px;
+        left: calc((100vw - min(calc(100vw - 28px), 360px)) / 2);
+        width: calc((min(calc(100vw - 28px), 360px) - 12px) / 3);
+        box-sizing: border-box;
+        text-align: center;
+      }
+      #coop-panel { bottom: 112px; }
     }
 
     #coop-panel {
