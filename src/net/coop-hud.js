@@ -35,7 +35,8 @@ export function setupCoopHud() {
   const toggle = document.createElement('button');
   toggle.id = 'coop-toggle';
   toggle.textContent = '👥 CO-OP';
-  toggle.addEventListener('click', () => {
+  toggle.addEventListener('click', (e) => {
+    e.stopPropagation(); // don't let the click bubble to the tap-outside handler
     panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
   });
   document.body.appendChild(toggle);
@@ -46,6 +47,7 @@ export function setupCoopHud() {
   panel.style.display = 'none';
 
   panel.innerHTML = `
+    <button id="coop-close" aria-label="Close">✕</button>
     <div id="coop-title">CO-OP SESSION</div>
     <div class="coop-row">
       <label class="coop-label">FRIEND'S CODE</label>
@@ -89,7 +91,22 @@ export function setupCoopHud() {
   countEl     = panel.querySelector('#coop-count');
   codeDisplay = panel.querySelector('#coop-code-display');
   muteBtn     = panel.querySelector('#coop-mute');
-  const leaveBtn = panel.querySelector('#coop-leave');
+  const leaveBtn  = panel.querySelector('#coop-leave');
+  const closeBtn  = panel.querySelector('#coop-close');
+
+  // Close X — hides the panel without leaving the session.
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    panel.style.display = 'none';
+  });
+
+  // Tap outside the panel to close it (panel click doesn't bubble out thanks to
+  // stopPropagation on the toggle; only clicks that miss the panel reach document).
+  document.addEventListener('click', () => {
+    if (panel.style.display !== 'none') panel.style.display = 'none';
+  });
+  // Prevent panel clicks from reaching the document handler above.
+  panel.addEventListener('click', (e) => e.stopPropagation());
 
   // Load saved name
   nameInput.value = localStorage.getItem('coopName') || '';
@@ -260,10 +277,13 @@ function injectStyles() {
       letter-spacing: .08em;
     }
     #coop-toggle:hover { background: rgba(0,120,180,0.4); }
-    /* Mobile only: lift CO-OP button above the SCREEN/VR/AR row (bottom ~67px). */
+    /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row.
+       RECENTER has an inline bottom:90px so we need !important to push it up,
+       creating a 35px gap (105px − 70px mode-top) for the 29px CO-OP button. */
     @media (max-width: 480px) {
-      #coop-toggle { bottom: 80px; }
-      #coop-panel  { bottom: 118px; }
+      #recenter-btn { bottom: 110px !important; }
+      #coop-toggle  { bottom: 73px; }
+      #coop-panel   { bottom: 112px; }
     }
 
     #coop-panel {
@@ -286,7 +306,22 @@ function injectStyles() {
       letter-spacing: .15em;
       color: #7df;
       margin-bottom: 2px;
+      padding-right: 20px; /* clear the close button */
     }
+    #coop-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: none;
+      border: none;
+      color: #7df;
+      font: 700 15px/1 monospace;
+      cursor: pointer;
+      padding: 2px 5px;
+      opacity: 0.6;
+      z-index: 1;
+    }
+    #coop-close:hover { opacity: 1; }
     .coop-row { display: flex; flex-direction: column; gap: 4px; }
     .coop-label { font-size: 10px; letter-spacing: .12em; color: #7df; opacity:.7; }
     .coop-code-row { display: flex; gap: 6px; }
