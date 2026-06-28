@@ -34,14 +34,16 @@ const BACKEND_URL = _normalizeBackend(
 
 const POLL_MS = 2500;
 
-let code      = null;
-let paidCount = 0;
+let code       = null;
+let paidCount  = 0;
 let _pollTimer = null;
+let _ownerToken = null;
 
-export function isLightningEnabled() { return LIGHTNING_ON; }
-export function getSessionCode()     { return code; }
-export function getPaidCount()       { return paidCount; }
-export function getBackendUrl()      { return BACKEND_URL; }
+export function isLightningEnabled()    { return LIGHTNING_ON; }
+export function getSessionCode()        { return code; }
+export function getPaidCount()          { return paidCount; }
+export function getBackendUrl()         { return BACKEND_URL; }
+export function setOwnerToken(token)    { _ownerToken = token || null; }
 
 /**
  * activateWithCode(roomCode) — call from coop-hud.js after joinSession() succeeds.
@@ -84,12 +86,13 @@ export async function createInvoice() {
 
 function startPolling() {
   const tick = async () => {
-    if (!code) return; // deactivated while awaiting
+    if (!code) return;
     try {
-      const res  = await fetch(`${BACKEND_URL}/session/${code}`);
-      const data = await res.json();
-      if (data.exists && typeof data.paidCount === 'number') {
-        paidCount = data.paidCount;
+      const headers = _ownerToken ? { Authorization: `Bearer ${_ownerToken}` } : {};
+      const res  = await fetch(`${BACKEND_URL}/session/${code}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.exists && typeof data.paidCount === 'number') paidCount = data.paidCount;
       }
     } catch {
       // transient — retry next tick

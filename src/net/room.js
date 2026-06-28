@@ -67,11 +67,11 @@ class LiveKitTransport {
     this._room = null;
   }
 
-  async join(roomName, identity) {
+  async join(roomName, identity, { ownerToken, admissionTicket } = {}) {
     if (this._room) await this.leave();
     if (!LK_URL) throw new Error('VITE_LIVEKIT_URL is not set. Add it to .env.local.');
 
-    const token = await _fetchLKToken(roomName, identity);
+    const token = await _fetchLKToken(roomName, identity, ownerToken, admissionTicket);
     const room  = new Room({ adaptiveStream: true, dynacast: true });
 
     room.on(RoomEvent.DataReceived, (payload, participant) => {
@@ -113,12 +113,12 @@ class LiveKitTransport {
 
 const _enc = new TextEncoder();
 
-async function _fetchLKToken(roomName, identity) {
+async function _fetchLKToken(roomName, identity, ownerToken, admissionTicket) {
   const base = (import.meta.env.VITE_TOKEN_URL || BACKEND).replace(/\/+$/, '');
   const res  = await fetch(`${base}/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ room: roomName, identity }),
+    body: JSON.stringify({ room: roomName, identity, ownerToken, admissionTicket }),
   });
   if (!res.ok) throw new Error(`Token fetch failed: ${res.status} ${await res.text()}`);
   const { token } = await res.json();
@@ -137,10 +137,10 @@ let _transport = ACTIVE_TYPE === 'bc'
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export async function joinSession(code, { name = 'Player', mode = 'flat' } = {}) {
+export async function joinSession(code, { name = 'Player', mode = 'flat', ownerToken, admissionTicket } = {}) {
   if (!_transport) _transport = new LiveKitTransport();
   const identity = `${name.replace(/\s+/g, '-').slice(0, 20)}-${Date.now().toString(36)}`;
-  await _transport.join(String(code), identity);
+  await _transport.join(String(code), identity, { ownerToken, admissionTicket });
 }
 
 export async function leaveSession() {

@@ -1,8 +1,13 @@
 /**
  * coop-hud.js — Co-op session panel (join by numeric code).
  *
- * Completely independent of the existing HUD. Creates a slide-out panel at
- * the bottom-left. Calls room.js for all networking.
+ * Security model (Phase 4):
+ *   On load: claim own code → get ownerToken → auto-join own room (owner path).
+ *   To join friend: POST /join-request → poll until approved → get admissionTicket
+ *   → POST /token (ticket consumed, single-use) → join LiveKit room (knock path).
+ *   For BC/Mock transport: no server approval required (dev/local only).
+ *
+ * ownerToken is held in memory only, never in localStorage or the DOM.
  */
 
 import {
@@ -13,15 +18,24 @@ import {
   getParticipantCount,
   getRoomName,
   setMicEnabled,
+  getActiveTransportType,
 } from './room.js';
-import { isLightningEnabled, activateWithCode, deactivate as deactivateLightning, getBackendUrl } from '../lightning.js';
+import {
+  isLightningEnabled,
+  activateWithCode,
+  deactivate as deactivateLightning,
+  getBackendUrl,
+  setOwnerToken,
+} from '../lightning.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
-let sessionChip; // fixed top-left chip showing SESSION ####
-let currentMode = 'flat';
-let joined = false;
-let muted = false;
-let ownCode = null; // this device's own generated code (never changes after load)
+let sessionChip;
+let currentMode  = 'flat';
+let joined       = false;
+let muted        = false;
+let ownCode      = null; // this device's own code (never changes after load)
+let ownerToken   = null; // secret returned by /claim; held in memory only
+let _ownerPollTimer = null; // timer for polling pending join requests
 
 // Called from main.js when the XR mode changes.
 export function setCoopMode(mode) {
@@ -31,17 +45,15 @@ export function setCoopMode(mode) {
 export function setupCoopHud() {
   injectStyles();
 
-  // Toggle button (always visible, bottom-left)
   const toggle = document.createElement('button');
   toggle.id = 'coop-toggle';
   toggle.textContent = '👥 CO-OP';
   toggle.addEventListener('click', (e) => {
-    e.stopPropagation(); // don't let the click bubble to the tap-outside handler
+    e.stopPropagation();
     panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
   });
   document.body.appendChild(toggle);
 
-  // Panel
   panel = document.createElement('div');
   panel.id = 'coop-panel';
   panel.style.display = 'none';
@@ -69,11 +81,11 @@ export function setupCoopHud() {
       <div id="coop-code-display"></div>
       <div id="coop-count">Players: 1</div>
     </div>
+    <div id="coop-requests"></div>
   `;
 
   document.body.appendChild(panel);
 
-  // Persistent SESSION chip — top-left, shown only while joined.
   sessionChip = document.createElement('div');
   sessionChip.id = 'session-chip';
   sessionChip.style.cssText = `
@@ -91,44 +103,38 @@ export function setupCoopHud() {
   countEl     = panel.querySelector('#coop-count');
   codeDisplay = panel.querySelector('#coop-code-display');
   muteBtn     = panel.querySelector('#coop-mute');
-  const leaveBtn  = panel.querySelector('#coop-leave');
-  const closeBtn  = panel.querySelector('#coop-close');
+  const leaveBtn = panel.querySelector('#coop-leave');
+  const closeBtn = panel.querySelector('#coop-close');
 
-  // Close X — hides the panel without leaving the session.
   closeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     panel.style.display = 'none';
   });
-
-  // Tap outside the panel to close it (panel click doesn't bubble out thanks to
-  // stopPropagation on the toggle; only clicks that miss the panel reach document).
   document.addEventListener('click', () => {
     if (panel.style.display !== 'none') panel.style.display = 'none';
   });
-  // Prevent panel clicks from reaching the document handler above.
   panel.addEventListener('click', (e) => e.stopPropagation());
 
-  // Load saved name
   nameInput.value = localStorage.getItem('coopName') || '';
 
-  // Uppercase whatever the user types (friend's code field).
   codeInput.addEventListener('input', () => {
     const pos = codeInput.selectionStart;
     codeInput.value = codeInput.value.toUpperCase();
     codeInput.setSelectionRange(pos, pos);
   });
 
-  // Generate this device's own code on load, show it in the top-left chip, and
-  // immediately auto-join that room so a friend typing our code finds us there.
-  // Falls back to a locally-generated code if the server is unreachable — never blank.
-  _generateUniqueCode().then(async (code) => {
-    ownCode = code;
+  // On load: claim own code → store ownerToken → auto-join own room → start owner poll.
+  _claimUniqueCode().then(async ({ code, ownerToken: tok }) => {
+    ownCode     = code;
+    ownerToken  = tok;
     _updateChip(code);
+    setOwnerToken(tok); // thread to lightning.js for gated payment-status poll
     const savedName = localStorage.getItem('coopName') || nameInput.value || 'Player';
     try {
-      await joinSession(code, { name: savedName, mode: currentMode });
+      await joinSession(code, { name: savedName, mode: currentMode, ownerToken: tok });
       joined = true;
       if (isLightningEnabled()) activateWithCode(code);
+      _startOwnerPolling(); // listen for incoming knock requests
     } catch (e) {
       console.warn('[coop] auto-join own room failed', e);
     }
@@ -138,7 +144,6 @@ export function setupCoopHud() {
   leaveBtn.addEventListener('click', handleLeave);
   muteBtn.addEventListener('click', handleMute);
 
-  // Peer events
   onPeerJoin((identity, displayName) => {
     setStatus(`${displayName} joined`, 'ok');
     refreshCount();
@@ -149,7 +154,7 @@ export function setupCoopHud() {
   });
 }
 
-// Alphanumeric alphabet — uppercase only, visually unambiguous (no 0/O/1/I/L).
+// ── Code alphabet — uppercase, visually unambiguous (no 0/O/1/I/L) ─────────────
 const CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function _randomCode() {
@@ -158,25 +163,24 @@ function _randomCode() {
   return s;
 }
 
-// Pick a 4-char alphanumeric code that isn't already an active server session.
-// Falls back to the candidate immediately if the server is unreachable.
-async function _generateUniqueCode() {
+// Claim a unique code via POST /session/:code/claim.
+// Returns { code, ownerToken }. ownerToken may be null if server is unreachable.
+async function _claimUniqueCode() {
   const backend = getBackendUrl();
   for (let i = 0; i < 10; i++) {
     const candidate = _randomCode();
     try {
-      const r = await fetch(`${backend}/session/${candidate}`);
-      const d = await r.json();
-      if (!d.exists) return candidate;
+      const res  = await fetch(`${backend}/session/${candidate}/claim`, { method: 'POST' });
+      const data = await res.json();
+      if (!data.taken) return { code: candidate, ownerToken: data.ownerToken };
     } catch {
-      return candidate; // server unreachable — use candidate
+      // Server unreachable — use candidate without ownerToken (graceful degradation).
+      return { code: candidate, ownerToken: null };
     }
   }
-  return _randomCode();
+  return { code: _randomCode(), ownerToken: null };
 }
 
-// Show the SESSION chip whenever there's a valid code — pre-join (hosting) or joined.
-// Hides the chip only when the field is empty or invalid.
 function _updateChip(code) {
   if (code && /^[A-Z0-9]{1,8}$/.test(code)) {
     sessionChip.textContent = `SESSION ${code}`;
@@ -186,26 +190,65 @@ function _updateChip(code) {
   }
 }
 
+// ── JOIN handler ──────────────────────────────────────────────────────────────
+// BC/Mock transports: join directly (no server approval — dev-only paths).
+// LiveKit: knock flow — POST /join-request → poll → approved ticket → /token.
 async function handleJoin() {
   const code = codeInput.value.trim().toUpperCase();
   const name = nameInput.value.trim() || 'Player';
 
   if (!code || !/^[A-Z0-9]{1,8}$/.test(code)) {
-    setStatus('Enter your friend\'s code', 'err');
+    setStatus("Enter your friend's code", 'err');
     return;
   }
 
   localStorage.setItem('coopName', name);
   joinBtn.disabled = true;
-  setStatus('Connecting…', '');
 
+  if (getActiveTransportType() !== 'livekit') {
+    // BC / Mock — no server gating; join directly for local dev
+    setStatus('Connecting…', '');
+    try {
+      await joinSession(code, { name, mode: currentMode });
+      joined = true;
+      showJoined(code);
+      setStatus('Connected!', 'ok');
+      refreshCount();
+      if (isLightningEnabled()) activateWithCode(code);
+    } catch (err) {
+      console.error('[coop]', err);
+      setStatus(err.message, 'err');
+      joinBtn.disabled = false;
+    }
+    return;
+  }
+
+  // LiveKit — knock flow
+  setStatus(`Requesting to join ${code}…`, '');
   try {
-    await joinSession(code, { name, mode: currentMode });
+    const backend   = getBackendUrl();
+    const knockRes  = await fetch(`${backend}/session/${code}/join-request`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requesterName: name, requesterCode: ownCode }),
+    });
+
+    if (!knockRes.ok) {
+      const err = await knockRes.json().catch(() => ({}));
+      throw new Error(err.error || `Knock failed (${knockRes.status})`);
+    }
+
+    const { requestId } = await knockRes.json();
+    setStatus(`Waiting for ${code} to approve… (90 s)`, '');
+
+    const admissionTicket = await _pollForApproval(code, requestId);
+
+    setStatus('Connecting…', '');
+    await joinSession(code, { name, mode: currentMode, admissionTicket });
     joined = true;
     showJoined(code);
     setStatus('Connected!', 'ok');
     refreshCount();
-    // Unify Lightning session with the coop room code so one payment upgrades all.
     if (isLightningEnabled()) activateWithCode(code);
   } catch (err) {
     console.error('[coop]', err);
@@ -214,7 +257,125 @@ async function handleJoin() {
   }
 }
 
+// Poll GET /session/:code/join-request/:requestId until approved or terminal.
+// Returns the admissionTicket on approval; throws on denial/expiry/timeout.
+async function _pollForApproval(friendCode, requestId, timeoutMs = 90_000) {
+  const backend  = getBackendUrl();
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, 3000));
+
+    const res = await fetch(`${backend}/session/${friendCode}/join-request/${requestId}`);
+    if (!res.ok) throw new Error('Request status check failed');
+    const data = await res.json();
+
+    if (data.status === 'approved') {
+      if (!data.admissionTicket) throw new Error('Approved but no ticket received');
+      return data.admissionTicket;
+    }
+    if (data.status === 'denied')  throw new Error('Join request was denied');
+    if (data.status === 'expired') throw new Error('Join request timed out');
+  }
+
+  throw new Error('Timed out waiting for host approval');
+}
+
+// ── OWNER POLLING — shows incoming knock requests in the panel ─────────────────
+function _startOwnerPolling() {
+  if (getActiveTransportType() !== 'livekit') return; // BC/Mock — no server
+  if (_ownerPollTimer) return;
+  const backend = getBackendUrl();
+  const poll = async () => {
+    if (!ownCode || !ownerToken) return;
+    try {
+      const res = await fetch(`${backend}/session/${ownCode}/requests`, {
+        headers: { Authorization: `Bearer ${ownerToken}` },
+      });
+      if (res.ok) _renderPendingRequests(await res.json());
+    } catch { /* transient */ }
+    _ownerPollTimer = setTimeout(poll, 4000);
+  };
+  _ownerPollTimer = setTimeout(poll, 2000);
+}
+
+function _stopOwnerPolling() {
+  if (_ownerPollTimer) { clearTimeout(_ownerPollTimer); _ownerPollTimer = null; }
+  _renderPendingRequests([]); // clear any shown cards
+}
+
+// Render / diff incoming request cards inside #coop-requests.
+function _renderPendingRequests(list) {
+  const container = panel.querySelector('#coop-requests');
+  if (!container) return;
+
+  const seen = new Set(list.map(r => r.requestId));
+
+  // Remove cards for requests no longer pending
+  for (const card of [...container.querySelectorAll('.coop-req')]) {
+    if (!seen.has(card.dataset.id)) card.remove();
+  }
+
+  // Add new cards
+  for (const r of list) {
+    if (container.querySelector(`[data-id="${r.requestId}"]`)) continue;
+    const card = document.createElement('div');
+    card.className = 'coop-req';
+    card.dataset.id = r.requestId;
+    card.innerHTML = `
+      <span class="req-info">
+        <span class="req-name">${_esc(r.requesterName)}</span>
+        <span class="req-code">${_esc(r.requesterCode)}</span>
+        wants to join
+      </span>
+      <span class="req-btns">
+        <button class="req-approve" title="Approve">✓</button>
+        <button class="req-deny"    title="Deny">✗</button>
+      </span>
+    `;
+    card.querySelector('.req-approve').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      card.remove();
+      await _approveRequest(r.requestId);
+    });
+    card.querySelector('.req-deny').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      card.remove();
+      await _denyRequest(r.requestId);
+    });
+    container.appendChild(card);
+  }
+}
+
+async function _approveRequest(requestId) {
+  const backend = getBackendUrl();
+  try {
+    await fetch(`${backend}/session/${ownCode}/join-request/${requestId}/approve`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+  } catch (e) { console.warn('[coop] approve failed', e); }
+}
+
+async function _denyRequest(requestId) {
+  const backend = getBackendUrl();
+  try {
+    await fetch(`${backend}/session/${ownCode}/join-request/${requestId}/deny`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${ownerToken}` },
+    });
+  } catch (e) { console.warn('[coop] deny failed', e); }
+}
+
+function _esc(str) {
+  return String(str || '').replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
+  );
+}
+
+// ── LEAVE / MUTE ───────────────────────────────────────────────────────────────
 async function handleLeave() {
+  _stopOwnerPolling();
   await leaveSession();
   joined = false;
   showDisconnected();
@@ -245,7 +406,6 @@ function showDisconnected() {
   panel.querySelector('#coop-active').style.display = 'none';
   muted = false;
   muteBtn.textContent = '🎙 MUTE';
-  // Restore chip to own code (device is no longer in any friend's room).
   if (ownCode) _updateChip(ownCode);
 }
 
@@ -279,8 +439,6 @@ function injectStyles() {
     #coop-toggle:hover { background: rgba(0,120,180,0.4); }
     /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row,
        centered horizontally over the SCREEN button (left third of mode switcher).
-       Mode switcher: centered, width=min(100vw-28px,360px), gap=6px → each btn
-       width=(mode_width-12px)/3. CO-OP shares the same left edge + that width.
        RECENTER has an inline bottom:90px so we need !important to push it up. */
     @media (max-width: 480px) {
       #recenter-btn { bottom: 110px !important; }
@@ -314,7 +472,7 @@ function injectStyles() {
       letter-spacing: .15em;
       color: #7df;
       margin-bottom: 2px;
-      padding-right: 20px; /* clear the close button */
+      padding-right: 20px;
     }
     #coop-close {
       position: absolute;
@@ -332,8 +490,6 @@ function injectStyles() {
     #coop-close:hover { opacity: 1; }
     .coop-row { display: flex; flex-direction: column; gap: 4px; }
     .coop-label { font-size: 10px; letter-spacing: .12em; color: #7df; opacity:.7; }
-    .coop-code-row { display: flex; gap: 6px; }
-    .coop-code-row input { flex: 1; }
     .coop-hint { font-size: 9px; color: #7df; opacity: .55; letter-spacing: .03em; }
 
     #coop-panel input {
@@ -348,16 +504,6 @@ function injectStyles() {
       letter-spacing: .08em;
     }
     #coop-code::placeholder { font-size: 11px; letter-spacing: .03em; }
-    #coop-gen {
-      background: rgba(0,0,0,0.5);
-      border: 1px solid #7df6;
-      border-radius: 5px;
-      color: #7df;
-      font: 700 14px monospace;
-      cursor: pointer;
-      padding: 0 10px;
-      flex-shrink: 0;
-    }
     .coop-btn-row { display: flex; gap: 8px; align-items: center; }
     #coop-join, #coop-leave {
       flex: 1;
@@ -391,6 +537,40 @@ function injectStyles() {
       text-align: center;
     }
     #coop-count { font-size: 11px; color: #adf; text-align: center; margin-top: 4px; }
+
+    /* Knock / approval cards */
+    #coop-requests:not(:empty) {
+      border-top: 1px solid #7df3;
+      padding-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .coop-req {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(100,200,255,0.08);
+      border: 1px solid #7df5;
+      border-radius: 6px;
+      padding: 5px 8px;
+      gap: 6px;
+    }
+    .req-info { font-size: 10px; color: #cef; line-height: 1.3; flex: 1; }
+    .req-name { font-weight: 700; color: #7df; display: block; }
+    .req-code { font-size: 9px; opacity: .7; }
+    .req-btns { display: flex; gap: 4px; flex-shrink: 0; }
+    .req-approve, .req-deny {
+      border: none;
+      border-radius: 4px;
+      font: 700 12px monospace;
+      cursor: pointer;
+      padding: 3px 7px;
+    }
+    .req-approve { background: #3a6; color: #fff; }
+    .req-approve:hover { background: #4c8; }
+    .req-deny    { background: #633; color: #faa; }
+    .req-deny:hover { background: #855; }
   `;
   document.head.appendChild(s);
 }
