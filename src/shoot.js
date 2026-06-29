@@ -43,11 +43,28 @@ const RAPID_BURST_SPEED = 4.0;
 const BURST_PALETTE = [0xf7931a, 0xb14bff, 0x00e5ff, 0xffd700] // orange, magenta, cyan, gold
   .map((c) => new THREE.Color(c));
 
+// Lightning zap — fires ONLY on a successful hit during the PAID rapid-fire
+// window (never on misses, never in free play). A jagged main bolt from the shot
+// origin to the hit point plus a few forks, additive electric blue/white, brief.
+// One LineSegments draw call per bolt; capped so rapid hits stay cheap on Quest.
+const BOLT_LIFETIME     = 0.16;   // seconds — flashes and fades fast (crackling zap)
+const BOLT_MAX          = 12;     // hard cap on simultaneous bolts
+const BOLT_SEGMENTS     = 12;     // jaggedness of the main bolt
+const BOLT_JITTER       = 0.11;   // sideways jitter as a fraction of bolt length
+const BOLT_COLOR        = 0xc4e2ff; // electric blue-white (additive → reads white-hot)
+// Thickness faked via jittered strand bundles (GL line width ignored on Quest/ANGLE).
+const BOLT_CORE_STRANDS = 6;      // main bolt thickness
+const BOLT_CORE_THICK   = 0.018;  // metres of fuzz spread for the main bundle
+// Flat/mobile gun muzzle in camera space (≈ the on-screen gun barrel tip). Used
+// as the lightning origin so the bolt is seen from the side, not end-on.
+const MUZZLE_OFFSET = new THREE.Vector3(0.18, -0.16, -0.5);
+
 // onFire — optional callback invoked on every shot fired (hit or miss),
 // e.g. to trigger the weapon muzzle flash.
 export function setupShooter(camera, scene, onFire) {
   const raycaster = new THREE.Raycaster();
-  const _ndc = new THREE.Vector2(); // reused for camera-space aiming
+  const _ndc    = new THREE.Vector2();  // reused for camera-space aiming
+  const _camPos = new THREE.Vector3();  // reused: camera world position for the muzzle
 
   // Active burst objects — each has { points, velocities, age }.
   // Kept small; bursts expire in ~0.35s so rarely more than 2–3 alive at once.
@@ -55,6 +72,9 @@ export function setupShooter(camera, scene, onFire) {
 
   // Active "+21" floating-score sprites — each has { sprite, age }.
   const floaters = [];
+
+  // Active lightning bolts — each has { line, age }.
+  const bolts = [];
 
   // ── Shared burst material ──────────────────────────────────────────────────
   // One material instance reused by all bursts — no extra GPU state changes.
@@ -90,44 +110,53 @@ export function setupShooter(camera, scene, onFire) {
   // Called by input.js for mouse click and touch tap.
   // ndcX/ndcY are Normalised Device Coordinates [-1, +1].
   function onShoot(ndcX, ndcY) {
-    // setupRay aims the raycaster from the camera through the NDC point.
-    // Captured in a closure so rapid-fire bursts re-aim the same way each shot.
-    triggerFire(() => raycaster.setFromCamera(_ndc.set(ndcX, ndcY), camera));
+    // muzzleOrigin = null → doShot derives the flat/mobile gun muzzle from the camera.
+    triggerFire(() => raycaster.setFromCamera(_ndc.set(ndcX, ndcY), camera), null);
   }
 
   // ── shootFromRay ───────────────────────────────────────────────────────────
   // Called by xr.js for Quest controller triggers and handheld screen taps.
-  // origin/direction are world-space, captured at trigger time.
+  // origin IS the gun muzzle — pass it through as the lightning bolt's start.
   function shootFromRay(origin, direction) {
-    triggerFire(() => raycaster.set(origin, direction));
+    const muzzle = origin.clone();
+    triggerFire(() => raycaster.set(origin, direction), muzzle);
   }
 
   // ── triggerFire ──────────────────────────────────────────────────────────
   // One trigger event → one shot, OR a quick burst when rapid-fire is active.
   // setupRay() configures the raycaster for this trigger's aim; it's reused for
-  // every shot in the burst so they all follow the same line.
-  function triggerFire(setupRay) {
-    doShot(setupRay); // first shot fires immediately
+  // every shot in the burst so they all follow the same line. muzzleOrigin (or
+  // null for flat) is the lightning bolt's start point.
+  function triggerFire(setupRay, muzzleOrigin) {
+    doShot(setupRay, muzzleOrigin); // first shot fires immediately
 
     if (isRapidFire()) {
       // Schedule the remaining burst shots a few ms apart for a rifle feel.
       for (let i = 1; i < RAPID_BURST; i++) {
-        setTimeout(() => doShot(setupRay), i * RAPID_INTERVAL_MS);
+        setTimeout(() => doShot(setupRay, muzzleOrigin), i * RAPID_INTERVAL_MS);
       }
     }
   }
 
   // ── doShot ───────────────────────────────────────────────────────────────
   // Fire a single shot: aim, flash, raycast, resolve hit/miss. Free — no cost.
-  function doShot(setupRay) {
+  function doShot(setupRay, muzzleOrigin) {
     setupRay();
+
+    // Lightning bolt start = the GUN MUZZLE (not the eye). For controller shots
+    // muzzleOrigin is the controller pose. For flat/mobile it's null, so derive
+    // the on-screen gun's muzzle as a down-right offset from the camera — this
+    // keeps the bolt off the view axis so it isn't foreshortened to nothing.
+    const boltStart = muzzleOrigin
+      ? muzzleOrigin
+      : MUZZLE_OFFSET.clone().applyQuaternion(camera.quaternion).add(camera.getWorldPosition(_camPos));
 
     // Announce the shot (muzzle flash etc.) — fires for both hits and misses.
     if (onFire) onFire();
 
-    // Broadcast to peers: origin + direction, lossy (a dropped beam is harmless).
+    // Broadcast to peers: origin + direction + rapidFire flag, lossy (a dropped bolt is harmless).
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
-    sendEvent({ t: 'shot', origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z] });
+    sendEvent({ t: 'shot', origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z], rapidFire: isRapidFire() });
 
     // Three's raycaster doesn't skip invisible objects, so a just-hit coin
     // (hidden during its respawn delay) could otherwise intercept the ray in
@@ -157,6 +186,9 @@ export function setupShooter(camera, scene, onFire) {
         recordHit(NORMAL_POINTS);
         playHitSound();
       }
+      // PAID rapid-fire only: a lightning zap along the shot path to the coin.
+      // Hits only (inside `if (hit)`), so misses never spawn a bolt.
+      if (isRapidFire()) spawnLightning(boltStart, hit.point);
     } else {
       recordMiss();
       playMissSound();
@@ -272,6 +304,49 @@ export function setupShooter(camera, scene, onFire) {
       const t = f.age / FLOATER_LIFETIME;
       f.sprite.material.opacity = t < 0.4 ? 1 : 1 - (t - 0.4) / 0.6;
     }
+
+    // Animate lightning bolts — flicker-fade fast, then dispose.
+    for (let i = bolts.length - 1; i >= 0; i--) {
+      const b = bolts[i];
+      b.age += delta;
+      if (b.age >= BOLT_LIFETIME) {
+        scene.remove(b.line);
+        b.line.geometry.dispose();
+        b.line.material.dispose();
+        bolts.splice(i, 1);
+        continue;
+      }
+      // Fade out with a slight random flicker so it crackles rather than dimming smoothly.
+      const t = b.age / BOLT_LIFETIME;
+      b.line.material.opacity = (1 - t) * (0.65 + Math.random() * 0.35);
+    }
+  }
+
+  // ── spawnLightning ───────────────────────────────────────────────────────────
+  // A jagged additive bolt from the shot origin to the hit point, plus forks.
+  // One LineSegments draw call; capped at BOLT_MAX (drop oldest) to stay cheap.
+  function spawnLightning(start, end) {
+    if (bolts.length >= BOLT_MAX) {
+      const old = bolts.shift();
+      scene.remove(old.line);
+      old.line.geometry.dispose();
+      old.line.material.dispose();
+    }
+    const verts = buildBoltSegments(start, end);
+    if (verts.length === 0) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    const mat = new THREE.LineBasicMaterial({
+      color: BOLT_COLOR,
+      transparent: true,
+      opacity: 1,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+    const line = new THREE.LineSegments(geo, mat);
+    line.frustumCulled = false;
+    scene.add(line);
+    bolts.push({ line, age: 0 });
   }
 
   // ── spawnPeerShot ─────────────────────────────────────────────────────────────
@@ -287,7 +362,82 @@ export function setupShooter(camera, scene, onFire) {
     spawnBurst(impactPt, BURST_PARTICLE_COUNT, BURST_SPEED, burstMat);
   }
 
-  return { onShoot, shootFromRay, updateBursts, spawnPeerShot };
+  return { onShoot, shootFromRay, updateBursts, spawnPeerShot, spawnLightning };
+}
+
+// ── buildBoltSegments ────────────────────────────────────────────────────────
+// Builds a Float32Array of LineSegments vertex pairs for one lightning bolt:
+// a jagged main path from start→end (perpendicular jitter, zeroed at the ends)
+// plus a few organic forking branches. Returns flat [ax,ay,az, bx,by,bz, …].
+function buildBoltSegments(start, end) {
+  const dir = end.clone().sub(start);
+  const len = dir.length();
+  if (len < 1e-3) return new Float32Array(0);
+  dir.normalize();
+
+  // Two axes perpendicular to the shot direction, for sideways jitter.
+  let u = new THREE.Vector3(0, 1, 0).cross(dir);
+  if (u.lengthSq() < 1e-4) u = new THREE.Vector3(1, 0, 0);
+  u.normalize();
+  const w = new THREE.Vector3().crossVectors(dir, u).normalize();
+
+  const segs = [];
+  const push = (a, b) => segs.push(a.x, a.y, a.z, b.x, b.y, b.z);
+
+  // A jagged polyline from A→B; jitter peaks mid-span (sin) so the ends anchor.
+  function jaggedPath(A, B, steps, amp) {
+    const span = B.clone().sub(A);
+    const pts = [A.clone()];
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const s = Math.sin(Math.PI * t);
+      const p = A.clone().addScaledVector(span, t);
+      p.addScaledVector(u, (Math.random() - 0.5) * amp * 2 * s);
+      p.addScaledVector(w, (Math.random() - 0.5) * amp * 2 * s);
+      pts.push(p);
+    }
+    pts.push(B.clone());
+    return pts;
+  }
+
+  // Draw a polyline as several fuzzy offset copies → fakes thickness + chaos.
+  function emitStranded(pts, strands, thick) {
+    for (let s = 0; s < strands; s++) {
+      let prev = null;
+      for (let i = 0; i < pts.length; i++) {
+        const o = pts[i].clone()
+          .addScaledVector(u, (Math.random() - 0.5) * thick)
+          .addScaledVector(w, (Math.random() - 0.5) * thick);
+        if (prev) push(prev, o);
+        prev = o;
+      }
+    }
+  }
+
+  const amp = len * BOLT_JITTER;
+
+  // Main bolt — a thick, chaotic bundle.
+  const main = jaggedPath(start, end, BOLT_SEGMENTS, amp);
+  emitStranded(main, BOLT_CORE_STRANDS, len * BOLT_CORE_THICK);
+
+  // Forking branches off interior points. The first couple are noticeably THICKER
+  // and more chaotic; the rest are thin wispy tendrils.
+  const forks = 3 + (Math.random() * 2 | 0); // 3–4
+  for (let f = 0; f < forks; f++) {
+    const idx = 2 + (Math.random() * (main.length - 4) | 0);
+    const p = main[idx];
+    const bdir = dir.clone().multiplyScalar(0.3)
+      .addScaledVector(u, (Math.random() - 0.5) * 2.2)
+      .addScaledVector(w, (Math.random() - 0.5) * 2.2)
+      .normalize();
+    const blen = len * (0.14 + Math.random() * 0.26);
+    const bend = p.clone().addScaledVector(bdir, blen);
+    const bpts = jaggedPath(p, bend, 3 + (Math.random() * 2 | 0), amp * 0.9);
+    const thick = f < 2;
+    emitStranded(bpts, thick ? 4 : 2, len * (thick ? 0.012 : 0.005));
+  }
+
+  return new Float32Array(segs);
 }
 
 // ── Star point-sprite texture (drawn once, shared) ──────────────────────────────

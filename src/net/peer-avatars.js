@@ -299,10 +299,15 @@ class PeerAvatar {
   }
 
   // Trigger the peer shot VFX from this avatar's gun world position.
-  fireFromGun(dir, spawnPeerShot) {
-    if (!this._hasOrigin || !spawnPeerShot) return;
+  // spawnLightning is only passed when msg.rapidFire === true.
+  fireFromGun(dir, spawnPeerShot, spawnLightning) {
+    if (!this._hasOrigin) return;
     this._gunGroup.getWorldPosition(_muzzle);
-    spawnPeerShot(_muzzle.clone(), dir);
+    if (spawnPeerShot) spawnPeerShot(_muzzle.clone(), dir);
+    if (spawnLightning) {
+      const boltEnd = _muzzle.clone().addScaledVector(dir, 5.0);
+      spawnLightning(_muzzle.clone(), boltEnd);
+    }
   }
 
   // ── Opacity ───────────────────────────────────────────────────────────────
@@ -333,7 +338,7 @@ class PeerAvatar {
 
 // ── Manager ───────────────────────────────────────────────────────────────────
 
-export function setupPeerAvatars(scene, { spawnPeerShot } = {}) {
+export function setupPeerAvatars(scene, { spawnPeerShot, spawnLightning } = {}) {
   const peers    = new Map(); // identity → PeerAvatar
   let _nextSlot  = 0;
 
@@ -367,7 +372,7 @@ export function setupPeerAvatars(scene, { spawnPeerShot } = {}) {
     const av = peers.get(identity);
     if (!av) return;
     _shotDir.fromArray(msg.dir).normalize();
-    av.fireFromGun(_shotDir, spawnPeerShot);
+    av.fireFromGun(_shotDir, spawnPeerShot, msg.rapidFire ? spawnLightning : null);
   });
 
   return {
