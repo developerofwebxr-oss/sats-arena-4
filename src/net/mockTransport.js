@@ -157,8 +157,9 @@ export class MockTransport {
     this._roomName = null;
   }
 
-  // Outgoing poses are accepted and discarded (local player only visible to self).
-  sendPose(_pose) {}
+  // Outgoing poses/events accepted and discarded (local player only visible to self).
+  sendPose(_pose)  {}
+  sendEvent(_evt)  {}
 
   setMicEnabled(_enabled) {}
 
@@ -316,6 +317,11 @@ export class BCTransport {
     this._channel.postMessage(msg);
   }
 
+  sendEvent(evt) {
+    if (!this._channel) return;
+    this._channel.postMessage({ ...evt, identity: this._identity, displayName: this._identity });
+  }
+
   setMicEnabled(_e) {}
 
   getParticipantCount() { return this._peers.size + (this._channel ? 1 : 0); }
@@ -356,6 +362,8 @@ export class BCTransport {
       }
       const pose = msg.pose;
       this._imp.push(() => this._cb.onPeerPose(pose, id, name));
+    } else if (msg.t === 'shot') {
+      this._cb.onPeerEvent(msg, id, name);
     }
   }
 

@@ -3,6 +3,7 @@ import { targetMeshes, removeTarget, removeSpecial } from './targets.js';
 import { playHitSound, playMissSound, playSatoshiHitSound } from './audio.js';
 import { recordHit, recordMiss } from './score.js';
 import { isRapidFire, RAPID_BURST, RAPID_INTERVAL_MS } from './upgrade.js';
+import { sendEvent } from './net/room.js';
 
 /**
  * shoot.js — raycasting, hit detection, and burst particles.
@@ -123,6 +124,10 @@ export function setupShooter(camera, scene, onFire) {
 
     // Announce the shot (muzzle flash etc.) — fires for both hits and misses.
     if (onFire) onFire();
+
+    // Broadcast to peers: origin + direction, lossy (a dropped beam is harmless).
+    const o = raycaster.ray.origin, d = raycaster.ray.direction;
+    sendEvent({ t: 'shot', origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z] });
 
     // Three's raycaster doesn't skip invisible objects, so a just-hit coin
     // (hidden during its respawn delay) could otherwise intercept the ray in
@@ -269,7 +274,20 @@ export function setupShooter(camera, scene, onFire) {
     }
   }
 
-  return { onShoot, shootFromRay, updateBursts };
+  // ── spawnPeerShot ─────────────────────────────────────────────────────────────
+  // Called from peer-avatars.js when a peer's shot event arrives.
+  // Reuses the existing spawnBurst VFX — no new effect forked.
+  //   muzzlePos  — THREE.Vector3, peer gun world position (from peer avatar slot)
+  //   dir        — THREE.Vector3, normalised aim direction from the event
+  function spawnPeerShot(muzzlePos, dir) {
+    // Small burst at the muzzle (visual "bang" at the gun tip).
+    spawnBurst(muzzlePos, 12, BURST_SPEED, burstMat);
+    // Larger burst along the trajectory (simulated impact, no hit-detection).
+    const impactPt = new THREE.Vector3().copy(muzzlePos).addScaledVector(dir, 5.0);
+    spawnBurst(impactPt, BURST_PARTICLE_COUNT, BURST_SPEED, burstMat);
+  }
+
+  return { onShoot, shootFromRay, updateBursts, spawnPeerShot };
 }
 
 // ── Star point-sprite texture (drawn once, shared) ──────────────────────────────

@@ -26,7 +26,7 @@
  */
 
 import * as THREE from 'three';
-import { onPeerPose, onPeerJoin, onPeerLeave } from './room.js';
+import { onPeerPose, onPeerJoin, onPeerLeave, onPeerEvent } from './room.js';
 import { cloneGun } from '../weapon.js';
 
 // ── Slot layout ───────────────────────────────────────────────────────────────
@@ -79,10 +79,15 @@ function _initShared() {
 }
 
 // ── Per-frame interpolation temporaries (no allocation in hot path) ──────────
-const _pa = new THREE.Vector3();
-const _pb = new THREE.Vector3();
-const _qa = new THREE.Quaternion();
-const _qb = new THREE.Quaternion();
+const _pa      = new THREE.Vector3();
+const _pb      = new THREE.Vector3();
+const _qa      = new THREE.Quaternion();
+const _qb      = new THREE.Quaternion();
+// Aim tracking — used in _applyAim and peer shot handler
+const _aimDir  = new THREE.Vector3();
+const _aimQ    = new THREE.Quaternion();
+const _muzzle  = new THREE.Vector3();
+const _shotDir = new THREE.Vector3();
 
 // ── PeerAvatar ────────────────────────────────────────────────────────────────
 
@@ -254,9 +259,21 @@ class PeerAvatar {
     return _pa.fromArray(worldP).sub(this._originPos).clamp(_LO, _HI);
   }
 
+  // Orient the hand+gun so the barrel tracks the peer's aim direction.
+  // hands[0].q is the world quaternion of the peer's camera (flat) or right
+  // controller (VR) — the gun barrel lies along handMesh local -Z, so
+  // handMesh.lookAt(worldPos + aimDir) makes the barrel face the aim direction.
+  _applyAim(aimWorldQ) {
+    _aimDir.set(0, 0, -1).applyQuaternion(aimWorldQ);
+    this.handMesh.getWorldPosition(_pa);
+    _pa.addScaledVector(_aimDir, 1.0);
+    this.handMesh.lookAt(_pa);
+  }
+
   _applyPose(msg) {
     if (!msg.head || !this._hasOrigin) return;
     this.headMesh.position.copy(this._headLocalPos(msg.head.p));
+    if (msg.hands?.[0]) this._applyAim(_aimQ.fromArray(msg.hands[0].q));
   }
 
   _applyInterpolated(a, b, t) {
@@ -270,6 +287,22 @@ class PeerAvatar {
       _qb.fromArray(b.head.q),
       t,
     );
+    // Gun aim: slerp between the two aim quaternions (reuses _qa/_qb after head).
+    if (a.hands?.[0] && b.hands?.[0]) {
+      _aimQ.slerpQuaternions(
+        _qa.fromArray(a.hands[0].q),
+        _qb.fromArray(b.hands[0].q),
+        t,
+      );
+      this._applyAim(_aimQ);
+    }
+  }
+
+  // Trigger the peer shot VFX from this avatar's gun world position.
+  fireFromGun(dir, spawnPeerShot) {
+    if (!this._hasOrigin || !spawnPeerShot) return;
+    this._gunGroup.getWorldPosition(_muzzle);
+    spawnPeerShot(_muzzle.clone(), dir);
   }
 
   // ── Opacity ───────────────────────────────────────────────────────────────
@@ -300,7 +333,7 @@ class PeerAvatar {
 
 // ── Manager ───────────────────────────────────────────────────────────────────
 
-export function setupPeerAvatars(scene) {
+export function setupPeerAvatars(scene, { spawnPeerShot } = {}) {
   const peers    = new Map(); // identity → PeerAvatar
   let _nextSlot  = 0;
 
@@ -327,6 +360,14 @@ export function setupPeerAvatars(scene) {
       console.log(`[avatar] peer ${identity} created at first pose → slot ${slot - 1}`);
     }
     peers.get(identity).pushPose(msg);
+  });
+
+  onPeerEvent((msg, identity) => {
+    if (msg.t !== 'shot') return;
+    const av = peers.get(identity);
+    if (!av) return;
+    _shotDir.fromArray(msg.dir).normalize();
+    av.fireFromGun(_shotDir, spawnPeerShot);
   });
 
   return {

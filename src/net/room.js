@@ -53,11 +53,13 @@ console.log(`[room] transport: ${ACTIVE_TYPE}`);
 const _poseCbs  = [];
 const _joinCbs  = [];
 const _leaveCbs = [];
+const _eventCbs = [];
 
 const _cb = {
   onPeerPose:  (msg, id, name) => _poseCbs.forEach(cb => cb(msg, id, name)),
   onPeerJoin:  (id, name)      => _joinCbs.forEach(cb => cb(id, name)),
   onPeerLeave: (id)            => _leaveCbs.forEach(cb => cb(id)),
+  onPeerEvent: (msg, id, name) => _eventCbs.forEach(cb => cb(msg, id, name)),
 };
 
 // ── LiveKit transport ─────────────────────────────────────────────────────────
@@ -78,7 +80,9 @@ class LiveKitTransport {
       if (!participant) return;
       let msg;
       try { msg = JSON.parse(new TextDecoder().decode(payload)); } catch { return; }
-      if (msg.t === 'pose') _cb.onPeerPose(msg, participant.identity, participant.name || participant.identity);
+      const pid = participant.identity, pname = participant.name || participant.identity;
+      if (msg.t === 'pose') _cb.onPeerPose(msg, pid, pname);
+      else                  _cb.onPeerEvent(msg, pid, pname);
     });
 
     room.on(RoomEvent.ParticipantConnected,    (p) => _cb.onPeerJoin(p.identity, p.name || p.identity));
@@ -98,6 +102,12 @@ class LiveKitTransport {
   sendPose(pose) {
     if (!this._room || this._room.state !== 'connected') return;
     const data = _enc.encode(JSON.stringify({ t: 'pose', ...pose }));
+    this._room.localParticipant.publishData(data, { reliable: false });
+  }
+
+  sendEvent(evt) {
+    if (!this._room || this._room.state !== 'connected') return;
+    const data = _enc.encode(JSON.stringify(evt));
     this._room.localParticipant.publishData(data, { reliable: false });
   }
 
@@ -147,13 +157,13 @@ export async function leaveSession() {
   await _transport?.leave();
 }
 
-export function sendPose(pose) {
-  _transport?.sendPose(pose);
-}
+export function sendPose(pose)  { _transport?.sendPose(pose); }
+export function sendEvent(evt)  { _transport?.sendEvent?.(evt); }
 
-export function onPeerPose(cb)  { _poseCbs.push(cb);  }
-export function onPeerJoin(cb)  { _joinCbs.push(cb);  }
-export function onPeerLeave(cb) { _leaveCbs.push(cb); }
+export function onPeerPose(cb)   { _poseCbs.push(cb);  }
+export function onPeerJoin(cb)   { _joinCbs.push(cb);  }
+export function onPeerLeave(cb)  { _leaveCbs.push(cb); }
+export function onPeerEvent(cb)  { _eventCbs.push(cb); }
 
 export async function setMicEnabled(enabled) {
   await _transport?.setMicEnabled?.(enabled);

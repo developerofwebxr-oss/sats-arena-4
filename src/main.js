@@ -38,7 +38,7 @@ const vrui = setupVrUI(scene, camera, renderer);
 
 // setupShooter must come before setupXR because setupXR needs shootFromRay.
 // weapon.flashMuzzle is the onFire callback — triggers the muzzle flash on each shot.
-const { onShoot, shootFromRay, updateBursts } = setupShooter(camera, scene, weapon.flashMuzzle);
+const { onShoot, shootFromRay, updateBursts, spawnPeerShot } = setupShooter(camera, scene, weapon.flashMuzzle);
 
 // setupXR receives:
 //   renderer            — so xr.getController() and the XR camera work
@@ -70,7 +70,7 @@ modeCtrl.subscribe((state) => setCoopMode(state.activeMode));
 setupCoopHud();
 
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
-const { updatePeers } = setupPeerAvatars(scene);
+const { updatePeers } = setupPeerAvatars(scene, { spawnPeerShot });
 
 // Local pose publisher — throttled to ~15 Hz over the lossy channel.
 const publishPose = setupPosePublisher(renderer, camera, modeCtrl);
