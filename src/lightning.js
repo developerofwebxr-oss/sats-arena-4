@@ -34,16 +34,18 @@ const BACKEND_URL = _normalizeBackend(
 
 const POLL_MS = 2500;
 
-let code       = null;
-let paidCount  = 0;
-let _pollTimer = null;
-let _ownerToken = null;
+let code          = null;
+let paidCount     = 0;
+let _pollTimer    = null;
+let _ownerToken   = null;
+let _paymentToken = null;
 
-export function isLightningEnabled()    { return LIGHTNING_ON; }
-export function getSessionCode()        { return code; }
-export function getPaidCount()          { return paidCount; }
-export function getBackendUrl()         { return BACKEND_URL; }
-export function setOwnerToken(token)    { _ownerToken = token || null; }
+export function isLightningEnabled()      { return LIGHTNING_ON; }
+export function getSessionCode()          { return code; }
+export function getPaidCount()            { return paidCount; }
+export function getBackendUrl()           { return BACKEND_URL; }
+export function setOwnerToken(token)      { _ownerToken   = token || null; }
+export function setPaymentToken(token)    { _paymentToken = token || null; }
 
 /**
  * activateWithCode(roomCode) — call from coop-hud.js after joinSession() succeeds.
@@ -88,7 +90,8 @@ function startPolling() {
   const tick = async () => {
     if (!code) return;
     try {
-      const headers = _ownerToken ? { Authorization: `Bearer ${_ownerToken}` } : {};
+      const authToken = _ownerToken || _paymentToken;
+      const headers   = authToken ? { Authorization: `Bearer ${authToken}` } : {};
       const res  = await fetch(`${BACKEND_URL}/session/${code}`, { headers });
       if (res.ok) {
         const data = await res.json();

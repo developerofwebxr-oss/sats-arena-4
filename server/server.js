@@ -90,7 +90,7 @@ const paymentToCode = new Map();
 
 function _newSession(code) {
   const now = Date.now();
-  return { code, createdAt: now, lastSeen: now, paidCount: 0, openInvoices: [], ownerToken: null, requests: new Map() };
+  return { code, createdAt: now, lastSeen: now, paidCount: 0, openInvoices: [], ownerToken: null, paymentToken: null, requests: new Map() };
 }
 
 // ── LNbits helpers ────────────────────────────────────────────────────────────
@@ -145,17 +145,19 @@ app.post('/session/:code/claim', rl('claim', 5), (req, res) => {
   const existing = sessions.get(code);
   if (existing?.ownerToken) return res.json({ taken: true });
 
-  const ownerToken = crypto.randomBytes(32).toString('hex');
+  const ownerToken   = crypto.randomBytes(32).toString('hex');
+  const paymentToken = crypto.randomBytes(32).toString('hex');
   const now = Date.now();
   if (existing) {
-    existing.ownerToken = ownerToken;
-    existing.requests   = existing.requests || new Map();
-    existing.lastSeen   = now;
+    existing.ownerToken   = ownerToken;
+    existing.paymentToken = paymentToken;
+    existing.requests     = existing.requests || new Map();
+    existing.lastSeen     = now;
   } else {
-    sessions.set(code, { ..._newSession(code), ownerToken });
+    sessions.set(code, { ..._newSession(code), ownerToken, paymentToken });
   }
   console.log(`[claim] ${code} owned`);
-  res.json({ code, ownerToken });
+  res.json({ code, ownerToken, paymentToken });
 });
 
 // ── TOKEN (GATED) ─────────────────────────────────────────────────────────────
@@ -311,6 +313,7 @@ app.get('/session/:code/join-request/:requestId', rl('poll-status', 20), (req, r
   if (r.status === 'approved' && !r.ticketUsed && r.admissionTicket) {
     if (Date.now() - r.ticketCreatedAt < TKT_TTL) {
       resp.admissionTicket = r.admissionTicket;
+      resp.paymentToken    = session.paymentToken;
     } else {
       resp.status = r.status = 'expired';
     }
@@ -326,22 +329,28 @@ app.get('/session/:code', rl('session-poll', 30), async (req, res) => {
   const token   = req.query.ownerToken || bearerToken(req);
   const session = sessions.get(code);
 
-  if (!session?.ownerToken || session.ownerToken !== token) {
+  if (!session) return res.status(403).json({ error: 'Not authorized' });
+
+  const isOwner  = session.ownerToken   && session.ownerToken   === token;
+  const isReader = session.paymentToken && session.paymentToken === token;
+  if (!isOwner && !isReader && !DEV_ENDPOINTS) {
     return res.status(403).json({ error: 'Not authorized' });
   }
 
   session.lastSeen = Date.now();
 
-  // Check open invoices and count settled ones exactly once (see comment on original).
-  for (const hash of [...session.openInvoices]) {
-    let paid = false;
-    try { paid = await lnbitsIsPaid(hash); } catch (err) { console.error('check error', err.message); continue; }
-    if (paid) {
-      const idx = session.openInvoices.indexOf(hash);
-      if (idx !== -1) {
-        session.openInvoices.splice(idx, 1);
-        session.paidCount += 1;
-        paymentToCode.delete(hash);
+  if (isOwner) {
+    // Only the owner triggers LNbits check; readers see cached paidCount
+    for (const hash of [...session.openInvoices]) {
+      let paid = false;
+      try { paid = await lnbitsIsPaid(hash); } catch (err) { console.error('check error', err.message); continue; }
+      if (paid) {
+        const idx = session.openInvoices.indexOf(hash);
+        if (idx !== -1) {
+          session.openInvoices.splice(idx, 1);
+          session.paidCount += 1;
+          paymentToCode.delete(hash);
+        }
       }
     }
   }

@@ -26,6 +26,7 @@ import {
   deactivate as deactivateLightning,
   getBackendUrl,
   setOwnerToken,
+  setPaymentToken,
 } from '../lightning.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
@@ -257,7 +258,7 @@ async function handleJoin() {
     const { requestId } = await knockRes.json();
     setStatus(`Waiting for ${code} to approve… (90 s)`, '');
 
-    const admissionTicket = await _pollForApproval(code, requestId);
+    const { admissionTicket, paymentToken } = await _pollForApproval(code, requestId);
 
     setStatus('Connecting…', '');
     await joinSession(code, { name, mode: currentMode, admissionTicket });
@@ -265,7 +266,10 @@ async function handleJoin() {
     showJoined(code);
     setStatus('Connected!', 'ok');
     refreshCount();
-    if (isLightningEnabled()) activateWithCode(code);
+    if (isLightningEnabled()) {
+      if (paymentToken) setPaymentToken(paymentToken);
+      activateWithCode(code);
+    }
   } catch (err) {
     console.error('[coop]', err);
     const msg = err.message || '';
@@ -296,7 +300,7 @@ async function _pollForApproval(friendCode, requestId, timeoutMs = 90_000) {
 
     if (data.status === 'approved') {
       if (!data.admissionTicket) throw new Error('Approved but no ticket received');
-      return data.admissionTicket;
+      return { admissionTicket: data.admissionTicket, paymentToken: data.paymentToken || null };
     }
     if (data.status === 'denied')  throw new Error('Join request was denied');
     if (data.status === 'expired') throw new Error('Join request timed out');
