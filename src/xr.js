@@ -23,15 +23,15 @@ const RAY_LENGTH = 5;
 // onControllerSelect(origin, direction) → bool: an optional in-world UI handler.
 // If it returns true, it consumed the trigger (e.g. pressed the ACTIVATE panel)
 // and the shot is suppressed.
-export function setupXR(renderer, scene, shootFromRay, onControllerSelect) {
+export function setupXR(renderer, scene, shootFromRay, onControllerSelect, onControllerFire) {
 
   // ── Build both controllers ─────────────────────────────────────────────────
   // getController(0/1) returns a Group whose world matrix Three.js updates
   // automatically each XR frame to match the physical controller pose.
   // Index 0 = first controller to connect, 1 = second. We treat both identically.
   const controllers = [
-    buildController(0, renderer, scene, shootFromRay, onControllerSelect),
-    buildController(1, renderer, scene, shootFromRay, onControllerSelect),
+    buildController(0, renderer, scene, shootFromRay, onControllerSelect, onControllerFire),
+    buildController(1, renderer, scene, shootFromRay, onControllerSelect, onControllerFire),
   ];
 
   // ── updateControllers ─────────────────────────────────────────────────────
@@ -67,7 +67,7 @@ export function setupXR(renderer, scene, shootFromRay, onControllerSelect) {
 
 // ── buildController ──────────────────────────────────────────────────────────
 // Creates one controller group, its ray line, and wires events.
-function buildController(index, renderer, scene, shootFromRay, onControllerSelect) {
+function buildController(index, renderer, scene, shootFromRay, onControllerSelect, onControllerFire) {
   // getController returns a Group that Three.js XR manager updates each frame.
   const group = renderer.xr.getController(index);
 
@@ -154,6 +154,9 @@ function buildController(index, renderer, scene, shootFromRay, onControllerSelec
       // In-world UI (the ACTIVATE panel) takes precedence: if the controller is
       // pointing at it, activate and DON'T fire a shot.
       if (onControllerSelect && onControllerSelect(_origin, _direction)) return;
+
+      // Notify weapon which hand fired so its flashMuzzle() flashes the right gun.
+      onControllerFire?.(index);
     }
 
     // Clone so shootFromRay doesn't hold a reference to our reused vectors.
