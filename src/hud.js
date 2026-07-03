@@ -8,8 +8,8 @@ import { getScore } from './score.js';
  * hud.js — all DOM overlays.
  *
  * Free-to-play HUD (no balance / currency):
- *   - RAPID FIRE purchase button (top-right) → one tap buys 60s of rapid-fire
- *   - Rapid-fire countdown (top-left) while active
+ *   - RAPID FIRE status box (top-right): buyable when idle, live countdown while
+ *     an active window runs. Repeatable — pay again after a window ends.
  *   - On-screen SHOOT button (bottom-right)
  *
  * Shooting is free and unlimited. The upgrade purchase IS the upgrade — there's
@@ -18,17 +18,19 @@ import { getScore } from './score.js';
 
 const RAPID_FIRE_PRICE = 21; // sats — display + (later) the Lightning invoice amount
 
-let countdownEl;
 let scoreEl;        // running SCORE
 let lastShownScore = -1;
 let upgradeBtn;
 
-// Session upgrade model (Phase 2):
-//   One payment per session upgrades ALL players. paidCount comes from the
-//   server poll in lightning.js. When paidCount rises, we auto-grant rapid-fire
-//   and disable the pay button so no second charge is issued.
-let lastPaid       = 0;   // last paidCount seen (detect a fresh payment)
-let sessionGranted = false; // rapid-fire already granted this session
+// Session upgrade model (Prompt 18 + 25):
+//   Each payment upgrades ALL players and is REPEATABLE. paidCount comes from the
+//   server poll in lightning.js and only ever increases. We detect a payment as
+//   paidCount INCREASING since last seen — each increment starts a fresh 60s
+//   window on BOTH clients (host + joiner each poll the same counter). The status
+//   box reflects the ACTIVE WINDOW (isRapidFire()), not the permanent paid flag,
+//   so it reverts to buyable when the window ends and a new payment works again.
+let lastPaid       = 0;   // highest paidCount seen — a higher value = fresh payment
+let sessionGranted = false; // legacy: kept for the VR ACTIVATE panel charge API
 
 let payModal;        // payment QR overlay
 let payModalQr;
@@ -103,30 +105,9 @@ function injectStyles() {
 export function createHUD(onShoot) {
   injectStyles();
 
-  // ── Rapid-fire countdown (top-left) ─────────────────────────────────────────
-  // Hidden unless active. Magenta to match the upgrade.
-  const hud = document.createElement('div');
-  hud.id = 'hud';
-  hud.style.cssText = `
-    position: fixed;
-    top: 16px;
-    left: 16px;
-    font-family: monospace;
-    pointer-events: none;
-    user-select: none;
-  `;
-
-  countdownEl = document.createElement('div');
-  countdownEl.style.cssText = `
-    display: none;
-    font-size: 15px;
-    letter-spacing: 0.12em;
-    color: #b14bff;
-    text-shadow: 0 0 8px #b14bff;
-  `;
-
-  hud.append(countdownEl);
-  document.body.appendChild(hud);
+  // The active rapid-fire countdown lives in the top-RIGHT status box (the upgrade
+  // button), not top-left — top-left is SESSION (coop-hud) + SCORE only, so the
+  // three lines never collide. See updateStatusBox().
 
   // ── SCORE (top-left, below the SESSION chip from coop-hud.js) ─────────────────
   scoreEl = document.createElement('div');
@@ -343,7 +324,7 @@ function closePaymentModal() {
 // Payment detection happens in updateRapidFireHUD() via the server poll.
 async function purchaseRapidFire() {
   if (purchasing) return;
-  if (getPaidCount() >= 1) return; // session already upgraded
+  if (isRapidFire()) return; // a window is already running — buy again once it ends
 
   setUpgradeLoading(true);
   try {
@@ -371,18 +352,42 @@ export function activateCharge() {
 }
 
 // ── updateRapidFireHUD ──────────────────────────────────────────────────────
-// Called every frame from main.js. Shows/hides the countdown and toggles the
-// upgrade button's active glow. Only re-renders text when the second changes.
+// Called every frame from main.js. Detects repeat payments (paidCount increment)
+// and drives the top-right status box off the ACTIVE WINDOW, not the paid flag.
 export function updateRapidFireHUD() {
-  const active = isRapidFire();
-
-  // SCORE — only re-render the text when it actually changes.
+  // SCORE (top-left) — only re-render the text when it actually changes.
   const score = getScore();
   if (score !== lastShownScore) {
     lastShownScore = score;
     scoreEl.textContent = `SCORE ${score}`;
   }
 
+  // ── Detect a fresh/repeat payment: paidCount INCREASING since last seen ──────
+  // Each increment starts a fresh 60s window. Server-authoritative and shared:
+  // host + joiner each poll the same session's paidCount (ownerToken /
+  // paymentToken) and independently grant, so one payment still upgrades BOTH —
+  // now repeatable. Not gated on sessionGranted, so a 2nd payment re-triggers.
+  if (isLightningEnabled() && getSessionCode()) {
+    const paid = getPaidCount();
+    if (paid > lastPaid) {
+      lastPaid = paid;
+      closePaymentModal();
+      grantRapidFire();      // fresh window on EVERY increment (repeatable)
+      sessionGranted = true; // legacy VR charge-panel suppression (unchanged)
+    }
+  }
+
+  // ── Top-right status box: buyable ⇄ live countdown, driven by active window ──
+  updateStatusBox(isRapidFire());
+}
+
+// Status box states (top-right #upgrade-btn):
+//   active window → live countdown "▶ RAPID FIRE m:ss" (magenta glow, not tappable)
+//   idle + in a lightning session → buyable "⚡ RAPID FIRE / 21 sats · 60s"
+//   idle + no session / no lightning → hidden
+// State is the ACTIVE WINDOW, never the permanent paidCount — so it reverts to
+// buyable at 0:00 and a repeat payment works again.
+function updateStatusBox(active) {
   upgradeBtn.classList.toggle('active', active);
 
   if (active) {
@@ -391,53 +396,28 @@ export function updateRapidFireHUD() {
       lastShownSecond = secs;
       const m = Math.floor(secs / 60);
       const s = String(secs % 60).padStart(2, '0');
-      countdownEl.textContent = `▶ RAPID FIRE ${m}:${s}`;
+      upgradeBtn.innerHTML = `<div style="font-size:16px; letter-spacing:0.12em;">▶ RAPID FIRE ${m}:${s}</div>`;
     }
-    countdownEl.style.display = 'block';
-  } else if (lastShownSecond !== -1) {
-    lastShownSecond = -1;
-    countdownEl.style.display = 'none';
-  }
-
-  // ── Session-shared Lightning upgrade ────────────────────────────────────────
-  // Show the buy button only when joined (code set) and session not yet paid.
-  // Once paidCount >= 1, auto-grant rapid-fire and lock out further purchases —
-  // one payment upgrades all players for the session.
-  if (!isLightningEnabled()) return;
-
-  const code = getSessionCode();
-  if (!code) {
-    // Not in a session yet — hide the button.
-    upgradeBtn.style.display = 'none';
+    upgradeBtn.disabled = true;
+    upgradeBtn.style.cursor = 'default';
+    upgradeBtn.style.opacity = '1';
+    upgradeBtn.style.display = 'block';
     return;
   }
 
-  const paid = getPaidCount();
+  // Window ended (or never ran) — force a re-render on the next active window.
+  lastShownSecond = -1;
 
-  if (paid > lastPaid) {
-    // Fresh payment — auto-grant rapid-fire (server-authoritative: both clients
-    // poll the same session and each independently calls grantRapidFire()).
-    lastPaid = paid;
-    closePaymentModal();
-    if (!sessionGranted) {
-      sessionGranted = true;
-      grantRapidFire();
-    }
-  }
+  // Don't clobber the "CREATING INVOICE…" spinner mid-purchase.
+  if (purchasing) return;
 
-  if (sessionGranted || paid >= 1) {
-    // Session already upgraded — disable buy button.
-    upgradeBtn.innerHTML = `<div style="font-size:15px; letter-spacing:0.1em;">⚡ SESSION UPGRADED ✓</div>`;
-    upgradeBtn.style.cursor = 'default';
-    upgradeBtn.style.display = 'block';
-    upgradeBtn.disabled = true;
-    upgradeBtn.style.opacity = '0.6';
-  } else {
-    // Joinable session, not yet paid.
-    if (upgradeBtn.innerHTML !== upgradeDefaultHTML) upgradeBtn.innerHTML = upgradeDefaultHTML;
-    upgradeBtn.disabled = false;
-    upgradeBtn.style.opacity = '1';
-    upgradeBtn.style.cursor = 'pointer';
-    upgradeBtn.style.display = 'block';
-  }
+  // Reset to the clean buyable look — also clears any stale countdown text so a
+  // hidden box never keeps "▶ RAPID FIRE 0:0x" from the window that just ended.
+  if (upgradeBtn.innerHTML !== upgradeDefaultHTML) upgradeBtn.innerHTML = upgradeDefaultHTML;
+  upgradeBtn.disabled = false;
+  upgradeBtn.style.opacity = '1';
+  upgradeBtn.style.cursor = 'pointer';
+
+  // Visible (buyable) only inside a lightning session; otherwise hidden.
+  upgradeBtn.style.display = (isLightningEnabled() && getSessionCode()) ? 'block' : 'none';
 }
