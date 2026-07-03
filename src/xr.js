@@ -155,8 +155,9 @@ function buildController(index, renderer, scene, shootFromRay, onControllerSelec
       // pointing at it, activate and DON'T fire a shot.
       if (onControllerSelect && onControllerSelect(_origin, _direction)) return;
 
-      // Notify weapon which hand fired so its flashMuzzle() flashes the right gun.
-      onControllerFire?.(index);
+      // Notify weapon which hand fired. Returns false when that gun is gated
+      // (fairness: left gun disabled because a flat peer is in the session).
+      if (onControllerFire?.(index) === false) return;
     }
 
     // Clone so shootFromRay doesn't hold a reference to our reused vectors.

@@ -18,7 +18,7 @@ import gunModelUrl from './assets/sats-arena-better-gun.glb?url';
  *
  * Public API:
  *   setupWeapon(camera, renderer)
- *     → { updateWeapon(delta), flashMuzzle(), notifyControllerFire(i), setHidden(bool) }
+ *     → { updateWeapon(delta), flashMuzzle(), notifyControllerFire(i), setLeftGunActive(bool), setHidden(bool) }
  */
 
 // Muzzle flash fades from full to zero over this many seconds.
@@ -50,14 +50,13 @@ const MODEL_POS   = new THREE.Vector3(0, -0.26, 0);
 const MODEL_EULER = new THREE.Euler(0, Math.PI / 2, 0);
 
 // ── Per-hand VR model orientation ────────────────────────────────────────────
-// Two independent constants so tuning one hand never affects the other.
-// Right hand: same rotation as the camera gun (barrel was already calibrated).
-// Left hand uses a negative-X scale (mirror), which flips the barrel direction
-// after the PI/2 rotation; −PI/2 compensates so it still points forward (−Z).
-// ⚠ Tune these on-device: adjust the Y angle of each hand independently.
-const VR_MODEL_EULER      = new THREE.Euler(0,  Math.PI / 2, 0); // right hand
-const VR_MODEL_EULER_LEFT = new THREE.Euler(0, -Math.PI / 2, 0); // left hand (with X mirror)
-const MIRROR_LEFT = true; // negative X scale on left gun to un-flip the clone
+// Lifted from sats-arena/src/weapon.js — same GLB, verified correct on Quest.
+// Right: +180° extra yaw so barrel faces forward with trigger under the finger.
+// Left: mirrored (negative X scale), so it needs the OPPOSITE sign (plain PI/2).
+// Two independent constants — tuning one hand never touches the other.
+const VR_MODEL_EULER      = new THREE.Euler(0, Math.PI / 2 + Math.PI, 0); // right (VERIFIED)
+const VR_MODEL_EULER_LEFT = new THREE.Euler(0, Math.PI / 2, 0);           // left  (VERIFIED)
+const MIRROR_LEFT = true; // negative X scale so the left gun isn't a backwards right gun
 
 // ── Muzzle flash placement ────────────────────────────────────────────────────
 const FLASH_POS  = new THREE.Vector3(0, -0.10, -0.36);
@@ -231,30 +230,51 @@ export function setupWeapon(camera, renderer) {
   renderer.xr.addEventListener('sessionstart', () => { cameraGun.group.visible = false; });
   renderer.xr.addEventListener('sessionend',   () => { cameraGun.group.visible = true;  });
 
+  // ── Fairness gate: left gun active/inactive ───────────────────────────────
+  // setLeftGunActive(false) drops to right-hand-only when a flat peer is in the
+  // session. Updates gun visibility instantly; fire is gated in notifyControllerFire.
+  // Left-stick locomotion is NOT touched — only the gun visual + its trigger.
+  let _leftGunActive      = true;
+  let _leftControllerIndex = -1; // controller index whose handedness === 'left'
+
+  function setLeftGunActive(active) {
+    _leftGunActive = active;
+    if (_leftControllerIndex >= 0) {
+      controllerGuns[_leftControllerIndex].group.visible = active;
+    }
+  }
+
   // ── Per-hand orientation: set euler + mirror at connect time ──────────────
   // Controller index 0/1 is not reliably left/right — handedness comes from
   // event.data.handedness. Two separate euler constants so tuning one never
-  // touches the other (the core fix from the handoff).
+  // touches the other.
   [0, 1].forEach((i) => {
     renderer.xr.getController(i).addEventListener('connected', (e) => {
       const src = e.data;
       if (!src || src.targetRayMode !== 'tracked-pointer') return;
       const isLeft = src.handedness === 'left';
+      if (isLeft) _leftControllerIndex = i;
       controllerGuns[i].setModelEuler(isLeft ? VR_MODEL_EULER_LEFT : VR_MODEL_EULER);
       controllerGuns[i].setMirror(isLeft && MIRROR_LEFT);
-      controllerGuns[i].group.visible = true;
+      // Respect the fairness gate if it was set before this controller connected.
+      controllerGuns[i].group.visible = isLeft ? _leftGunActive : true;
     });
     renderer.xr.getController(i).addEventListener('disconnected', () => {
+      if (i === _leftControllerIndex) _leftControllerIndex = -1;
       controllerGuns[i].group.visible = false;
     });
   });
 
   // ── Flash routing ─────────────────────────────────────────────────────────
-  // xr.js calls notifyControllerFire(index) just before shootFromRay so that
-  // when shoot.js calls onFire() → flashMuzzle(), we know which hand fired.
+  // xr.js calls notifyControllerFire(index) just before shootFromRay.
+  // Returns false when the left gun is gated — xr.js skips the shot entirely.
   let _firingController = -1;
 
-  function notifyControllerFire(index) { _firingController = index; }
+  function notifyControllerFire(index) {
+    if (index === _leftControllerIndex && !_leftGunActive) return false;
+    _firingController = index;
+    return true;
+  }
 
   /** Called by shoot.js's onFire callback on every shot. */
   function flashMuzzle() {
@@ -280,7 +300,7 @@ export function setupWeapon(camera, renderer) {
     cameraGun.group.visible = !hidden;
   }
 
-  return { updateWeapon, flashMuzzle, notifyControllerFire, setHidden };
+  return { updateWeapon, flashMuzzle, notifyControllerFire, setLeftGunActive, setHidden };
 }
 
 // ── Muzzle-flash burst texture (drawn once, shared across all gun units) ─────

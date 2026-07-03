@@ -153,6 +153,9 @@ class PeerAvatar {
     this._speaking    = false;
     this._hasOrigin   = false;
     this._originPos   = new THREE.Vector3();
+    // Fairness gate: null = unknown (don't penalise yet), true/false = known.
+    this.dualCapable     = null;
+    this._notifyCompose  = null; // set by the manager after construction
 
     // ── Root group: anchored at fixed slot, facing the player ─────────────────
     const slotPos = PEER_SLOTS[slotIndex % PEER_SLOTS.length];
@@ -258,6 +261,13 @@ class PeerAvatar {
     }
 
     if (msg.speaking !== undefined) this._speaking = msg.speaking;
+
+    // Track dualCapable for the fairness gate. Notify the manager only on change
+    // so recomputation is cheap (one call per state transition, not 15 Hz).
+    if (msg.dualCapable !== undefined && msg.dualCapable !== this.dualCapable) {
+      this.dualCapable = msg.dualCapable;
+      this._notifyCompose?.();
+    }
   }
 
   // ── Per-frame update ──────────────────────────────────────────────────────
@@ -389,15 +399,32 @@ class PeerAvatar {
 
 // ── Manager ───────────────────────────────────────────────────────────────────
 
-export function setupPeerAvatars(scene, { spawnPeerShot, spawnLightning } = {}) {
+export function setupPeerAvatars(scene, { spawnPeerShot, spawnLightning, onCompositionChange } = {}) {
   const peers    = new Map(); // identity → PeerAvatar
   let _nextSlot  = 0;
 
+  // Recompute the fairness flag whenever peer composition changes.
+  // anyFlat = true when at least one peer is confirmed non-dual-capable (flat screen).
+  // Peers with dualCapable === null (unknown) are treated as dual — don't penalise
+  // until we have a confirmed 'false' from their first pose packet.
+  function _recompute() {
+    const anyFlat = [...peers.values()].some(av => av.dualCapable === false);
+    onCompositionChange?.(anyFlat);
+  }
+
+  function _addPeer(identity, displayName) {
+    const slot = _nextSlot++;
+    const av   = new PeerAvatar(identity, displayName, scene, slot);
+    av._notifyCompose = _recompute; // wire the per-peer callback
+    peers.set(identity, av);
+    return { slot, av };
+  }
+
   onPeerJoin((identity, displayName) => {
     if (peers.has(identity)) return; // dedupe
-    const slot = _nextSlot++;
-    peers.set(identity, new PeerAvatar(identity, displayName, scene, slot));
+    const { slot } = _addPeer(identity, displayName);
     console.log(`[avatar] peer ${identity} (${displayName}) → slot ${slot}`);
+    // dualCapable is null at join — no recompute yet (don't penalise the unknown).
   });
 
   onPeerLeave((identity) => {
@@ -406,16 +433,16 @@ export function setupPeerAvatars(scene, { spawnPeerShot, spawnLightning } = {}) 
     av.dispose();
     peers.delete(identity);
     console.log(`[avatar] peer ${identity} left — slot freed`);
+    _recompute(); // may restore left gun if the flat peer was the last one
   });
 
   onPeerPose((msg, identity, displayName) => {
     // Race: first pose can arrive before the join event.
     if (!peers.has(identity)) {
-      const slot = _nextSlot++;
-      peers.set(identity, new PeerAvatar(identity, displayName, scene, slot));
+      const { slot } = _addPeer(identity, displayName);
       console.log(`[avatar] peer ${identity} created at first pose → slot ${slot - 1}`);
     }
-    peers.get(identity).pushPose(msg);
+    peers.get(identity).pushPose(msg); // pushPose calls _recompute on dualCapable change
   });
 
   onPeerEvent((msg, identity) => {

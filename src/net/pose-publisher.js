@@ -54,7 +54,7 @@ export function setupPosePublisher(renderer, camera, modeCtrl) {
 
     const isVR = currentMode === 'vr' || currentMode === 'ar';
 
-    let head, hands;
+    let head, hands, dualCapable;
 
     if (isVR && renderer.xr.isPresenting) {
       const xrCam = renderer.xr.getCamera();
@@ -64,12 +64,16 @@ export function setupPosePublisher(renderer, camera, modeCtrl) {
       hands = [];
       if (c0.children.length > 0 || c0.visible) hands.push(objToJoint(c0));
       if (c1.children.length > 0 || c1.visible) hands.push(objToJoint(c1));
-      if (hands.length === 0) hands = [aimJoint(xrCam)];
+      // dualCapable = true when physical tracked controllers are present.
+      // Set BEFORE the aimJoint fallback so the flag isn't confused by it.
+      dualCapable = hands.length > 0;
+      if (hands.length === 0) hands = [aimJoint(xrCam)]; // handheld phone AR
     } else {
       head  = objToJoint(camera);
       hands = [aimJoint(camera)];
+      dualCapable = false; // flat / mobile / gaze
     }
 
-    sendPose({ seq: ++_seq, mode: currentMode, head, hands });
+    sendPose({ seq: ++_seq, mode: currentMode, head, hands, dualCapable });
   };
 }

@@ -70,7 +70,20 @@ modeCtrl.subscribe((state) => setCoopMode(state.activeMode));
 setupCoopHud();
 
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
-const { updatePeers } = setupPeerAvatars(scene, { spawnPeerShot, spawnLightning });
+// onCompositionChange fires whenever the flat-vs-headset mix of peers changes.
+// anyFlatPeer = true → at least one peer has no tracked controllers (flat/mobile).
+// Headset player drops to right-hand-only on that event (fairness), and gains
+// the left gun back the moment the last flat peer leaves.
+let _hadFlatPeer = false;
+const { updatePeers } = setupPeerAvatars(scene, {
+  spawnPeerShot,
+  spawnLightning,
+  onCompositionChange(anyFlatPeer) {
+    weapon.setLeftGunActive(!anyFlatPeer);
+    if (anyFlatPeer && !_hadFlatPeer) vrui.showFairnessNotice();
+    _hadFlatPeer = anyFlatPeer;
+  },
+});
 
 // Local pose publisher — throttled to ~15 Hz over the lossy channel.
 const publishPose = setupPosePublisher(renderer, camera, modeCtrl);

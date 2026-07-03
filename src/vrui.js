@@ -18,11 +18,13 @@ import { getScore } from './score.js';
 // ── Tunable HUD placement (metres from the head; -Z is forward) ───────────────
 // Adjust these on-device. Keep SCORE/COUNTDOWN clear of the centre aim zone and
 // the lower-front ACTIVATE panel.
-const PANEL_OFFSET = new THREE.Vector3(0,  -0.50, -2.0); // ACTIVATE panel (lower-front)
-const SCORE_OFFSET = new THREE.Vector3(0,   0.55, -2.0); // SCORE (upper-front)
-const TIMER_OFFSET = new THREE.Vector3(0,   0.38, -2.0); // COUNTDOWN (just below score)
-const SCORE_WIDTH  = 0.60; // metres wide
-const TIMER_WIDTH  = 0.46;
+const PANEL_OFFSET  = new THREE.Vector3(0,  -0.50, -2.0); // ACTIVATE panel (lower-front)
+const SCORE_OFFSET  = new THREE.Vector3(0,   0.55, -2.0); // SCORE (upper-front)
+const TIMER_OFFSET  = new THREE.Vector3(0,   0.38, -2.0); // COUNTDOWN (just below score)
+const NOTICE_OFFSET = new THREE.Vector3(0,   0.18, -2.0); // fairness notice (centre)
+const SCORE_WIDTH   = 0.60; // metres wide
+const TIMER_WIDTH   = 0.46;
+const NOTICE_SECS   = 5.0;  // how long the fairness notice stays visible
 
 export function setupVrUI(scene, camera, renderer) {
   // ── ACTIVATE panel ──────────────────────────────────────────────────────
@@ -34,11 +36,16 @@ export function setupVrUI(scene, camera, renderer) {
   scene.add(panel);
 
   // ── SCORE + COUNTDOWN text sprites (repaint-on-change) ──────────────────────
-  const scoreSprite = createTextSprite(SCORE_WIDTH, '#f7931a'); // orange
-  const timerSprite = createTextSprite(TIMER_WIDTH, '#b14bff'); // magenta
-  scoreSprite.mesh.visible = false;
-  timerSprite.mesh.visible = false;
-  scene.add(scoreSprite.mesh, timerSprite.mesh);
+  const scoreSprite  = createTextSprite(SCORE_WIDTH, '#f7931a'); // orange
+  const timerSprite  = createTextSprite(TIMER_WIDTH, '#b14bff'); // magenta
+  const noticeSprite = createTextSprite(1.0, '#ff6060');          // red — fairness warning
+  noticeSprite.setText('Opponent on flat screen:\nright hand only');
+  scoreSprite.mesh.visible  = false;
+  timerSprite.mesh.visible  = false;
+  noticeSprite.mesh.visible = false;
+  scene.add(scoreSprite.mesh, timerSprite.mesh, noticeSprite.mesh);
+
+  let _noticeUntil = 0; // performance.now() target; 0 = not shown
 
   const raycaster = new THREE.Raycaster();
   const _camPos  = new THREE.Vector3();
@@ -58,8 +65,9 @@ export function setupVrUI(scene, camera, renderer) {
     // Flat/handheld → DOM HUD handles it; hide all in-world UI.
     if (!presenting) {
       panel.visible = false;
-      scoreSprite.mesh.visible = false;
-      timerSprite.mesh.visible = false;
+      scoreSprite.mesh.visible  = false;
+      timerSprite.mesh.visible  = false;
+      noticeSprite.mesh.visible = false;
       return;
     }
 
@@ -84,6 +92,17 @@ export function setupVrUI(scene, camera, renderer) {
     if (panel.visible)            headLock(panel, PANEL_OFFSET);
     headLock(scoreSprite.mesh, SCORE_OFFSET);
     if (timerSprite.mesh.visible) headLock(timerSprite.mesh, TIMER_OFFSET);
+
+    // Fairness notice: shown for NOTICE_SECS when a flat peer enters the session.
+    const showNotice = performance.now() < _noticeUntil;
+    noticeSprite.mesh.visible = showNotice;
+    if (showNotice) headLock(noticeSprite.mesh, NOTICE_OFFSET);
+  }
+
+  // Call when the local player's left gun is dropped due to a flat peer joining.
+  // Shows the fairness notice for NOTICE_SECS; safe to call from any context.
+  function showFairnessNotice() {
+    _noticeUntil = performance.now() + NOTICE_SECS * 1000;
   }
 
   function handleControllerSelect(origin, direction) {
@@ -96,7 +115,7 @@ export function setupVrUI(scene, camera, renderer) {
     return false;
   }
 
-  return { updateVrUI, handleControllerSelect };
+  return { updateVrUI, handleControllerSelect, showFairnessNotice };
 }
 
 // ── Text sprite: a small head-lockable plane whose canvas is repainted only when
