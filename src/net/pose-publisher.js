@@ -44,8 +44,12 @@ function aimJoint(cam) {
 export function setupPosePublisher(renderer, camera, modeCtrl) {
   let elapsed = 0;
   let currentMode = 'screen';
+  let eyeOffset   = 0; // added to the raw XR camera Y when only a 'local' space exists
 
-  modeCtrl.subscribe((state) => { currentMode = state.activeMode; });
+  modeCtrl.subscribe((state) => {
+    currentMode = state.activeMode;
+    eyeOffset   = state.eyeOffset || 0;
+  });
 
   return function publishPose(delta) {
     elapsed += delta;
@@ -54,11 +58,14 @@ export function setupPosePublisher(renderer, camera, modeCtrl) {
 
     const isVR = currentMode === 'vr' || currentMode === 'ar';
 
-    let head, hands, dualCapable;
+    let head, hands, dualCapable, eyeY;
 
     if (isVR && renderer.xr.isPresenting) {
       const xrCam = renderer.xr.getCamera();
       head  = objToJoint(xrCam);
+      // Floor-relative eye height: XR camera Y (floor-relative under local-floor/
+      // bounded-floor) plus eyeOffset (only non-zero when we fell back to 'local').
+      eyeY  = head.p[1] + eyeOffset;
       const c0 = renderer.xr.getController(0);
       const c1 = renderer.xr.getController(1);
       hands = [];
@@ -71,9 +78,13 @@ export function setupPosePublisher(renderer, camera, modeCtrl) {
     } else {
       head  = objToJoint(camera);
       hands = [aimJoint(camera)];
+      eyeY  = head.p[1];  // flat camera is already floor-relative standing eye height (1.6)
       dualCapable = false; // flat / mobile / gaze
     }
 
-    sendPose({ seq: ++_seq, mode: currentMode, head, hands, dualCapable });
+    // eyeY is the ONE height convention shared by every mode: floor-relative eye
+    // height (floor at Y=0). head.p keeps raw world Y for the renderer's XZ delta;
+    // the renderer drives the head's vertical position from eyeY.
+    sendPose({ seq: ++_seq, mode: currentMode, head, hands, dualCapable, eyeY });
   };
 }

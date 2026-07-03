@@ -19,11 +19,17 @@
 
 // WebXR session init options. AR requests dom-overlay so HTML (crosshair/HUD)
 // shows over passthrough on handheld; Quest ignores what it doesn't use.
+// local-floor / bounded-floor give a FLOOR-RELATIVE origin so the published head
+// Y reflects real eye height above the floor (matching flat/mobile's assumed 1.6).
 const VR_INIT = { optionalFeatures: ['local-floor', 'bounded-floor'] };
 const AR_INIT = {
-  optionalFeatures: ['dom-overlay', 'local-floor'],
+  optionalFeatures: ['dom-overlay', 'local-floor', 'bounded-floor'],
   domOverlay: { root: document.body },
 };
+
+// Fallback eye height (metres) added to a non-floor 'local' space so a VR/AR head
+// is still published at a sensible standing height. Matches scene.js flat camera Y.
+const ESTIMATED_EYE_HEIGHT = 1.6;
 
 // ── Mode controller (no DOM) ────────────────────────────────────────────────
 
@@ -33,6 +39,10 @@ export function createModeController(renderer) {
     activeMode: 'screen', // 'screen' | 'vr' | 'ar'
     vr: { status: 'checking', reason: '' },
     ar: { status: 'checking', reason: '' },
+    // Eye-height offset added to the raw XR camera Y before publishing (metres).
+    // 0 when a real floor-relative space (local-floor/bounded-floor) is granted;
+    // ESTIMATED_EYE_HEIGHT when only a non-floor 'local' space is available.
+    eyeOffset: 0,
   };
 
   const listeners = [];
@@ -44,12 +54,34 @@ export function createModeController(renderer) {
     fn(state); // push current state immediately
   }
 
+  // ── Reference space selection (floor-relative eye height) ────────────────────
+  // Pick the best floor-relative reference space the runtime actually granted,
+  // set it on the renderer BEFORE setSession (Three reads referenceSpaceType when
+  // it requests the space), and record the eye-height offset the publisher applies.
+  //   local-floor / bounded-floor → floor at Y=0, head Y is real eye height  → offset 0
+  //   local (no floor granted)     → origin at headset start, head Y ≈ 0      → offset 1.6
+  // Only the Y ORIGIN differs between these; XZ behaviour is identical, so
+  // locomotion/aim are unaffected.
+  function applyReferenceSpace(session) {
+    const feats = session.enabledFeatures;
+    let type = 'local-floor'; // Quest default; safe when enabledFeatures is absent
+    if (feats) {
+      if      (feats.includes('local-floor'))   type = 'local-floor';
+      else if (feats.includes('bounded-floor')) type = 'bounded-floor';
+      else                                      type = 'local';
+    }
+    renderer.xr.setReferenceSpaceType(type);
+    state.eyeOffset = (type === 'local') ? ESTIMATED_EYE_HEIGHT : 0;
+    console.log(`[xr] reference space: ${type} (eyeOffset ${state.eyeOffset})`);
+  }
+
   // ── Mode switching — the reusable methods (DOM + future 3D both call these) ──
 
   async function enterVR() {
     if (state.vr.status !== 'supported') return;
     try {
       const session = await navigator.xr.requestSession('immersive-vr', VR_INIT);
+      applyReferenceSpace(session);        // set floor-relative space before setSession
       await renderer.xr.setSession(session);
       // activeMode is set by the sessionstart listener below.
     } catch (err) {
@@ -61,6 +93,7 @@ export function createModeController(renderer) {
     if (state.ar.status !== 'supported') return;
     try {
       const session = await navigator.xr.requestSession('immersive-ar', AR_INIT);
+      applyReferenceSpace(session);        // set floor-relative space before setSession
       await renderer.xr.setSession(session);
     } catch (err) {
       console.warn('Failed to enter AR:', err);

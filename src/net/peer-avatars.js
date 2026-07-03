@@ -47,9 +47,16 @@ const STALE_TIMEOUT = 3.0;  // seconds of silence before fade starts
 const FADE_SECS     = 1.5;  // fade duration
 
 // ── Head local-offset clamp ───────────────────────────────────────────────────
-// Pose delta drives subtle head movement; clamp prevents runaway if world scales differ.
+// Pose delta drives subtle head XZ movement; clamp prevents runaway if scales differ.
 const _LO = new THREE.Vector3(-0.30, -0.20, -0.30);
 const _HI = new THREE.Vector3( 0.30,  0.20,  0.30);
+
+// ── Floor-relative eye-height clamp ───────────────────────────────────────────
+// The head's VERTICAL position is driven by the peer's published floor-relative
+// eye height (eyeY), not the XZ origin-delta. Clamp to a sane human range so a
+// mis-calibrated peer can't sink through the floor or fly to the ceiling.
+const EYE_Y_MIN = 0.8;
+const EYE_Y_MAX = 2.2;
 
 // ── Gun clone parameters (for right-hand gun) ─────────────────────────────────
 // The raw GLB long-axis is X; rotate 90° Y so barrel faces root-local −Z (toward player).
@@ -153,6 +160,9 @@ class PeerAvatar {
     this._speaking    = false;
     this._hasOrigin   = false;
     this._originPos   = new THREE.Vector3();
+    // Floor-relative eye height (metres). null until the first pose carrying eyeY;
+    // falls back to EYE_Y so pre-eyeY clients still render at standing height.
+    this._eyeY        = null;
     // Fairness gate: null = unknown (don't penalise yet), true/false = known.
     this.dualCapable     = null;
     this._notifyCompose  = null; // set by the manager after construction
@@ -261,6 +271,7 @@ class PeerAvatar {
     }
 
     if (msg.speaking !== undefined) this._speaking = msg.speaking;
+    if (msg.eyeY !== undefined)     this._eyeY    = msg.eyeY;
 
     // Track dualCapable for the fairness gate. Notify the manager only on change
     // so recomputation is cheap (one call per state transition, not 15 Hz).
@@ -318,6 +329,15 @@ class PeerAvatar {
     return _pa.fromArray(worldP).sub(this._originPos).clamp(_LO, _HI);
   }
 
+  // Head vertical position, LOCAL to the root slot. Driven by the peer's published
+  // floor-relative eye height (eyeY), NOT the XZ origin-delta. root.position.y is
+  // EYE_Y, and the scene floor is Y=0, so the local Y that puts the head at world
+  // height `eyeY` is (eyeY - EYE_Y). Falls back to EYE_Y (→ local 0) if no eyeY yet.
+  _headLocalY() {
+    const y = this._eyeY == null ? EYE_Y : this._eyeY;
+    return THREE.MathUtils.clamp(y, EYE_Y_MIN, EYE_Y_MAX) - EYE_Y;
+  }
+
   // Orient the hand+gun so the barrel tracks the peer's aim direction.
   // hands[0].q is the world quaternion of the peer's camera (flat) or right
   // controller (VR) — the gun barrel lies along handMesh local -Z, so
@@ -332,6 +352,7 @@ class PeerAvatar {
   _applyPose(msg) {
     if (!msg.head || !this._hasOrigin) return;
     this.headMesh.position.copy(this._headLocalPos(msg.head.p));
+    this.headMesh.position.y = this._headLocalY(); // vertical from floor-relative eyeY
     if (msg.hands?.[0]) this._applyAim(_aimQ.fromArray(msg.hands[0].q));
   }
 
@@ -340,6 +361,7 @@ class PeerAvatar {
     const pa = _pa.fromArray(a.head.p).sub(this._originPos).clamp(_LO, _HI);
     const pb = _pb.fromArray(b.head.p).sub(this._originPos).clamp(_LO, _HI);
     this.headMesh.position.lerpVectors(pa, pb, t);
+    this.headMesh.position.y = this._headLocalY(); // vertical from floor-relative eyeY
     // Head rotation: interpolate the broadcast quaternion so the head nods/turns.
     this.headMesh.quaternion.slerpQuaternions(
       _qa.fromArray(a.head.q),
