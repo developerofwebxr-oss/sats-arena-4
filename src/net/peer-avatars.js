@@ -58,17 +58,31 @@ const _HI = new THREE.Vector3( 0.30,  0.20,  0.30);
 const EYE_Y_MIN = 0.8;
 const EYE_Y_MAX = 2.2;
 
-// ── Gun clone parameters (for right-hand gun) ─────────────────────────────────
-// The raw GLB long-axis is X; rotate 90° Y so barrel faces root-local −Z (toward player).
+// ── Gun clone parameters (per hand) ───────────────────────────────────────────
+// The raw GLB long-axis is X; rotate 90° Y so barrel faces hand-local −Z (toward player).
 // Scale slightly smaller than player gun (0.50) to look right at arm's length.
 const GUN_SCALE = 0.42;
 const GUN_POS   = new THREE.Vector3(0, -0.12, 0.05); // hang slightly below + forward of hand
 const GUN_EULER = new THREE.Euler(0, Math.PI / 2, 0); // barrel → local −Z
 
-// Right hand resting position in root-LOCAL space:
-//   +0.28 X = peer's right (their dominant hand), −0.38 Y = below shoulder,
-//   −0.20 Z = slightly forward (toward player)
-const HAND_REST = new THREE.Vector3(0.28, -0.38, -0.20);
+// ── Torso (floating chest, no legs) ───────────────────────────────────────────
+// Torso is a child of root; its ORIGIN is at shoulder height and it is repositioned
+// each frame just below the head node, upright, yaw-following the head. The chest
+// mesh hangs downward from the shoulders and tapers to a rounded base.
+const SHOULDER_DROP  = 0.30;   // shoulders sit this far below the head/eye centre (m)
+const TORSO_HEIGHT   = 0.46;   // shoulders → base
+const TORSO_TOP_R    = 0.19;   // shoulder-width radius
+const TORSO_BOT_R    = 0.11;   // waist radius (tapers in)
+const TORSO_RADIAL   = 12;     // low-poly
+
+// ── Arms + hands (torso-LOCAL; −Z is forward, toward the viewer) ───────────────
+// Shoulders sit at the top corners of the torso; hands rest out in front at arm's
+// length. A tapered limb connects shoulder → hand; the gun lives at the hand.
+const SHOULDER_X = 0.17;                              // shoulder offset from torso centre
+const HAND_R     = new THREE.Vector3( 0.26, -0.10, -0.30); // right hand rest (torso-local)
+const HAND_L     = new THREE.Vector3(-0.26, -0.10, -0.30); // left  hand rest (mirror X)
+const ARM_R_SHOULDER = 0.055; // limb radius at the shoulder (thicker)
+const ARM_R_WRIST    = 0.035; // limb radius at the wrist  (tapered)
 
 // ── Shared geometry (allocated once per module lifetime) ─────────────────────
 // Flat-faced head constants — faithful port from xr-stage/web/src/room/avatars.js.
@@ -77,9 +91,10 @@ const HEAD_CUT_RAD = THREE.MathUtils.degToRad(128); // past-hemisphere; larger =
 const _openingR    = HEAD_RADIUS * Math.sin(HEAD_CUT_RAD); // radius of the circular face disc
 const _openingZ    = HEAD_RADIUS * Math.cos(HEAD_CUT_RAD); // z-offset of the disc (negative = forward)
 
-// Head geometry is shared (same shape across all peers); materials are per-instance
-// inside _makeHead() so each avatar's opacity fades independently.
-let _skullGeo, _faceGeo, _handGeo, _handMat, _ringGeo, _phGeo, _phMat;
+// Head + body geometry is shared (same shape across all peers); MATERIALS are
+// per-instance so each avatar's opacity fades independently.
+let _skullGeo, _torsoGeo, _baseGeo, _ringGeo, _phGeo, _phMat;
+let _faceGeo;
 
 function _initShared() {
   if (_skullGeo) return;
@@ -87,13 +102,43 @@ function _initShared() {
   _skullGeo = new THREE.SphereGeometry(HEAD_RADIUS, 24, 16, 0, Math.PI * 2, 0, HEAD_CUT_RAD);
   // Circle cap that exactly plugs the skull opening.
   _faceGeo  = new THREE.CircleGeometry(_openingR, 32);
-  _handGeo  = new THREE.SphereGeometry(0.06, 8, 6);
-  _handMat  = new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.7, metalness: 0 });
+  // Torso: tapered cylinder (wide shoulders → narrow waist), low-poly, open-ended
+  // (the rounded base sphere caps the bottom; the top is hidden under the neck).
+  _torsoGeo = new THREE.CylinderGeometry(TORSO_TOP_R, TORSO_BOT_R, TORSO_HEIGHT, TORSO_RADIAL, 1, true);
+  // Rounded base — soft cap so the floating torso doesn't read as a cut-off tube.
+  _baseGeo  = new THREE.SphereGeometry(TORSO_BOT_R, TORSO_RADIAL, 8);
   // Speaking ring scaled to new HEAD_RADIUS (was 0.16 for old radius 0.12).
   _ringGeo  = new THREE.TorusGeometry(HEAD_RADIUS * 1.25, 0.012, 6, 24);
   // Placeholder: bright green wireframe box — immediately obvious, needs no texture/light.
   _phGeo    = new THREE.BoxGeometry(0.40, 0.90, 0.20);
   _phMat    = new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true });
+}
+
+// Body material — blue-white sibling to the head (0xe8e8ef) with a faint cyan
+// emissive so it reads sci-fi/Tron even without a bloom pass (SA4 has none).
+// Cloned per avatar so opacity fades are independent.
+function _makeBodyMat() {
+  return new THREE.MeshStandardMaterial({
+    color:             0xdfe8f2,
+    roughness:         0.55,
+    metalness:         0.10,
+    emissive:          0x0a3a44, // faint cyan glow in shadow
+    emissiveIntensity: 1.0,
+  });
+}
+
+// Tapered limb between two torso-LOCAL points (shoulder → hand). Returns a Mesh
+// oriented along the connector; thicker at the shoulder, thinner at the wrist.
+// Static (does not rotate with aim) — reads as an arm leading to the gun.
+function _makeLimb(a, b, mat) {
+  const dir = _limbDir.copy(b).sub(a);
+  const len = dir.length();
+  // Cylinder axis is +Y: top (+Y) → b (wrist, thin), bottom → a (shoulder, thick).
+  const geo  = new THREE.CylinderGeometry(ARM_R_WRIST, ARM_R_SHOULDER, len, 8, 1, true);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.copy(a).add(b).multiplyScalar(0.5);       // midpoint
+  mesh.quaternion.setFromUnitVectors(_UP, dir.normalize()); // +Y → connector direction
+  return mesh;
 }
 
 // Ported verbatim from xr-stage makeHead() — same shape, proportions, materials.
@@ -142,6 +187,10 @@ const _aimDir  = new THREE.Vector3();
 const _aimQ    = new THREE.Quaternion();
 const _muzzle  = new THREE.Vector3();
 const _shotDir = new THREE.Vector3();
+// Body/limb helpers (module-level so _makeLimb + torso yaw don't allocate)
+const _limbDir = new THREE.Vector3();
+const _UP      = new THREE.Vector3(0, 1, 0);
+const _yawE    = new THREE.Euler(0, 0, 0, 'YXZ');
 
 // ── PeerAvatar ────────────────────────────────────────────────────────────────
 
@@ -200,25 +249,59 @@ class PeerAvatar {
     this.label = this._makeLabel(displayName);
     this.headMesh.add(this.label);
 
-    // ── Right hand sphere ─────────────────────────────────────────────────────
-    this.handMesh = new THREE.Mesh(_handGeo, _handMat.clone());
-    this.handMesh.position.copy(HAND_REST);
-    this.handMesh.visible = false;
-    this.root.add(this.handMesh);
+    // ── Body material (per-avatar, for independent opacity fade) ──────────────
+    this._bodyMat = _makeBodyMat();
 
-    // ── Gun pivot — child of right hand ───────────────────────────────────────
-    // Position/rotation applied here; the raw GLB model is added once loaded.
-    this._gunGroup = new THREE.Group();
-    this._gunGroup.position.copy(GUN_POS);
-    this._gunGroup.rotation.copy(GUN_EULER);
-    this._gunGroup.scale.setScalar(GUN_SCALE);
-    this.handMesh.add(this._gunGroup);
+    // ── Floating torso (child of root; repositioned under the head each frame) ─
+    // Origin at shoulder height; chest hangs downward and tapers to a rounded base.
+    this.torso = new THREE.Group();
+    this.torso.visible = false; // shown with the rest of the body on first pose
+    const chest = new THREE.Mesh(_torsoGeo, this._bodyMat);
+    chest.position.y = -TORSO_HEIGHT / 2; // top (shoulders) at torso origin
+    const base = new THREE.Mesh(_baseGeo, this._bodyMat);
+    base.position.y = -TORSO_HEIGHT;      // rounded cap at the bottom
+    this.torso.add(chest, base);
+    this.root.add(this.torso);
+
+    // ── Arms + hands ──────────────────────────────────────────────────────────
+    // Two arm units (right, left). Each: a static tapered limb (shoulder → hand)
+    // plus an invisible hand pivot that holds a gun and rotates to track aim.
+    // The gun-holding sphere is GONE — the arm now leads to the gun.
+    // Right = index 0 (always shown for a peer with ≥1 gun); left = index 1
+    // (shown only for a dual-wield / both-headset peer publishing a 2nd hand).
+    this.arms = [
+      this._makeArmUnit(new THREE.Vector3( SHOULDER_X, 0, 0), HAND_R, identity),
+      this._makeArmUnit(new THREE.Vector3(-SHOULDER_X, 0, 0), HAND_L, identity),
+    ];
+    // Muzzle origin for peer-shot VFX stays the RIGHT gun (index 0) — keeps
+    // fireFromGun / lightning behaviour identical to before.
+    this._gunGroup = this.arms[0].gunGroup;
+  }
+
+  // Build one arm unit: static limb (child of torso) + hand pivot (child of torso)
+  // holding a gun clone. Hidden until pose/visibility says otherwise.
+  _makeArmUnit(shoulder, hand, identity) {
+    const arm = _makeLimb(shoulder, hand, this._bodyMat);
+    arm.visible = false;
+    this.torso.add(arm);
+
+    const pivot = new THREE.Group();     // invisible — no sphere; just holds the gun
+    pivot.position.copy(hand);
+    pivot.visible = false;
+    this.torso.add(pivot);
+
+    const gunGroup = new THREE.Group();
+    gunGroup.position.copy(GUN_POS);
+    gunGroup.rotation.copy(GUN_EULER);
+    gunGroup.scale.setScalar(GUN_SCALE);
+    pivot.add(gunGroup);
 
     cloneGun().then((model) => {
-      if (this.dead) return; // avatar was disposed before the gun loaded — skip
-      this._gunGroup.add(model);
-      console.log(`[avatar] gun cloned for peer ${identity}`);
+      if (this.dead) return; // disposed before the gun loaded — skip
+      gunGroup.add(model);
     });
+
+    return { arm, pivot, gunGroup };
   }
 
   // ── Label (billboarded sprite) ────────────────────────────────────────────
@@ -259,7 +342,7 @@ class PeerAvatar {
       this._hasOrigin = true;
       this._ph.visible = false;
       this.headMesh.visible = true;
-      this.handMesh.visible = true;
+      this.torso.visible = true; // arms/guns reveal per-hand in _applyHands
     }
 
     this.poseBuffer.push({ time: recvSec, msg });
@@ -338,22 +421,54 @@ class PeerAvatar {
     return THREE.MathUtils.clamp(y, EYE_Y_MIN, EYE_Y_MAX) - EYE_Y;
   }
 
-  // Orient the hand+gun so the barrel tracks the peer's aim direction.
-  // hands[0].q is the world quaternion of the peer's camera (flat) or right
-  // controller (VR) — the gun barrel lies along handMesh local -Z, so
-  // handMesh.lookAt(worldPos + aimDir) makes the barrel face the aim direction.
-  _applyAim(aimWorldQ) {
+  // Keep the torso just below the head, upright, yaw-following the head. Called
+  // after the head position/quaternion are set for the frame. Upright = no pitch/
+  // roll; only the head's yaw is copied so head + torso read as one figure.
+  _updateTorso() {
+    this.torso.position.set(
+      this.headMesh.position.x,
+      this.headMesh.position.y - SHOULDER_DROP,
+      this.headMesh.position.z,
+    );
+    _yawE.setFromQuaternion(this.headMesh.quaternion); // 'YXZ' → .y is yaw
+    this.torso.rotation.set(0, _yawE.y, 0);
+  }
+
+  // Orient a hand pivot so its gun barrel tracks the peer's aim direction.
+  // hands[i].q is the world quaternion of the peer's camera (flat) or controller
+  // (VR); the gun barrel lies along the pivot's local -Z, so lookAt(pos + aimDir)
+  // faces the barrel down the aim. The arm limb is static and does not rotate.
+  _applyAimPivot(pivot, aimWorldQ) {
     _aimDir.set(0, 0, -1).applyQuaternion(aimWorldQ);
-    this.handMesh.getWorldPosition(_pa);
+    pivot.getWorldPosition(_pa);
     _pa.addScaledVector(_aimDir, 1.0);
-    this.handMesh.lookAt(_pa);
+    pivot.lookAt(_pa);
+  }
+
+  // Show/aim an arm+gun per published hand; hide arms with no hand data.
+  // Right = index 0 (any peer with a gun); left = index 1 (dual-wield peer with a
+  // 2nd published hand). handsB/t optional (used for interpolation).
+  _applyHands(handsA, handsB, t) {
+    for (let i = 0; i < this.arms.length; i++) {
+      const a = handsA && handsA[i];
+      const b = handsB && handsB[i];
+      const unit = this.arms[i];
+      if (!a && !b) { unit.arm.visible = false; unit.pivot.visible = false; continue; }
+      unit.arm.visible   = true;
+      unit.pivot.visible = true;
+      if (a && b) _aimQ.slerpQuaternions(_qa.fromArray(a.q), _qb.fromArray(b.q), t);
+      else        _aimQ.fromArray((a || b).q);
+      this._applyAimPivot(unit.pivot, _aimQ);
+    }
   }
 
   _applyPose(msg) {
     if (!msg.head || !this._hasOrigin) return;
     this.headMesh.position.copy(this._headLocalPos(msg.head.p));
     this.headMesh.position.y = this._headLocalY(); // vertical from floor-relative eyeY
-    if (msg.hands?.[0]) this._applyAim(_aimQ.fromArray(msg.hands[0].q));
+    if (msg.head.q) this.headMesh.quaternion.fromArray(msg.head.q); // keep yaw fresh for the torso
+    this._updateTorso();
+    this._applyHands(msg.hands, null, 0);
   }
 
   _applyInterpolated(a, b, t) {
@@ -368,15 +483,9 @@ class PeerAvatar {
       _qb.fromArray(b.head.q),
       t,
     );
-    // Gun aim: slerp between the two aim quaternions (reuses _qa/_qb after head).
-    if (a.hands?.[0] && b.hands?.[0]) {
-      _aimQ.slerpQuaternions(
-        _qa.fromArray(a.hands[0].q),
-        _qb.fromArray(b.hands[0].q),
-        t,
-      );
-      this._applyAim(_aimQ);
-    }
+    this._updateTorso();
+    // Arms/guns: slerp each present hand's aim (reuses _qa/_qb after the head slerp).
+    this._applyHands(a.hands, b.hands, t);
   }
 
   // Trigger the peer shot VFX from this avatar's gun world position.
@@ -396,12 +505,13 @@ class PeerAvatar {
     this._opacity = v;
     if (v <= 0) { this.root.visible = false; return; }
     this.root.visible = true;
-    // headMesh is now a Group (skull + faceMount) — traverse all child meshes.
+    // headMesh is a Group (skull + faceMount) — traverse all child meshes.
     this.headMesh.traverse((o) => {
       if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = v; }
     });
-    this.handMesh.material.transparent = true;
-    this.handMesh.material.opacity     = v;
+    // Torso + both arms share the per-avatar body material — one set fades all.
+    this._bodyMat.transparent = true;
+    this._bodyMat.opacity     = v;
     this.label.material.opacity = v;
   }
 
@@ -411,7 +521,9 @@ class PeerAvatar {
     this.scene.remove(this.root);
     // Dispose per-instance materials (skull + faceMount); geometry is shared — do not dispose.
     this.headMesh.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
-    this.handMesh.material.dispose();
+    this._bodyMat.dispose();              // torso + arms (shared per-avatar)
+    // Per-avatar arm limb GEOMETRY (built per instance in _makeLimb) — dispose it.
+    this.arms.forEach((u) => u.arm.geometry.dispose());
     this._ring.material.dispose();
     this.label.material.map.dispose();
     this.label.material.dispose();
