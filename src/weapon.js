@@ -119,6 +119,60 @@ export function setupWeapon(camera, renderer) {
     let _mirror = false;
     let _euler  = initialEuler;
 
+    // ── Grey (disabled) state ──────────────────────────────────────────────
+    // Captures original material values so restore is exact.
+    // setGrey(true/false) can be called before or after setModel — _greyActive
+    // is checked in setModel and applied immediately when the model arrives.
+    let _greyActive = false;
+    const _savedMats = new Map(); // material → { color, emissive, opacity, transparent }
+    let _savedKeyI   = 8;  // gunKey.intensity before grey
+    let _savedFillI  = 4;  // gunFill.intensity before grey
+
+    function _applyGrey() {
+      if (!_model) return;
+      _savedKeyI  = gunKey.intensity;
+      _savedFillI = gunFill.intensity;
+      gunKey.intensity  = 0;
+      gunFill.intensity = 0;
+      _model.traverse((o) => {
+        if (!o.isMesh || !o.material) return;
+        const mats = Array.isArray(o.material) ? o.material : [o.material];
+        mats.forEach((mat) => {
+          if (!_savedMats.has(mat)) {
+            _savedMats.set(mat, {
+              color:       mat.color.clone(),
+              emissive:    mat.emissive ? mat.emissive.clone() : null,
+              opacity:     mat.opacity,
+              transparent: mat.transparent,
+            });
+          }
+          mat.color.setRGB(0.45, 0.45, 0.45);
+          if (mat.emissive) mat.emissive.set(0x000000);
+          mat.opacity     = 0.35;
+          mat.transparent = true;
+          mat.needsUpdate = true;
+        });
+      });
+    }
+
+    function _restoreGrey() {
+      gunKey.intensity  = _savedKeyI;
+      gunFill.intensity = _savedFillI;
+      _savedMats.forEach((saved, mat) => {
+        mat.color.copy(saved.color);
+        if (mat.emissive && saved.emissive) mat.emissive.copy(saved.emissive);
+        mat.opacity     = saved.opacity;
+        mat.transparent = saved.transparent;
+        mat.needsUpdate = true;
+      });
+      _savedMats.clear();
+    }
+
+    function setGrey(active) {
+      _greyActive = active;
+      if (active) _applyGrey(); else _restoreGrey();
+    }
+
     function _applyTransform() {
       if (!_model) return;
       _model.position.copy(MODEL_POS);
@@ -129,10 +183,19 @@ export function setupWeapon(camera, renderer) {
     function setModel(m) {
       _model = m;
       m.traverse((o) => {
-        if (o.isMesh) { o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false; }
+        if (!o.isMesh) return;
+        o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false;
+        // Clone the material so this gun unit owns it independently — safe to mutate
+        // for grey state without affecting the camera gun or other controller guns.
+        if (o.material) {
+          o.material = Array.isArray(o.material)
+            ? o.material.map((mat) => mat.clone())
+            : o.material.clone();
+        }
       });
       _applyTransform();
       group.add(m);
+      if (_greyActive) _applyGrey(); // apply pending grey if set before model loaded
     }
 
     function setMirror(b)      { _mirror = b; _applyTransform(); }
@@ -161,7 +224,7 @@ export function setupWeapon(camera, renderer) {
       }
     }
 
-    return { group, setModel, setMirror, setModelEuler, flashMuzzle, updateFlash };
+    return { group, setModel, setMirror, setModelEuler, setGrey, flashMuzzle, updateFlash };
   }
 
   // ── Create guns ───────────────────────────────────────────────────────────
@@ -240,7 +303,8 @@ export function setupWeapon(camera, renderer) {
   function setLeftGunActive(active) {
     _leftGunActive = active;
     if (_leftControllerIndex >= 0) {
-      controllerGuns[_leftControllerIndex].group.visible = active;
+      // Don't hide — grey out instead so the player sees the gun is present but off.
+      controllerGuns[_leftControllerIndex].setGrey(!active);
     }
   }
 
@@ -256,11 +320,13 @@ export function setupWeapon(camera, renderer) {
       if (isLeft) _leftControllerIndex = i;
       controllerGuns[i].setModelEuler(isLeft ? VR_MODEL_EULER_LEFT : VR_MODEL_EULER);
       controllerGuns[i].setMirror(isLeft && MIRROR_LEFT);
-      // Respect the fairness gate if it was set before this controller connected.
-      controllerGuns[i].group.visible = isLeft ? _leftGunActive : true;
+      controllerGuns[i].group.visible = true; // always show; grey signals disabled
+      // Apply grey immediately if the fairness gate was already active.
+      if (isLeft && !_leftGunActive) controllerGuns[i].setGrey(true);
     });
     renderer.xr.getController(i).addEventListener('disconnected', () => {
       if (i === _leftControllerIndex) _leftControllerIndex = -1;
+      controllerGuns[i].setGrey(false); // reset material state for next connect cycle
       controllerGuns[i].group.visible = false;
     });
   });

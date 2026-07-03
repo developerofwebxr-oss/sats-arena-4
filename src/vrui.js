@@ -38,8 +38,8 @@ export function setupVrUI(scene, camera, renderer) {
   // ── SCORE + COUNTDOWN text sprites (repaint-on-change) ──────────────────────
   const scoreSprite  = createTextSprite(SCORE_WIDTH, '#f7931a'); // orange
   const timerSprite  = createTextSprite(TIMER_WIDTH, '#b14bff'); // magenta
-  const noticeSprite = createTextSprite(1.0, '#ff6060');          // red — fairness warning
-  noticeSprite.setText('Opponent on flat screen:\nright hand only');
+  const noticeSprite = createTextSprite(1.4, '#ff6060');           // red — fairness warning
+  noticeSprite.setText('Left gun disabled for fair play.\nBoth in headsets → two-handed.');
   scoreSprite.mesh.visible  = false;
   timerSprite.mesh.visible  = false;
   noticeSprite.mesh.visible = false;
@@ -99,10 +99,16 @@ export function setupVrUI(scene, camera, renderer) {
     if (showNotice) headLock(noticeSprite.mesh, NOTICE_OFFSET);
   }
 
-  // Call when the local player's left gun is dropped due to a flat peer joining.
-  // Shows the fairness notice for NOTICE_SECS; safe to call from any context.
+  // Shown when the left gun is dropped (flat peer entered).
   function showFairnessNotice() {
+    noticeSprite.setText('Left gun disabled for fair play.\nBoth in headsets → two-handed.');
     _noticeUntil = performance.now() + NOTICE_SECS * 1000;
+  }
+
+  // Shown briefly when the left gun is restored (flat peer left / both in headsets).
+  function showFairnessRestoreNotice() {
+    noticeSprite.setText('Left gun back — shoot two-handed!');
+    _noticeUntil = performance.now() + 3000; // 3 s — shorter, it's good news
   }
 
   function handleControllerSelect(origin, direction) {
@@ -115,7 +121,7 @@ export function setupVrUI(scene, camera, renderer) {
     return false;
   }
 
-  return { updateVrUI, handleControllerSelect, showFairnessNotice };
+  return { updateVrUI, handleControllerSelect, showFairnessNotice, showFairnessRestoreNotice };
 }
 
 // ── Text sprite: a small head-lockable plane whose canvas is repainted only when
@@ -143,13 +149,14 @@ function createTextSprite(worldWidth, color) {
     last = str;
     ctx.clearRect(0, 0, W, H);
 
-    // Auto-fit: start at BASE_FONT, shrink if the text would overflow the width
-    // (so long scores like "SCORE 9999" stay fully visible and centred).
+    const lines = str.split('\n');
+
+    // Auto-fit: find the font size where the LONGEST line fits in MAX_W.
     let fontPx = BASE_FONT;
     ctx.font = `bold ${fontPx}px monospace`;
-    const measured = ctx.measureText(str).width;
-    if (measured > MAX_W) {
-      fontPx = Math.floor(fontPx * (MAX_W / measured));
+    const widest = Math.max(...lines.map((l) => ctx.measureText(l).width));
+    if (widest > MAX_W) {
+      fontPx = Math.floor(fontPx * (MAX_W / widest));
       ctx.font = `bold ${fontPx}px monospace`;
     }
 
@@ -158,7 +165,16 @@ function createTextSprite(worldWidth, color) {
     ctx.textBaseline = 'middle';
     ctx.shadowColor = color;
     ctx.shadowBlur = 18;
-    ctx.fillText(str, W / 2, H / 2);
+
+    if (lines.length === 1) {
+      ctx.fillText(str, W / 2, H / 2);
+    } else {
+      const lineH  = fontPx * 1.3;
+      const totalH = lineH * lines.length;
+      const yStart = (H - totalH) / 2 + lineH * 0.5;
+      lines.forEach((line, i) => ctx.fillText(line, W / 2, yStart + i * lineH));
+    }
+
     tex.needsUpdate = true; // upload only on change
   }
 

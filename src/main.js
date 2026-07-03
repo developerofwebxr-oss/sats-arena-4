@@ -81,6 +81,7 @@ const { updatePeers } = setupPeerAvatars(scene, {
   onCompositionChange(anyFlatPeer) {
     weapon.setLeftGunActive(!anyFlatPeer);
     if (anyFlatPeer && !_hadFlatPeer) vrui.showFairnessNotice();
+    if (!anyFlatPeer && _hadFlatPeer)  vrui.showFairnessRestoreNotice();
     _hadFlatPeer = anyFlatPeer;
   },
 });
