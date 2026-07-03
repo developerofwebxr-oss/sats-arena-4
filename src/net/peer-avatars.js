@@ -64,18 +64,65 @@ const GUN_EULER = new THREE.Euler(0, Math.PI / 2, 0); // barrel → local −Z
 const HAND_REST = new THREE.Vector3(0.28, -0.38, -0.20);
 
 // ── Shared geometry (allocated once per module lifetime) ─────────────────────
-let _headGeo, _headMat, _handGeo, _handMat, _ringGeo, _phGeo, _phMat;
+// Flat-faced head constants — faithful port from xr-stage/web/src/room/avatars.js.
+const HEAD_RADIUS  = 0.22;
+const HEAD_CUT_RAD = THREE.MathUtils.degToRad(128); // past-hemisphere; larger = smaller face opening
+const _openingR    = HEAD_RADIUS * Math.sin(HEAD_CUT_RAD); // radius of the circular face disc
+const _openingZ    = HEAD_RADIUS * Math.cos(HEAD_CUT_RAD); // z-offset of the disc (negative = forward)
+
+// Head geometry is shared (same shape across all peers); materials are per-instance
+// inside _makeHead() so each avatar's opacity fades independently.
+let _skullGeo, _faceGeo, _handGeo, _handMat, _ringGeo, _phGeo, _phMat;
 
 function _initShared() {
-  if (_headGeo) return;
-  _headGeo = new THREE.SphereGeometry(0.12, 12, 8);
-  _headMat = new THREE.MeshStandardMaterial({ color: 0x44aaff, roughness: 0.6, metalness: 0.1 });
-  _handGeo = new THREE.SphereGeometry(0.06, 8, 6);
-  _handMat = new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.7, metalness: 0 });
-  _ringGeo = new THREE.TorusGeometry(0.16, 0.012, 6, 24);
+  if (_skullGeo) return;
+  // Partial sphere: full phi sweep, theta from back pole down 128 degrees (past equator).
+  _skullGeo = new THREE.SphereGeometry(HEAD_RADIUS, 24, 16, 0, Math.PI * 2, 0, HEAD_CUT_RAD);
+  // Circle cap that exactly plugs the skull opening.
+  _faceGeo  = new THREE.CircleGeometry(_openingR, 32);
+  _handGeo  = new THREE.SphereGeometry(0.06, 8, 6);
+  _handMat  = new THREE.MeshStandardMaterial({ color: 0xffaa44, roughness: 0.7, metalness: 0 });
+  // Speaking ring scaled to new HEAD_RADIUS (was 0.16 for old radius 0.12).
+  _ringGeo  = new THREE.TorusGeometry(HEAD_RADIUS * 1.25, 0.012, 6, 24);
   // Placeholder: bright green wireframe box — immediately obvious, needs no texture/light.
-  _phGeo   = new THREE.BoxGeometry(0.40, 0.90, 0.20);
-  _phMat   = new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true });
+  _phGeo    = new THREE.BoxGeometry(0.40, 0.90, 0.20);
+  _phMat    = new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true });
+}
+
+// Ported verbatim from xr-stage makeHead() — same shape, proportions, materials.
+// Returns a THREE.Group containing skull (rounded back) + faceMount (flat disc cap).
+//
+// To swap in a real profile image later (one-liner):
+//   const fm = headGroup.getObjectByName('faceMount');
+//   fm.material.map = new THREE.TextureLoader().load(url);
+//   fm.material.map.colorSpace = THREE.SRGBColorSpace;
+//   fm.material.color.set(0xffffff);
+//   fm.material.needsUpdate = true;
+function _makeHead() {
+  _initShared();
+  const head = new THREE.Group();
+
+  // Rounded back hemisphere. rotation.x = PI/2 rotates the +Y pole to +Z (back of head),
+  // so the skull's opening faces -Z (forward, toward the player looking at this peer).
+  const skull = new THREE.Mesh(
+    _skullGeo,
+    new THREE.MeshStandardMaterial({ color: 0xe8e8ef, roughness: 0.6 }),
+  );
+  skull.rotation.x = Math.PI / 2;
+  head.add(skull);
+
+  // Flat face disc — caps the skull opening, flush at openingZ, facing forward (-Z).
+  const faceMount = new THREE.Mesh(
+    _faceGeo,
+    new THREE.MeshStandardMaterial({ color: 0x222a3a, roughness: 0.85, metalness: 0 }),
+  );
+  faceMount.name       = 'faceMount';
+  faceMount.rotation.y = Math.PI;   // CircleGeometry faces +Z by default; flip to face -Z
+  faceMount.position.z = _openingZ; // flush with the skull's circular opening
+  head.add(faceMount);
+
+  // SA4 drives head.position via pose delta, so head.position.y is NOT set here.
+  return head;
 }
 
 // ── Per-frame interpolation temporaries (no allocation in hot path) ──────────
@@ -121,8 +168,10 @@ class PeerAvatar {
     this._ph.position.set(0, -0.45, 0); // centre the box at torso (head is above)
     this.root.add(this._ph);
 
-    // ── Head sphere (hidden until first pose) ─────────────────────────────────
-    this.headMesh = new THREE.Mesh(_headGeo, _headMat.clone());
+    // ── Flat-faced head group (hidden until first pose) ───────────────────────
+    // Returns a THREE.Group with skull + faceMount — drop-in for the old sphere.
+    // All downstream code (pose position/quaternion, ring, label) still uses this.headMesh.
+    this.headMesh = _makeHead();
     this.headMesh.visible = false;
     this.root.add(this.headMesh);
 
@@ -176,7 +225,7 @@ class PeerAvatar {
     const mat    = new THREE.SpriteMaterial({ map: tex, depthTest: false });
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(0.6, 0.15, 1);
-    sprite.position.set(0, 0.22, 0); // float above the head sphere
+    sprite.position.set(0, HEAD_RADIUS + 0.13, 0); // float above the head (HEAD_RADIUS + margin)
     return sprite;
   }
 
@@ -315,8 +364,10 @@ class PeerAvatar {
     this._opacity = v;
     if (v <= 0) { this.root.visible = false; return; }
     this.root.visible = true;
-    this.headMesh.material.transparent = true;
-    this.headMesh.material.opacity     = v;
+    // headMesh is now a Group (skull + faceMount) — traverse all child meshes.
+    this.headMesh.traverse((o) => {
+      if (o.isMesh && o.material) { o.material.transparent = true; o.material.opacity = v; }
+    });
     this.handMesh.material.transparent = true;
     this.handMesh.material.opacity     = v;
     this.label.material.opacity = v;
@@ -326,8 +377,8 @@ class PeerAvatar {
   dispose() {
     this.dead = true;
     this.scene.remove(this.root);
-    // Dispose only per-instance materials/textures we created (not shared ones).
-    this.headMesh.material.dispose();
+    // Dispose per-instance materials (skull + faceMount); geometry is shared — do not dispose.
+    this.headMesh.traverse((o) => { if (o.isMesh && o.material) o.material.dispose(); });
     this.handMesh.material.dispose();
     this._ring.material.dispose();
     this.label.material.map.dispose();
