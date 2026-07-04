@@ -43,6 +43,16 @@ export function setCoopMode(mode) {
   currentMode = mode; // 'flat' | 'vr' | 'ar'
 }
 
+// This device's own claimed code (the room it owns). Competition uses it to
+// decide the host/authority: you are the host iff getRoomName() === getOwnCode()
+// (the owner auto-joins their OWN code; a joiner is in the friend's code).
+export function getOwnCode() { return ownCode; }
+
+// This device's display name (for competition proposal cards).
+export function getLocalName() {
+  return localStorage.getItem('coopName') || (nameInput && nameInput.value) || 'Player';
+}
+
 export function setupCoopHud() {
   injectStyles();
 

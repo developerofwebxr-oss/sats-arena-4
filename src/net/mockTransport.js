@@ -317,7 +317,9 @@ export class BCTransport {
     this._channel.postMessage(msg);
   }
 
-  sendEvent(evt) {
+  // BroadcastChannel delivers reliably in-process, so opts.reliable is a no-op
+  // here — competition control/score messages arrive regardless.
+  sendEvent(evt, _opts) {
     if (!this._channel) return;
     this._channel.postMessage({ ...evt, identity: this._identity, displayName: this._identity });
   }
@@ -362,7 +364,10 @@ export class BCTransport {
       }
       const pose = msg.pose;
       this._imp.push(() => this._cb.onPeerPose(pose, id, name));
-    } else if (msg.t === 'shot') {
+    } else {
+      // Any other event type (shot, competition control/score, …) → onPeerEvent.
+      // Delivered directly (not through the impairment queue) so reliable control
+      // and score messages arrive in order without simulated loss.
       this._cb.onPeerEvent(msg, id, name);
     }
   }

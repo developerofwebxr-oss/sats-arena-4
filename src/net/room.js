@@ -105,10 +105,10 @@ class LiveKitTransport {
     this._room.localParticipant.publishData(data, { reliable: false });
   }
 
-  sendEvent(evt) {
+  sendEvent(evt, { reliable = false } = {}) {
     if (!this._room || this._room.state !== 'connected') return;
     const data = _enc.encode(JSON.stringify(evt));
-    this._room.localParticipant.publishData(data, { reliable: false });
+    this._room.localParticipant.publishData(data, { reliable });
   }
 
   async setMicEnabled(enabled) {
@@ -158,7 +158,8 @@ export async function leaveSession() {
 }
 
 export function sendPose(pose)  { _transport?.sendPose(pose); }
-export function sendEvent(evt)  { _transport?.sendEvent?.(evt); }
+// opts.reliable = true → guaranteed-delivery channel (control + score messages).
+export function sendEvent(evt, opts)  { _transport?.sendEvent?.(evt, opts); }
 
 export function onPeerPose(cb)   { _poseCbs.push(cb);  }
 export function onPeerJoin(cb)   { _joinCbs.push(cb);  }

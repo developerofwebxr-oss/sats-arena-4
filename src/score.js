@@ -62,3 +62,15 @@ export function resetRound() {
 export function getBestScore() {
   return parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
 }
+
+/**
+ * Hard-zero the current score/hits/misses WITHOUT persisting a best score.
+ * Used by competition mode for the mandatory 0–0 reset on round begin / rematch
+ * (a partial free-play score must not carry into a match, and must not be logged
+ * as an all-time best). Distinct from resetRound(), which persists best on reload.
+ */
+export function resetScore() {
+  hits   = 0;
+  misses = 0;
+  score  = 0;
+}

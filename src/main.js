@@ -18,6 +18,7 @@ import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
 import { tickTransport } from './net/room.js';
 import { setupMockDevPanel } from './net/mock-dev-panel.js';
+import { setupCompetition, updateCompetition } from './net/competition.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,11 @@ modeCtrl.subscribe((state) => setCoopMode(state.activeMode));
 
 // Co-op HUD (bottom-left toggle panel — join by numeric code).
 setupCoopHud();
+
+// Opt-in competition mode (4:20 race). Inert until both players agree; free
+// endless co-op stays the default. Must come after setupCoopHud so its Compete
+// control can mount inside the co-op panel.
+setupCompetition();
 
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
 // onCompositionChange fires whenever the flat-vs-headset mix of peers changes.
@@ -129,6 +135,7 @@ renderer.setAnimationLoop(function animate() {
   tickTransport();        // flush mock/bc impairment queues
   updatePeers(delta);     // interpolate peer avatar positions
   publishPose(delta);     // broadcast local pose ~15 Hz
+  updateCompetition();    // opt-in match: broadcast own score, repaint dual HUD
 
   renderer.render(scene, camera);
 });
