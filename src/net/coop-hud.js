@@ -462,9 +462,6 @@ export function coopLeave() { return handleLeave(); }
 /** Toggle mic mute (identical to clicking #coop-mute). Keeps the DOM label in sync. */
 export function coopToggleMute() { return handleMute(); }
 
-/** Current mute state, so the in-world item can render MUTE vs UNMUTE. */
-export function isCoopMuted() { return muted; }
-
 /** True once this device is in a room (the DOM shows LEAVE/MUTE at the same time). */
 export function isCoopJoined() { return joined; }
 
