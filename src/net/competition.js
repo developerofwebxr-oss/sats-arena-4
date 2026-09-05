@@ -259,6 +259,17 @@ function clearHostTimers() {
   _hostTimers = [];
 }
 
+// ── Match state (read by the skins module) ────────────────────────────────────
+/**
+ * True while the round clock is running or counting in. Skin switching is
+ * disabled in this window: pausing both players mid-match would distort the
+ * host-authoritative clock and hand either side a pause-cheat.
+ * 'ended' is NOT active — the end card is up and free co-op has resumed.
+ */
+export function isMatchActive() {
+  return state === 'countdown' || state === 'active';
+}
+
 // ── UI actions ────────────────────────────────────────────────────────────────
 function propose() {
   if (!twoConnected() || (state !== 'idle' && state !== 'ended')) return;

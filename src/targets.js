@@ -193,6 +193,12 @@ function makeTargetData(mesh) {
 /**
  * spawnTargets(scene) — create all coin targets and add them to the scene.
  */
+/**
+ * Read-only accessor: the group holding every coin + the Satoshi target. The
+ * skins module tints it reversibly. Spawn/authority/AR-follow logic is untouched.
+ */
+export function getTargetGroup() { return targetGroup; }
+
 export function spawnTargets(scene) {
   scene.add(targetGroup); // coins live under this group so AR can follow the player
 

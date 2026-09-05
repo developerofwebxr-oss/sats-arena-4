@@ -366,7 +366,17 @@ export function setupWeapon(camera, renderer) {
     cameraGun.group.visible = !hidden;
   }
 
-  return { updateWeapon, flashMuzzle, notifyControllerFire, setLeftGunActive, setHidden };
+  /**
+   * Read-only accessor: the root Object3D of every gun (camera gun + both
+   * controller guns). The skins module uses these to apply a REVERSIBLE tint
+   * without re-parenting or rebuilding anything here. Nothing about weapon
+   * behaviour changes; this only hands out references it already owns.
+   */
+  function getGunRoots() {
+    return [cameraGun.group, ...controllerGuns.map((g) => g.group)];
+  }
+
+  return { updateWeapon, flashMuzzle, notifyControllerFire, setLeftGunActive, setHidden, getGunRoots };
 }
 
 // ── Muzzle-flash burst texture (drawn once, shared across all gun units) ─────
