@@ -148,14 +148,18 @@ export function refreshSkinHud() { renderList(); }
 function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
+    /* SKIN belongs to the CO-OP control cluster, not to the RECENTER column.
+       Desktop: stacked directly ABOVE #coop-toggle (which is left:16 bottom:16,
+       31px tall), so 55px clears it by 8px. RECENTER is gyro/mobile-only and
+       never appears here. */
     #skin-toggle {
-      position: fixed; left: 16px; bottom: 96px; z-index: 8000;
+      position: fixed; left: 16px; bottom: 55px; z-index: 8000;
       padding: 8px 12px; border-radius: 8px;
       border: 1px solid #7df6; background: rgba(0,0,0,.55);
       color: #adf; font: 700 12px/1 monospace; letter-spacing: .12em; cursor: pointer;
     }
     #skin-panel {
-      position: fixed; left: 16px; bottom: 140px; z-index: 8001;
+      position: fixed; left: 16px; bottom: 93px; z-index: 8001;
       display: flex; flex-direction: column; gap: 8px;
       width: 210px; padding: 14px;
       background: rgba(6,6,14,.95); border: 1px solid #7df6; border-radius: 10px;
@@ -201,10 +205,38 @@ function injectStyles() {
       font: 12px monospace; letter-spacing: .04em; pointer-events: none;
     }
 
-    /* Mobile: keep clear of the SHOOT/RECENTER cluster. */
-    @media (max-width: 820px) {
-      #skin-toggle { bottom: 150px; }
-      #skin-panel  { bottom: 194px; }
+    /* Mobile portrait: SKIN sits BESIDE CO-OP, forming one row above the
+       SCREEN/VR/AR switcher — [CO-OP][SKIN] over [SCREEN][VR][AR].
+
+       Placement reuses the mode switcher's OWN column math (modeswitcher.js
+       injectStyles + the #coop-toggle rule in coop-hud.js) rather than a
+       hand-placed offset, so it tracks any viewport width:
+         switcher width  SW  = min(100vw - 28px, 360px)
+         column width    COL = (SW - 12px) / 3        (12px = two 6px gaps)
+         switcher left   L   = (100vw - SW) / 2
+       CO-OP takes column 0 (over SCREEN); SKIN takes column 1 (over VR), i.e.
+       left = L + COL + 6px.
+
+       Breakpoint is 480px to MATCH the switcher and CO-OP rules — it was 820px,
+       which put SKIN on the mobile offset at tablet widths where the cluster
+       math does not apply.
+
+       This also resolves the RECENTER overlap: RECENTER is left:16 width:92
+       bottom:110 and ~87px tall (56px circle + two label lines), so the old
+       left:16 bottom:150 SKIN button sat directly on its label. SKIN now shares
+       CO-OP's row at bottom:73 (30px tall, topping out at 103) and sits in the
+       middle column, so it clears RECENTER both vertically and horizontally. */
+    @media (max-width: 480px) {
+      #skin-toggle {
+        bottom: 73px;
+        left: calc((100vw - min(calc(100vw - 28px), 360px)) / 2
+                   + (min(calc(100vw - 28px), 360px) - 12px) / 3 + 6px);
+        width: calc((min(calc(100vw - 28px), 360px) - 12px) / 3);
+        box-sizing: border-box;
+        text-align: center;
+        padding: 8px 4px;
+      }
+      #skin-panel { bottom: 112px; left: 16px; }
     }
   `;
   document.head.appendChild(style);
