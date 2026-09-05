@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import gunModelUrl from './assets/sats-arena-better-gun.glb?url';
+import sponsorGunUrl from './assets/sponsor-gun.glb?url';
+import sponsorLogoRightUrl from './assets/sponsor-logo-right.png?url';
+import sponsorLogoLeftUrl from './assets/sponsor-logo-left.png?url';
+import { isRapidFire } from './upgrade.js';
 
 /**
  * weapon.js — a fancy Bitcoin-themed first-person blaster loaded from a GLB.
@@ -48,6 +52,29 @@ const VR_SCALE = 0.7;
 const MODEL_SCALE = 0.50;
 const MODEL_POS   = new THREE.Vector3(0, -0.26, 0);
 const MODEL_EULER = new THREE.Euler(0, Math.PI / 2, 0);
+
+// ── Sponsor gun (shown during the paid rapid-fire window) ────────────────────
+// The sponsor GLB shares the bitcoin gun's ORIENTATION CONTRACT exactly — barrel
+// along +X, same pivot convention — verified by rendering both through this
+// file's transform chain, so MODEL_EULER / VR_MODEL_EULER / VR_MODEL_EULER_LEFT
+// all apply unchanged and the muzzle/lightning origin does not move.
+//
+// Its bounds differ (1.107 x 0.289 x 0.639 vs 1.152 x 0.204 x 0.571) — a chunkier
+// gun — so it gets a per-model scale. Matching the apparent cross-section the
+// player sees (Y x Z) gives sqrt((0.204*0.571)/(0.289*0.639)) ~= 0.79.
+const SPONSOR_MODEL_SCALE = MODEL_SCALE * 0.79;
+
+// Which side of each gun the sponsor decal sits on, in GROUP space:
+// -1 = the face toward the player's centre line, which is the side actually
+// visible in first person. Flip a value here if a hand reads wrong on-device.
+const DECAL_SIDE_CAMERA = -1;
+const DECAL_SIDE_RIGHT  = -1;
+const DECAL_SIDE_LEFT   = +1;
+const DECAL_HEIGHT_FRAC = 0.20;  // decal height as a fraction of the gun's height
+// The grip hangs below the receiver, so the bounding box centre sits lower than
+// the flat side panel the logo should live on. Bias up the box instead.
+const DECAL_Y_BIAS      = 0.63;  // 0 = box bottom, 1 = box top
+const DECAL_LIFT        = 0.006; // metres off the surface, avoids z-fighting
 
 // ── Per-hand VR model orientation ────────────────────────────────────────────
 // Lifted from sats-arena/src/weapon.js — same GLB, verified correct on Quest.
@@ -115,9 +142,25 @@ export function setupWeapon(camera, renderer) {
     gunFill.position.set(-0.3, 0.0, 0.3);
     group.add(gunKey, gunFill);
 
-    let _model  = null;
+    let _model  = null;         // ALWAYS points at the ACTIVE model, so grey +
+                                // transform logic below needs no changes.
     let _mirror = false;
     let _euler  = initialEuler;
+    let _modelScale = MODEL_SCALE;
+
+    // Sponsor swap state. Both models are preloaded and parented; swapping is a
+    // visibility toggle, so there is no hitch when the paid window opens.
+    let _bitcoinModel = null;
+    let _sponsorModel = null;
+    let _sponsorOn    = false;
+
+    // SPONSOR DECAL — deliberately a child of `group`, NOT of the model.
+    // The left gun's model is mirrored with a NEGATIVE X scale; anything
+    // parented under it inherits that mirror and would render the sponsor's
+    // wordmark BACKWARDS. Hanging the decal off the unmirrored group makes a
+    // reversed logo structurally impossible on every hand.
+    let _decal = null;
+    const _invGroup = new THREE.Matrix4(); // reused: world → group space for the decal
 
     // ── Grey (disabled) state ──────────────────────────────────────────────
     // Captures original material values so restore is exact.
@@ -177,11 +220,13 @@ export function setupWeapon(camera, renderer) {
       if (!_model) return;
       _model.position.copy(MODEL_POS);
       _model.rotation.copy(_euler);
-      _model.scale.set(_mirror ? -MODEL_SCALE : MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+      _model.scale.set(_mirror ? -_modelScale : _modelScale, _modelScale, _modelScale);
     }
 
     function setModel(m) {
       _model = m;
+      _bitcoinModel = m;
+      _modelScale = MODEL_SCALE;
       m.traverse((o) => {
         if (!o.isMesh) return;
         o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false;
@@ -198,8 +243,117 @@ export function setupWeapon(camera, renderer) {
       if (_greyActive) _applyGrey(); // apply pending grey if set before model loaded
     }
 
-    function setMirror(b)      { _mirror = b; _applyTransform(); }
-    function setModelEuler(e)  { _euler  = e; _applyTransform(); }
+    /**
+     * Preload this unit's sponsor model + decal. Added hidden; setSponsor()
+     * reveals it. Mirrors setModel()'s material-cloning so grey state on the
+     * sponsor gun cannot bleed into another unit.
+     */
+    function setSponsorModel(m, decalTexture, decalSide) {
+      _sponsorModel = m;
+      m.traverse((o) => {
+        if (!o.isMesh) return;
+        o.frustumCulled = false; o.castShadow = false; o.receiveShadow = false;
+        if (o.material) {
+          o.material = Array.isArray(o.material)
+            ? o.material.map((mat) => mat.clone())
+            : o.material.clone();
+        }
+      });
+      m.visible = false;
+      group.add(m);
+
+      if (decalTexture) {
+        const mat = new THREE.MeshBasicMaterial({
+          map: decalTexture, transparent: true, alphaTest: 0.06,
+          depthWrite: false, side: THREE.DoubleSide, toneMapped: false,
+        });
+        _decal = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+        _decal.name = 'SponsorDecal';
+        _decal.frustumCulled = false;
+        _decal.visible = false;
+        _decal.userData.side = decalSide;
+        group.add(_decal);   // NOT group.add via the model — never mirrored
+      }
+      _placeDecal();
+    }
+
+    /**
+     * Position the decal on the sponsor gun's outward face. Measured from the
+     * model's ACTUAL bounds in group space, so it adapts to the camera gun's
+     * euler, both VR eulers, and the left gun's mirror without hand-tuned
+     * offsets per hand.
+     */
+    function _placeDecal() {
+      if (!_decal || !_sponsorModel) return;
+      const box = _groupSpaceBox(_sponsorModel);
+      if (!isFinite(box.min.x)) return;
+
+      const side = _decal.userData.side >= 0 ? 1 : -1;
+      const h = (box.max.y - box.min.y) * DECAL_HEIGHT_FRAC;
+      const img = _decal.material.map?.image;
+      const aspect = img && img.height ? img.width / img.height : 3.27;
+
+      _decal.scale.set(h * aspect, h, 1);
+      _decal.position.set(
+        side > 0 ? box.max.x + DECAL_LIFT : box.min.x - DECAL_LIFT,
+        box.min.y + (box.max.y - box.min.y) * DECAL_Y_BIAS,
+        (box.min.z + box.max.z) / 2,
+      );
+      // Plane faces +Z by default; turn it to face outward along X.
+      _decal.rotation.set(0, side > 0 ? Math.PI / 2 : -Math.PI / 2, 0);
+    }
+
+    /**
+     * Bounds of `root` expressed in GROUP space.
+     *
+     * Deliberately NOT Box3.setFromObject() + inverse-group: that returns a
+     * WORLD axis-aligned box, and re-bounding it through the group's rotation
+     * (the camera gun's group carries CAMERA_EULER) inflates and re-centres it,
+     * which put the decal off the gun. Transforming each geometry's own
+     * bounding box by (inverse-group x mesh-world) instead gives a tight,
+     * correctly-centred box in the space the decal's position actually lives in.
+     */
+    function _groupSpaceBox(root) {
+      group.updateMatrixWorld(true);
+      const inv = _invGroup.copy(group.matrixWorld).invert();
+      const out = new THREE.Box3(); out.makeEmpty();
+      const tmp = new THREE.Box3(); const m = new THREE.Matrix4();
+      root.traverse((o) => {
+        if (!o.isMesh || !o.geometry) return;
+        if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+        tmp.copy(o.geometry.boundingBox);
+        m.multiplyMatrices(inv, o.matrixWorld);
+        tmp.applyMatrix4(m);
+        out.union(tmp);
+      });
+      return out;
+    }
+
+    /** Swap between the bitcoin gun and the sponsor gun. Visibility only. */
+    function setSponsor(on) {
+      if (on === _sponsorOn) return;
+      if (!_sponsorModel || !_bitcoinModel) return;
+
+      // Grey (fairness) bookkeeping is keyed by material, so restore the model
+      // we are leaving before switching, then re-apply to the one we arrive at.
+      const wasGrey = _greyActive;
+      if (wasGrey) _restoreGrey();
+
+      _sponsorOn = on;
+      _bitcoinModel.visible = !on;
+      _sponsorModel.visible = on;
+      if (_decal) _decal.visible = on;
+
+      _model      = on ? _sponsorModel : _bitcoinModel;
+      _modelScale = on ? SPONSOR_MODEL_SCALE : MODEL_SCALE;
+      _applyTransform();
+      if (_decal) _placeDecal();
+
+      if (wasGrey) { _greyActive = true; _applyGrey(); }
+    }
+
+    function setMirror(b)      { _mirror = b; _applyTransform(); _placeDecal(); }
+    function setModelEuler(e)  { _euler  = e; _applyTransform(); _placeDecal(); }
 
     // ── Flash state (per-unit) ──────────────────────────────────────────────
     let _flashAge = FLASH_DURATION; // start "expired"
@@ -224,7 +378,8 @@ export function setupWeapon(camera, renderer) {
       }
     }
 
-    return { group, setModel, setMirror, setModelEuler, setGrey, flashMuzzle, updateFlash };
+    return { group, setModel, setSponsorModel, setSponsor, setMirror, setModelEuler,
+             setGrey, flashMuzzle, updateFlash };
   }
 
   // ── Create guns ───────────────────────────────────────────────────────────
@@ -286,6 +441,61 @@ export function setupWeapon(camera, renderer) {
     (p) => { if (p.total) console.log(`[gun] loading ${Math.round((p.loaded / p.total) * 100)}%`); },
     (err) => console.error('[gun] LOAD FAILED ✗', err),
   );
+
+  // ── Sponsor gun preload ───────────────────────────────────────────────────
+  // Loaded ONCE at startup and cloned per gun, so the swap when the paid window
+  // opens is a visibility toggle with no download and no hitch.
+  //
+  // PER-HAND LOGO MAPPING (as specified): camera + right hand use the
+  // "facing_right" sheet, the left hand uses "facing_left".
+  // IMPORTANT, verified by inspecting the supplied art: the "left" sheet is NOT
+  // a pre-mirrored copy — it is the same two logos with their POSITIONS swapped,
+  // and the LNbits wordmark reads FORWARD in both. So a mirrored decal would
+  // render it backwards no matter which sheet was used. That is why the decal
+  // hangs off the unmirrored group (see setSponsorModel): both hands read
+  // correctly by construction, and this mapping is preserved so the sheets can
+  // still be swapped per hand after the on-device check.
+  const texLoader = new THREE.TextureLoader();
+  const _logoRight = texLoader.load(sponsorLogoRightUrl);
+  const _logoLeft  = texLoader.load(sponsorLogoLeftUrl);
+  [_logoRight, _logoLeft].forEach((t) => {
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+  });
+
+  gltfLoader.load(
+    sponsorGunUrl,
+    (gltf) => {
+      // Measure BEFORE parenting: once the model is inside a gun group, a world
+      // AABB picks up the group's rotation and reports inflated numbers.
+      const box = new THREE.Box3().setFromObject(gltf.scene);
+      const size = box.getSize(new THREE.Vector3());
+      cameraGun.setSponsorModel(gltf.scene, _logoRight, DECAL_SIDE_CAMERA);
+      controllerGuns[0].setSponsorModel(gltf.scene.clone(true), _logoRight, DECAL_SIDE_RIGHT);
+      controllerGuns[1].setSponsorModel(gltf.scene.clone(true), _logoLeft,  DECAL_SIDE_LEFT);
+      console.log('[gun:sponsor] LOADED ✓ ' + JSON.stringify({
+        rawSize: [+size.x.toFixed(3), +size.y.toFixed(3), +size.z.toFixed(3)],
+        scale: +SPONSOR_MODEL_SCALE.toFixed(3),
+      }));
+      _applySponsorState(isRapidFire()); // in case a window is already open
+    },
+    undefined,
+    (err) => console.error('[gun:sponsor] LOAD FAILED ✗ — keeping the bitcoin gun', err),
+  );
+
+  // ── Sponsor swap, riding the EXISTING paid rapid-fire window ─────────────
+  // isRapidFire() is the same single source of truth the HUD countdown and
+  // shoot.js's lightning already read, so the gun swaps exactly when the paid
+  // window opens and reverts exactly when it closes — including every repeat
+  // window, with no new timer, event bus, or duplicated state.
+  let _sponsorShown = false;
+  function _applySponsorState(on) {
+    if (on === _sponsorShown) return;
+    _sponsorShown = on;
+    if (import.meta.env.DEV) console.log('[gun:sponsor] window ' + (on ? 'OPEN → sponsor gun' : 'CLOSED → bitcoin gun'));
+    cameraGun.setSponsor(on);
+    controllerGuns.forEach((g) => g.setSponsor(on));
+  }
 
   // ── VR session: show/hide camera gun ─────────────────────────────────────
   // Camera gun stays parented to camera the whole time; hidden during VR so
@@ -351,10 +561,13 @@ export function setupWeapon(camera, renderer) {
     }
   }
 
-  /** Called every frame. Fades all active gun flashes. */
+  /** Called every frame. Fades all active gun flashes, and keeps the sponsor
+   *  swap in step with the paid rapid-fire window. Edge-detected, so the actual
+   *  swap runs only on the two frames where the window opens and closes. */
   function updateWeapon(delta) {
     cameraGun.updateFlash(delta);
     controllerGuns.forEach((g) => g.updateFlash(delta));
+    _applySponsorState(isRapidFire());
   }
 
   /**
