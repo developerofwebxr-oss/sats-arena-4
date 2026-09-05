@@ -71,6 +71,7 @@ const classic = {
 const placeholder = {
   id: 'placeholder',
   name: 'PLACEHOLDER',
+  devOnly: true,   // hidden from the public menu; see DEV_MODE below
   environment: {
     build(group) {
       const GREEN = 0x39ff88;
@@ -171,6 +172,22 @@ const SKINS = [classic, goldArena, placeholder];
 
 export const DEFAULT_SKIN_ID = classic.id;
 
-export function listSkins()     { return SKINS.slice(); }
+// ── Dev-only skins ────────────────────────────────────────────────────────────
+// PLACEHOLDER is the crude green/pink leak-test skin from the skins seam work.
+// It is a DEV TOOL, not a product, so it is ABSENT from the public menu rather
+// than dimmed — a locked-looking row would imply something buyable. It stays in
+// the code (and in getSkin/hasSkin) because it is still how the named-group
+// teardown gets verified.
+//
+// Same flag the DEV/MOCK panel uses (mock-dev-panel.js): ?dev in the URL.
+const DEV_MODE = new URLSearchParams(location.search).has('dev');
+
+/**
+ * Skins the picker should offer. Dev-only skins are filtered out unless ?dev.
+ * NOTE: getSkin()/hasSkin() below are deliberately NOT filtered, so a ?dev host
+ * can still switch a non-dev peer onto the placeholder — the peer resolves the
+ * id it was sent and builds it, which is exactly what the leak test needs.
+ */
+export function listSkins()     { return SKINS.filter((s) => !s.devOnly || DEV_MODE); }
 export function getSkin(id)     { return SKINS.find((s) => s.id === id) || null; }
 export function hasSkin(id)     { return !!getSkin(id); }
