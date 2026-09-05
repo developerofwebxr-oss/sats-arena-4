@@ -21,6 +21,7 @@ import { setupCompetition, updateCompetition } from './net/competition.js';
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
+import { loadArena, onArenaReady, getArenaState } from './skins/arena-glb.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,11 @@ function _exposeSkinDev(skins, skinNet) {
   if (!import.meta.env.DEV) return;
   // stepGameplay is the REAL guarded tick, so a headless test exercises the same
   // code path the animation loop does (rAF is suspended when the tab is hidden).
-  window.__skins = { skins, net: skinNet, scene, stepGameplay: (d = 1 / 60, e = 0) => advanceGameplay(d, e) };
+  window.__skins = {
+    skins, net: skinNet, scene, renderer,
+    stepGameplay: (d = 1 / 60, e = 0) => advanceGameplay(d, e),
+    arena: () => getArenaState(),
+  };
 }
 
 // The first-person blaster. Captured as an object so armode can hide it on phone AR.
@@ -113,6 +118,21 @@ const skinNet = setupSkinNet({
 });
 setupSkinHud({ skins, net: skinNet });
 _exposeSkinDev(skins, skinNet);
+
+// Preload the Gold Arena environment at boot so a switch stays instant and the
+// both-ready handshake never has to wait on a 7 MB download. The picker shows
+// the row as LOADING… until this resolves, then re-renders.
+// NOTE ON AR: no XR listener is registered here on purpose. The skin group is a
+// child of `environment`, which armode.js already hides wholesale in passthrough
+// (environment.visible = false), so the arena shell is suppressed for free. A
+// second writer to the same visibility would be the exact bug pattern to avoid;
+// arena-glb.js exposes setArenaShellVisible() for finer control if props are
+// ever added that SHOULD stay visible in AR.
+loadArena();
+onArenaReady((st) => {
+  console.log(`[arena] ready via ${st.source}`, st.diagnostics);
+  refreshSkinHud();
+});
 
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
 // onCompositionChange fires whenever the flat-vs-headset mix of peers changes.

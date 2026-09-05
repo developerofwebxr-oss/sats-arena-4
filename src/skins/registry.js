@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildArena } from '../arena.js';
+import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState } from './arena-glb.js';
 
 /**
  * registry.js — skin definitions.
@@ -117,9 +118,44 @@ const placeholder = {
   entry: { sats: 0 },
 };
 
+// ── gold-arena ────────────────────────────────────────────────────────────────
+// The "Imperial Gold" arena GLB (or, on a hard validation failure, its 360
+// panorama fallback — arena-glb.js decides and reports which). The asset is
+// preloaded once at boot and re-parented on each switch, so build() stays
+// synchronous like every other skin.
+const goldArena = {
+  id: 'gold-arena',
+  name: 'GOLD ARENA',
+  environment: {
+    build(group) {
+      // Attaches immediately when preloaded. If a switch somehow beats the
+      // load, whenReady() below holds the both-ready handshake open until the
+      // arena is actually in the scene, so nobody resumes into an empty world.
+      if (!attachArenaInto(group)) {
+        whenArenaReady().then(() => attachArenaInto(group));
+      }
+    },
+  },
+  gun: null,        // keep the shipped gun against the gold architecture
+  coinType: null,   // and the shipped coins
+  // This environment brings its own floor, so the base radar floor must be
+  // hidden or it z-fights and bleeds cyan through the stone.
+  hidesBaseFloor: true,
+  targetTypes: ['coin', 'satoshi'],
+  hands: null,
+  animations: null,
+  entry: { sats: 0 },
+
+  // Optional per-skin readiness, honoured by the P30 both-ready handshake.
+  whenReady: () => whenArenaReady(),
+  isReady:   () => isArenaReady(),
+  // Shown in the picker while the 7 MB GLB streams in.
+  readyLabel: () => (isArenaReady() ? (getArenaState().source === 'panorama' ? '360°' : 'FREE') : 'LOADING…'),
+};
+
 // Order here is the order the picker shows them in. classic is index 0 and is
 // the boot default — the game must look untouched until someone switches.
-const SKINS = [classic, placeholder];
+const SKINS = [classic, goldArena, placeholder];
 
 export const DEFAULT_SKIN_ID = classic.id;
 

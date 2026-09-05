@@ -64,6 +64,7 @@ export function createScene() {
     transparent: true, // let the faded edges blend into the dark environment
   });
   const floor = new THREE.Mesh(floorGeo, floorMat);
+  floor.name = 'BaseRadarFloor'; // named so a skin with its own floor can hide it
   floor.rotation.x = -Math.PI / 2; // lay flat
 
   // ─── Environment group ─────────────────────────────────────────────────────

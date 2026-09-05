@@ -81,6 +81,10 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
     // real paywall drops into unchanged.
     if (!isSkinUnlocked(skinId))   return { ok: false, reason: 'Skin locked' };
 
+    // Assets still streaming — refuse rather than switch into an empty shell.
+    const target = getSkin(skinId);
+    if (target?.isReady && !target.isReady()) return { ok: false, reason: 'Still loading…' };
+
     // Peers cannot unilaterally switch — shared world, host authority.
     if (hasPeer() && !isHost())    return { ok: false, reason: 'Only the host can change skin' };
 
@@ -95,14 +99,19 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
     const leak = skins.applySkinLocal(skinId);
     pending.selfReady = true;
 
-    if (solo) {                 // nobody to wait for
-      finish();
+    if (solo) {                 // nobody to wait for — but still wait for assets
+      Promise.resolve(getSkin(skinId)?.whenReady?.()).then(() => finish());
       return { ok: true, leak, solo: true };
     }
 
-    send('skin-ready', { skinId });
     armTimeout();
-    maybeGo();
+    // A skin may still be streaming an asset in. Hold OUR ready until it is
+    // actually in the scene — that is exactly what both-ready is for.
+    Promise.resolve(getSkin(skinId)?.whenReady?.()).then(() => {
+      if (!pending || pending.skinId !== skinId) return; // superseded
+      send('skin-ready', { skinId });
+      maybeGo();
+    });
     return { ok: true, leak, solo: false };
   }
 
@@ -126,9 +135,12 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
         pending = { skinId: msg.skinId, selfReady: false, peerReady: false, role: 'peer' };
         pause(msg.skinId);
         skins.applySkinLocal(msg.skinId);
-        pending.selfReady = true;
-        send('skin-ready', { skinId: msg.skinId });
         armTimeout(); // resume anyway if skin-go never arrives
+        Promise.resolve(getSkin(msg.skinId)?.whenReady?.()).then(() => {
+          if (!pending || pending.skinId !== msg.skinId) return;
+          pending.selfReady = true;
+          send('skin-ready', { skinId: msg.skinId });
+        });
         break;
       }
 

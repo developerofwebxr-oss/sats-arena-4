@@ -104,19 +104,26 @@ function renderList() {
     const unlocked = isSkinUnlocked(skin.id);
     const price    = skinPriceSats(skin);
     const isActive = skin.id === activeId;
-    const dimmed   = !unlocked || (!gate.ok && !isActive);
+    const loading  = !!skin.isReady && !skin.isReady();   // assets still streaming
+    const dimmed   = !unlocked || loading || (!gate.ok && !isActive);
 
     const row = document.createElement('button');
     row.className = `skin-row${isActive ? ' active' : ''}${dimmed ? ' dim' : ''}`;
     row.innerHTML = `
       <span class="skin-name">${skin.name}</span>
-      <span class="skin-meta">${isActive ? 'ACTIVE' : (unlocked ? (price > 0 ? `${price} sats` : 'FREE') : 'LOCKED')}</span>`;
+      <span class="skin-meta">${
+        isActive ? 'ACTIVE'
+        : !unlocked ? 'LOCKED'
+        : skin.readyLabel ? skin.readyLabel()
+        : (price > 0 ? `${price} sats` : 'FREE')
+      }</span>`;
 
     row.addEventListener('click', (e) => {
       e.stopPropagation();
       if (isActive) return;
       // Dimmed rows explain themselves rather than doing nothing.
       if (!unlocked)  return skinToast('Unlock to use this skin');
+      if (loading)    return skinToast('Still loading…');
       if (!gate.ok)   return skinToast(gate.reason);
 
       const res = _net.requestSwitch(skin.id);

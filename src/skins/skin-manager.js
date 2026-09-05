@@ -53,6 +53,12 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
       if (tg) applyTint(tg, skin.coinType.tint);
     }
 
+    // A skin whose environment supplies its own floor hides the shared radar
+    // floor; anything else leaves it exactly as shipped. Always restored in
+    // teardown() so this can never leak into the next skin.
+    const baseFloor = scene.getObjectByName('BaseRadarFloor');
+    if (baseFloor) baseFloor.visible = !skin.hidesBaseFloor;
+
     activeGroup = group;
     activeId    = skin.id;
     return group;
@@ -66,6 +72,10 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
     for (const root of getGunRoots?.() || []) restoreTint(root);
     restoreAllTints(); // belt-and-braces: nothing tinted may survive a switch
 
+    // Restore the shared radar floor — the next skin re-decides in build().
+    const baseFloor = scene.getObjectByName('BaseRadarFloor');
+    if (baseFloor) baseFloor.visible = true;
+
     if (activeGroup) {
       activeGroup.parent?.remove(activeGroup);
       disposeTree(activeGroup);
@@ -78,6 +88,18 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
 
   /** Recursively dispose geometries and materials so a long session can't grow. */
   function disposeTree(root) {
+    // A skin may attach a CACHED asset it does not want destroyed — the arena
+    // GLB is parsed once and re-parented on every switch. Detach those first so
+    // the dispose walk below never reaches them. They leave the scene either
+    // way, so the leak assertion is unaffected; we also clear their skin tag so
+    // a stale id can never be mistaken for a leak later.
+    const keep = [];
+    root.traverse((o) => { if (o.userData?.keepAlive) keep.push(o); });
+    for (const k of keep) {
+      k.parent?.remove(k);
+      k.traverse((o) => { delete o.userData.skinId; });
+    }
+
     root.traverse((o) => {
       if (o.geometry) o.geometry.dispose?.();
       const mats = Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []);
