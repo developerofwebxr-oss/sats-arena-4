@@ -6,19 +6,24 @@ import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD } from './hud.js';
 import { setupInput } from './input.js';
 import { setupShooter } from './shoot.js';
-import { setupMovement } from './movement.js';
+import { setupMovement, recenterView } from './movement.js';
 import { setupWeapon } from './weapon.js';
 import { setupARMode } from './armode.js';
 import { setSpawnMode } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
 import { setupVrUI } from './vrui.js';
-import { setupCoopHud, setCoopMode } from './net/coop-hud.js';
+import { setupVrMenu } from './vr-menu.js';
+import {
+  setupCoopHud, setCoopMode,
+  coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
+  onPendingRequests, approveJoinRequest, denyJoinRequest,
+} from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
 import { tickTransport } from './net/room.js';
 import { setupMockDevPanel } from './net/mock-dev-panel.js';
-import { setupCompetition, updateCompetition } from './net/competition.js';
+import { setupCompetition, updateCompetition, canCompete, proposeCompetition } from './net/competition.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -41,13 +46,47 @@ const vrui = setupVrUI(scene, camera, renderer);
 // weapon.flashMuzzle is the onFire callback — triggers the muzzle flash on each shot.
 const { onShoot, shootFromRay, updateBursts, spawnPeerShot, spawnLightning } = setupShooter(camera, scene, weapon.flashMuzzle);
 
+// In-world VR/AR menu (X on the left controller). Every item delegates to an
+// existing handler. It needs the controllers that setupXR creates, and the mode
+// controller built further down, so both are bound late through getters — the
+// menu only ever reads them at runtime, never during construction.
+let xrApi    = null;
+let modeCtrl = null;
+
+const vrMenu = setupVrMenu(scene, renderer, {
+  recenterView,                                  // movement.js  — DOM RECENTER action
+  coopLeave,                                     // coop-hud.js  — DOM LEAVE button
+  coopToggleMute,                                // coop-hud.js  — DOM MUTE button
+  isCoopMuted,
+  isCoopJoined,
+  canCompete,                                    // competition.js — #cmp-compete enablement
+  proposeCompetition,                            // competition.js — propose() handshake
+  exitToScreen: () => modeCtrl && modeCtrl.exitToScreen(), // modeswitcher.js
+  onPendingRequests,                             // coop-hud.js  — knock polling mirror
+  approveJoinRequest,                            // coop-hud.js  — DOM ✓ on a knock card
+  denyJoinRequest,                               // coop-hud.js  — DOM ✗ on a knock card
+  getControllers: () => (xrApi ? xrApi.getControllers() : []),
+});
+
+// In-world UI select chain, in priority order. Each handler returns true when it
+// consumed the trigger, which suppresses the shot in xr.js. The menu comes first:
+// while it's open it consumes EVERY tracked-controller trigger, so the gun can't
+// fire underneath it; once closed it returns false immediately and firing is
+// restored with no residual state.
+function inWorldSelect(origin, direction) {
+  if (vrMenu.handleControllerSelect(origin, direction)) return true;
+  return vrui.handleControllerSelect(origin, direction);
+}
+
 // setupXR receives:
-//   renderer            — so xr.getController() and the XR camera work
-//   scene               — so controller Groups are added to the scene graph
-//   shootFromRay        — controller/handheld trigger → hit logic
-//   vrui.handleControllerSelect — VR controller pointing at the ACTIVATE panel
-//                                 activates a charge instead of firing
-const { updateControllers } = setupXR(renderer, scene, shootFromRay, vrui.handleControllerSelect, weapon.notifyControllerFire);
+//   renderer      — so xr.getController() and the XR camera work
+//   scene         — so controller Groups are added to the scene graph
+//   shootFromRay  — controller/handheld trigger → hit logic
+//   inWorldSelect — in-world UI gets first refusal on a tracked-controller
+//                   trigger (menu, then the ACTIVATE panel) instead of firing
+//   vrMenu.toggleMenu — X on the LEFT controller opens/closes the in-world menu
+xrApi = setupXR(renderer, scene, shootFromRay, inWorldSelect, weapon.notifyControllerFire, vrMenu.toggleMenu);
+const { updateControllers } = xrApi;
 
 // Walls + ceiling ring go into the environment group (with the radar floor) so
 // AR mode can hide the whole fake world at once.
@@ -61,7 +100,7 @@ setupARMode({ renderer, scene, environment, weapon, setSpawnMode });
 // Unified SCREEN / VR / AR mode switcher (replaces the separate VR/AR buttons).
 // Returns the mode controller; a future in-world 3D switcher can reuse its
 // enterVR / enterAR / exitToScreen methods.
-const modeCtrl = setupModeSwitcher(renderer);
+modeCtrl = setupModeSwitcher(renderer);
 
 // Keep the co-op module aware of the current XR mode so it publishes the right
 // pose joints (VR: head+2 hands; flat/AR: head+aim marker).
@@ -132,6 +171,7 @@ renderer.setAnimationLoop(function animate() {
   updateUpgrade(delta);   // tick the rapid-fire countdown
   updateRapidFireHUD();   // refresh countdown + upgrade button state
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
+  vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
   tickTransport();        // flush mock/bc impairment queues
   updatePeers(delta);     // interpolate peer avatar positions
   publishPose(delta);     // broadcast local pose ~15 Hz
