@@ -21,9 +21,11 @@ import * as THREE from 'three';
 const RAY_LENGTH = 5;
 
 // onControllerSelect(origin, direction) → bool: an optional in-world UI handler.
-// If it returns true, it consumed the trigger (e.g. pressed the ACTIVATE panel)
-// and the shot is suppressed.
-export function setupXR(renderer, scene, shootFromRay, onControllerSelect, onControllerFire) {
+// If it returns true, it consumed the trigger (e.g. pressed the ACTIVATE panel,
+// or the in-world menu is open) and the shot is suppressed.
+// onMenuToggle(): optional. Called when X (LEFT controller) is pressed, to open
+// or close the in-world VR/AR menu.
+export function setupXR(renderer, scene, shootFromRay, onControllerSelect, onControllerFire, onMenuToggle) {
 
   // ── Build both controllers ─────────────────────────────────────────────────
   // getController(0/1) returns a Group whose world matrix Three.js updates
@@ -45,24 +47,34 @@ export function setupXR(renderer, scene, shootFromRay, onControllerSelect, onCon
         rayLine.geometry.attributes.position.needsUpdate = true;
       }
 
-      // EXIT immersive session on a deliberate lower face-button press, on EITHER
-      // controller. xr-standard mapping on Quest Touch: buttons[4] = X (left hand)
-      // and A (right hand). So X or A exits. Edge-detected so holding doesn't
-      // repeat; ignores trigger (buttons[0]) and grip (buttons[1]).
+      // Lower face button, edge-detected so holding doesn't repeat; ignores
+      // trigger (buttons[0]) and grip (buttons[1]). xr-standard mapping on Quest
+      // Touch: buttons[4] = X (left hand) and A (right hand).
+      //   X (LEFT)  → toggle the in-world VR/AR menu (unified standard: X = menu).
+      //               "Exit to screen" now lives inside that menu.
+      //   A (RIGHT) → end the immersive session, unchanged. Deliberately kept as
+      //               a direct escape hatch that never depends on the menu.
+      // If no menu handler was supplied, X falls back to the old exit behaviour.
       const src = state.inputSource;
       if (src && src.gamepad && src.gamepad.buttons) {
         const b = src.gamepad.buttons;
         const pressed = !!(b[4] && b[4].pressed); // X on left, A on right
         if (pressed && !state.exitPrev) {
-          const session = renderer.xr.getSession();
-          if (session) session.end();
+          if (src.handedness === 'left' && onMenuToggle) {
+            onMenuToggle();
+          } else {
+            const session = renderer.xr.getSession();
+            if (session) session.end();
+          }
         }
         state.exitPrev = pressed;
       }
     });
   }
 
-  return { updateControllers };
+  // `controllers` is exposed so in-world UI can raycast from the live controller
+  // poses for hover highlighting (vr-menu.js). Read-only by convention.
+  return { updateControllers, getControllers: () => controllers };
 }
 
 // ── buildController ──────────────────────────────────────────────────────────

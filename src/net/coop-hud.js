@@ -37,6 +37,8 @@ let muted        = false;
 let ownCode      = null; // this device's own code (never changes after load)
 let ownerToken   = null; // secret returned by /claim; held in memory only
 let _ownerPollTimer = null; // timer for polling pending join requests
+let _pending     = [];   // last pending join-request list (mirrored to the VR menu)
+let _pendingCbs  = [];   // subscribers notified whenever that list changes
 
 // Called from main.js when the XR mode changes.
 export function setCoopMode(mode) {
@@ -346,6 +348,12 @@ function _stopOwnerPolling() {
 // Also manages a red badge on the toggle button so the host knows someone
 // is knocking even when the panel is closed.
 function _renderPendingRequests(list) {
+  // Mirror the pending list to any non-DOM view (the in-world VR/AR menu).
+  // Done before the DOM guard so the headset host still sees knocks even if the
+  // co-op panel isn't built yet. DOM rendering below is unchanged.
+  _pending = Array.isArray(list) ? list : [];
+  _pendingCbs.forEach((fn) => { try { fn(_pending); } catch (e) { console.warn('[coop] pending cb', e); } });
+
   const container = panel.querySelector('#coop-requests');
   if (!container) return;
 
@@ -425,6 +433,34 @@ function _esc(str) {
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])
   );
 }
+
+// ── In-world (VR/AR) accessors ────────────────────────────────────────────────
+// The immersive menu has no DOM, so it calls these. Each one delegates to the
+// SAME handler the DOM button uses — no duplicated logic, no new mechanics.
+
+/** Fire the LEAVE action (identical to clicking #coop-leave). */
+export function coopLeave() { return handleLeave(); }
+
+/** Toggle mic mute (identical to clicking #coop-mute). Keeps the DOM label in sync. */
+export function coopToggleMute() { return handleMute(); }
+
+/** Current mute state, so the in-world item can render MUTE vs UNMUTE. */
+export function isCoopMuted() { return muted; }
+
+/** True once this device is in a room (the DOM shows LEAVE/MUTE at the same time). */
+export function isCoopJoined() { return joined; }
+
+/** Subscribe to pending join requests. Fires immediately with the current list. */
+export function onPendingRequests(cb) {
+  _pendingCbs.push(cb);
+  cb(_pending);
+}
+
+/** Approve a knock by id (identical to the DOM card's ✓ button). */
+export function approveJoinRequest(requestId) { return _approveRequest(requestId); }
+
+/** Deny a knock by id (identical to the DOM card's ✗ button). */
+export function denyJoinRequest(requestId) { return _denyRequest(requestId); }
 
 // ── LEAVE / MUTE ───────────────────────────────────────────────────────────────
 async function handleLeave() {

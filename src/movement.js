@@ -40,6 +40,14 @@ let pitch = -0.2; // matches the initial tilt that was in scene.js
 let _dragging = false;
 export function isDragging() { return _dragging; }
 
+// The same "recenter" action the mobile RECENTER button fires (see
+// createRecenterButton below). Exported so the in-world VR/AR menu can invoke
+// the identical logic instead of duplicating it. No-op until the gyro path has
+// installed gyroRecenter (desktop/VR never do).
+export function recenterView() {
+  if (gyroRecenter) gyroRecenter();
+}
+
 // True once the gyroscope is actively driving the view. While true, touch-drag
 // look stands down so the two don't fight over yaw/pitch.
 let gyroActive = false;

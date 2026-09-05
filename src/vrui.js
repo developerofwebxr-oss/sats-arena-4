@@ -126,7 +126,9 @@ export function setupVrUI(scene, camera, renderer) {
 
 // ── Text sprite: a small head-lockable plane whose canvas is repainted only when
 // its text changes. setText() is a no-op when the string is unchanged. ──────────
-function createTextSprite(worldWidth, color) {
+// Exported so the in-world VR/AR menu (vr-menu.js) draws its knock notice with
+// the EXACT same 3D-text treatment as the rest of the in-world HUD.
+export function createTextSprite(worldWidth, color) {
   // 512×256 keeps the same 2:1 aspect (plane size unchanged) but gives more pixels.
   const W = 512, H = 256;
   const BASE_FONT = 120; // px; shrunk per-draw if the text is too wide to fit

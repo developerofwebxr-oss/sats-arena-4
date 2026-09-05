@@ -5,19 +5,24 @@ import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD } from './hud.js';
 import { setupInput } from './input.js';
 import { setupShooter } from './shoot.js';
-import { setupMovement } from './movement.js';
+import { setupMovement, recenterView } from './movement.js';
 import { setupWeapon } from './weapon.js';
 import { setupARMode } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
 import { setupVrUI } from './vrui.js';
-import { setupCoopHud, setCoopMode } from './net/coop-hud.js';
+import { setupVrMenu } from './vr-menu.js';
+import {
+  setupCoopHud, setCoopMode,
+  coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
+  onPendingRequests, approveJoinRequest, denyJoinRequest,
+} from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
 import { tickTransport } from './net/room.js';
 import { setupMockDevPanel } from './net/mock-dev-panel.js';
-import { setupCompetition, updateCompetition } from './net/competition.js';
+import { setupCompetition, updateCompetition, canCompete, proposeCompetition } from './net/competition.js';
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
@@ -66,18 +71,51 @@ const { onShoot, shootFromRay, updateBursts, spawnPeerShot, spawnLightning } = s
 // for the duration so nobody can score through the "Switching skin…" overlay.
 // Gating happens HERE, at the wiring seam — shoot.js / input.js / xr.js are
 // untouched, so the shooting path itself is exactly as confirmed.
-let skins = null; // assigned below; the wrappers are only ever called later
+let skins    = null; // assigned below; the wrappers are only ever called later
+let xrApi    = null; // setupXR's return, read late by the menu's getControllers
+let modeCtrl = null; // setupModeSwitcher's return, read late by exitToScreen
 const gamePaused      = () => !!skins && skins.isPaused();
 const gatedShoot      = (...a) => { if (gamePaused()) return; onShoot(...a); };
 const gatedShootFromRay = (...a) => { if (gamePaused()) return; shootFromRay(...a); };
 
-// setupXR receives:
-//   renderer            — so xr.getController() and the XR camera work
-//   scene               — so controller Groups are added to the scene graph
-//   shootFromRay        — controller/handheld trigger → hit logic
-//   vrui.handleControllerSelect — VR controller pointing at the ACTIVATE panel
-//                                 activates a charge instead of firing
-const { updateControllers } = setupXR(renderer, scene, gatedShootFromRay, vrui.handleControllerSelect, weapon.notifyControllerFire);
+// In-world VR/AR menu (X on the left controller). Every item delegates to an
+// existing handler. It needs the controllers that setupXR creates, and the mode
+// controller built further down, so both are bound late through getters — the
+// menu only ever reads them at runtime, never during construction.
+const vrMenu = setupVrMenu(scene, renderer, {
+  recenterView,                                  // movement.js  — DOM RECENTER action
+  coopLeave,                                     // coop-hud.js  — DOM LEAVE button
+  coopToggleMute,                                // coop-hud.js  — DOM MUTE button
+  isCoopMuted,
+  isCoopJoined,
+  canCompete,                                    // competition.js — #cmp-compete enablement
+  proposeCompetition,                            // competition.js — propose() handshake
+  exitToScreen: () => modeCtrl && modeCtrl.exitToScreen(), // modeswitcher.js
+  onPendingRequests,                             // coop-hud.js  — knock polling mirror
+  approveJoinRequest,                            // coop-hud.js  — DOM ✓ on a knock card
+  denyJoinRequest,                               // coop-hud.js  — DOM ✗ on a knock card
+  getControllers: () => (xrApi ? xrApi.getControllers() : []),
+});
+
+// In-world UI select chain, in priority order. Each handler returns true when it
+// consumed the trigger, which suppresses the shot in xr.js. The menu comes first:
+// while it's open it consumes EVERY tracked-controller trigger, so the gun can't
+// fire underneath it; once closed it returns false immediately and firing is
+// restored with no residual state. This SUBSUMES the ACTIVATE-panel handler —
+// vrui.handleControllerSelect is the fallback inside inWorldSelect.
+function inWorldSelect(origin, direction) {
+  if (vrMenu.handleControllerSelect(origin, direction)) return true;
+  return vrui.handleControllerSelect(origin, direction);
+}
+
+// MERGE NOTE (skins + VR menu): both branches modified this one call. Composed —
+//   arg3 gatedShootFromRay  the skins pause gate (skins branch)
+//   arg4 inWorldSelect      menu, falling through to the ACTIVATE panel (menu branch)
+//   arg6 vrMenu.toggleMenu  X on the LEFT controller opens/closes the menu
+// The menu is deliberately NOT pause-gated: stranding a headset user mid-switch
+// is worse than letting them open a menu behind a ~1s overlay.
+xrApi = setupXR(renderer, scene, gatedShootFromRay, inWorldSelect, weapon.notifyControllerFire, vrMenu.toggleMenu);
+const { updateControllers } = xrApi;
 
 // ── Skins ────────────────────────────────────────────────────────────────────
 // The arena is no longer built directly here: it is the "classic" skin's
@@ -101,7 +139,7 @@ setupARMode({ renderer, scene, environment, weapon, setSpawnMode });
 // Unified SCREEN / VR / AR mode switcher (replaces the separate VR/AR buttons).
 // Returns the mode controller; a future in-world 3D switcher can reuse its
 // enterVR / enterAR / exitToScreen methods.
-const modeCtrl = setupModeSwitcher(renderer);
+modeCtrl = setupModeSwitcher(renderer);
 
 // Keep the co-op module aware of the current XR mode so it publishes the right
 // pose joints (VR: head+2 hands; flat/AR: head+aim marker).
@@ -215,6 +253,7 @@ renderer.setAnimationLoop(function animate() {
   updateControllers();    // refresh controller ray lines each frame
   updateRapidFireHUD();   // refresh countdown + upgrade button state (shows the frozen value)
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
+  vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
   tickTransport();        // flush mock/bc impairment queues
   updatePeers(delta);     // interpolate peer avatar positions
   publishPose(delta);     // broadcast local pose ~15 Hz

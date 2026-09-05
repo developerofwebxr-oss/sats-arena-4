@@ -270,6 +270,17 @@ export function isMatchActive() {
   return state === 'countdown' || state === 'active';
 }
 
+// ── In-world (VR/AR) accessors ────────────────────────────────────────────────
+// The immersive menu has no DOM. These delegate to the SAME propose() handshake
+// the DOM COMPETE button uses, and expose the identical enablement condition
+// refreshCompeteBtn() applies, so the two views can never disagree.
+
+/** True when the COMPETE action is available (2 connected and no match in flight). */
+export function canCompete() { return twoConnected() && state === 'idle'; }
+
+/** Fire the COMPETE proposal (identical to clicking #cmp-compete). */
+export function proposeCompetition() { propose(); }
+
 // ── UI actions ────────────────────────────────────────────────────────────────
 function propose() {
   if (!twoConnected() || (state !== 'idle' && state !== 'ended')) return;
