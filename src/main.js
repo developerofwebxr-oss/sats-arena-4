@@ -33,6 +33,11 @@ if (import.meta.env.DEV) {
 // The first-person blaster. Captured as an object so armode can hide it on phone AR.
 const weapon = setupWeapon(camera, renderer);
 
+// DEV: drive the weapon's per-frame update deterministically. rAF is suspended
+// whenever the preview pane is hidden, which otherwise makes the sponsor swap
+// (which rides updateWeapon) untestable headlessly.
+if (import.meta.env.DEV) window.__weapon = weapon;
+
 // In-world VR ACTIVATE panel. Set up before setupXR so its select handler can be
 // given to the controllers (it takes precedence over shooting when pointed at).
 const vrui = setupVrUI(scene, camera, renderer);
