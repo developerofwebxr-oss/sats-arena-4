@@ -80,6 +80,9 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
       activeGroup.parent?.remove(activeGroup);
       disposeTree(activeGroup);
     }
+    // Let the outgoing skin drop any per-build handles it kept.
+    if (activeId) getSkin(activeId)?.onTeardown?.();
+
     const goneId = activeId;
     activeGroup = null;
     activeId    = null;
@@ -165,6 +168,16 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
     assertNoLeak,
     getActiveSkinId: () => activeId,
     getActiveGroup:  () => activeGroup,
+    /**
+     * Per-frame tick for the ACTIVE skin's cosmetic animation, if it has any.
+     * Purely decorative, so main.js calls it outside the gameplay pause gate —
+     * a frozen skyline during a skin switch would look broken, and it cannot
+     * affect scoring or the clock.
+     */
+    updateSkin(dt, elapsed) {
+      if (!activeId) return;
+      getSkin(activeId)?.update?.(dt, elapsed);
+    },
     // Gameplay pause — read by main.js's animation loop and input gates.
     isPaused: () => paused,
     setPaused: (v) => { paused = !!v; },

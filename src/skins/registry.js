@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildArena } from '../arena.js';
 import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState } from './arena-glb.js';
+import { buildClassicDecor } from './classic-decor.js';
 
 /**
  * registry.js — skin definitions.
@@ -37,14 +38,25 @@ import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState } from './
 // used to call directly; the only difference is that its output is parented
 // into the skin group (an untransformed child of `environment`) so it can be
 // torn down. No colours, sizes, or positions change.
+let _classicDecor = null; // per-build handle; cleared on teardown
+
 const classic = {
   id: 'classic',
   name: 'CLASSIC',
   environment: {
     build(group) {
       buildArena(group); // identical geometry to the original main.js call
+      // Neon skyline / living void / branding. Parented into the same
+      // skin:classic group, so the P30 leak assertion still governs it and it
+      // inherits the AR shell-off via `environment`.
+      _classicDecor = buildClassicDecor(group);
     },
   },
+  // Cosmetic animation only — drifting particles, falling data streams, bobbing
+  // glyphs. Called from the render loop while this skin is active.
+  update(dt, elapsed) { _classicDecor?.update(dt, elapsed); },
+  onTeardown() { _classicDecor = null; },
+  decorStats: () => _classicDecor?.stats || null,
   gun: null,       // ship-default gun
   coinType: null,  // ship-default coins
   targetTypes: ['coin', 'satoshi'],

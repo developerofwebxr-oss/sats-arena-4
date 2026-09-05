@@ -263,6 +263,7 @@ renderer.setAnimationLoop(function animate() {
   weapon.updateWeapon(delta); // fade the muzzle flash
   updateControllers();    // refresh controller ray lines each frame
   updateRapidFireHUD();   // refresh countdown + upgrade button state (shows the frozen value)
+  skins.updateSkin(delta, elapsed); // cosmetic skin animation (Classic's neon void)
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
   vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
   tickTransport();        // flush mock/bc impairment queues
