@@ -60,27 +60,33 @@ const EYE = new THREE.Vector3(0, 1.65, 0); // the notes' reference camera point
  * where the real geometry matters, so an XR-capable device always gets the GLB.
  * Desktop always gets it. Override either way with ?arena=glb / ?arena=pano.
  */
-export async function preferGlbArena() {
+export function preferGlbArena() {
   const q = new URLSearchParams(location.search).get('arena');
   if (q === 'glb')  return true;
-  if (q === 'pano') return false;
+  if (q === 'pano') return false;   // dev flag: force the fallback to inspect it
 
-  // HEADSET TEST — deliberately immersive-VR support, NOT the mere presence of
-  // navigator.xr. Android Chrome exposes navigator.xr for immersive-AR, so
-  // "has navigator.xr" would hand every Android phone the 140k-triangle arena,
-  // which is exactly the device this gate exists to protect. Quest supports
-  // immersive-vr; phones generally do not.
-  try {
-    if (navigator.xr?.isSessionSupported && await navigator.xr.isSessionSupported('immersive-vr')) return true;
-  } catch { /* treat a probe failure as "not a headset" */ }
+  // The GLB IS the default, on every device including phones.
+  //
+  // The previous gate asked "is this a phone?" (coarse pointer + small screen)
+  // and treated immersive-VR support as a capability signal. Both were wrong:
+  // phones rendered this arena correctly before it was ever gated, the model is
+  // now 891 KB and loads asynchronously, and immersive-vr support is a HEADSET
+  // question, not a "can this GPU draw 136k triangles" question. iPhones report
+  // no immersive-vr, so every iPhone was being handed the fallback — which is
+  // the regression this replaces.
+  //
+  // The panorama is now reserved for the two cases that actually justify it:
+  //   1. a genuine GLB load/validation failure (handled in _load's catch), and
+  //   2. a device that MEASURES as weak.
+  // Thresholds are deliberately severe, and unknown is never treated as weak —
+  // Safari does not implement deviceMemory at all, so `|| 8` style defaults
+  // would silently mis-gate every iPhone again.
+  const mem   = navigator.deviceMemory;          // undefined on iOS Safari
+  const cores = navigator.hardwareConcurrency;   // undefined on some browsers
+  const weakMemory = typeof mem === 'number' && mem <= 2;
+  const weakCpu    = typeof cores === 'number' && cores <= 2;
 
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  const smallish = Math.min(screen.width, screen.height) < 820;
-  const lowCores = (navigator.hardwareConcurrency || 8) <= 4;
-  const lowMem   = (navigator.deviceMemory || 8) <= 4;
-
-  const handheld = coarse && smallish;
-  return !(handheld || (lowCores && lowMem));
+  return !(weakMemory || weakCpu);
 }
 
 let _state = {
@@ -118,9 +124,9 @@ async function _load() {
 
   // Capability gate FIRST — on a handheld this skips the GLB download entirely
   // rather than fetching it and then deciding.
-  if (!(await preferGlbArena())) {
-    console.log('[arena] handheld/low-capability device → 360 panorama arena');
-    return buildPanorama({ reason: 'device capability gate (handheld or low-spec)' });
+  if (!preferGlbArena()) {
+    console.log('[arena] device measures as weak → 360 panorama arena');
+    return buildPanorama({ reason: 'measured low-capability device (<=2GB RAM or <=2 cores)' });
   }
 
   try {
@@ -262,15 +268,32 @@ function buildPanorama(info) {
 
   const tex = new THREE.TextureLoader().load(panoramaUrl);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.mapping = THREE.EquirectangularReflectionMapping;
+  // NOT EquirectangularReflectionMapping: that mapping is for envMaps/reflections.
+  // This texture is a plain `map` on UV-mapped sphere geometry, so it must stay
+  // on the default UVMapping or it samples wrongly.
 
-  // Radius comfortably beyond the play space; BackSide = we see the inside.
-  const sphere = new THREE.Mesh(
-    new THREE.SphereGeometry(40, 48, 32),
-    new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, depthWrite: false }),
-  );
+  // INVERTED GEOMETRY, not BackSide. Viewing a sphere's interior through
+  // side:BackSide shows the texture from behind, which MIRRORS it — that is why
+  // the arena read "flipped" and the signage was backwards. Scaling the geometry
+  // by -1 on X turns the sphere inside out instead, so we see the interior with
+  // the texture the right way round. This is the canonical three.js equirect
+  // recipe and it keeps the default FrontSide material.
+  const geo = new THREE.SphereGeometry(40, 48, 32);
+  geo.scale(-1, 1, 1);
+
+  const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    map: tex,
+    depthWrite: false,
+    // UNLIT (MeshBasicMaterial) so it is at full brightness with no lights, AND
+    // fog:false. scene.fog is Fog(10, 40) and this shell sits at radius 40 —
+    // exactly fog.far — so with fog enabled the entire panorama was faded to the
+    // near-black background. THAT is why it rendered dark. Opting this material
+    // out of fog fixes it without touching scene.fog (still owned by armode.js).
+    fog: false,
+  }));
   sphere.name = 'PanoramaShell';
   sphere.renderOrder = -1;
+  sphere.frustumCulled = false;
   // Centre longitude points along -Z in the source render, matching the GLB's
   // front vault, so no yaw correction is needed.
   root.add(sphere);
@@ -280,12 +303,15 @@ function buildPanorama(info) {
   // uniform colour directly underfoot still reads as "no floor". A small disc
   // with the Bitcoin mark gives the eye something to stand on.
   const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(6, 48),
-    new THREE.MeshBasicMaterial({ map: makeNadirTexture(), transparent: true }),
+    new THREE.CircleGeometry(9, 48),
+    new THREE.MeshBasicMaterial({
+      map: makeNadirTexture(), transparent: true, depthWrite: false, fog: false,
+    }),
   );
   disc.name = 'NadirDisc';
   disc.rotation.x = -Math.PI / 2;
   disc.position.y = 0.02; // just above the floor plane to avoid z-fighting
+  disc.frustumCulled = false;
   root.add(disc);
 
   root.userData.keepAlive = true;
@@ -298,29 +324,32 @@ function buildPanorama(info) {
   };
 }
 
-/** Radial gold gradient with a ₿ mark — hides the nadir and reads as a floor. */
+/**
+ * Nadir cover: a soft dark disc that hides the pole directly underfoot.
+ *
+ * NO ₿ GLYPH. The first version drew a large Bitcoin mark here, which is what
+ * appeared as "a ₿ lying on the floor" — a decal on the ground reads as a
+ * mistake, not as branding. Branding belongs on the gate and the dome. This is
+ * now purely a gradient that fades out at its edge so the seam is invisible.
+ */
 function makeNadirTexture() {
   const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const ctx = c.getContext('2d');
 
-  const g = ctx.createRadialGradient(S / 2, S / 2, S * 0.05, S / 2, S / 2, S / 2);
-  g.addColorStop(0,    'rgba(38,30,16,1)');
-  g.addColorStop(0.65, 'rgba(30,24,14,0.92)');
-  g.addColorStop(1,    'rgba(24,20,12,0)'); // fade out so the seam is invisible
+  const g = ctx.createRadialGradient(S / 2, S / 2, S * 0.04, S / 2, S / 2, S / 2);
+  g.addColorStop(0,    'rgba(34,27,15,1)');
+  g.addColorStop(0.55, 'rgba(30,24,14,0.86)');
+  g.addColorStop(1,    'rgba(24,20,12,0)'); // fade out so the edge is invisible
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(S / 2, S / 2, S / 2, 0, Math.PI * 2); ctx.fill();
 
-  ctx.strokeStyle = 'rgba(247,147,26,0.45)';
-  ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.arc(S / 2, S / 2, S * 0.34, 0, Math.PI * 2); ctx.stroke();
-
-  ctx.fillStyle = 'rgba(247,147,26,0.75)';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.font = `bold ${Math.round(S * 0.30)}px monospace`;
-  ctx.fillText('₿', S / 2, S / 2 + S * 0.01);
+  // A single faint ring gives the eye a floor plane to sit on, without reading
+  // as a logo stamped on the ground.
+  ctx.strokeStyle = 'rgba(247,147,26,0.18)';
+  ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.arc(S / 2, S / 2, S * 0.40, 0, Math.PI * 2); ctx.stroke();
 
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

@@ -27,7 +27,8 @@
       canvas {
         display: block;
         width: 100vw;
-        height: 100vh;
+        height: 100vh;   /* fallback */
+        height: 100dvh;  /* dynamic viewport: tracks mobile chrome collapsing */
         touch-action: manipulation;
       }
 

@@ -7,6 +7,12 @@ import * as THREE from 'three';
  * Kept in its own module so main.js stays thin and other modules
  * (targets, input, xr) can import { scene, camera } without circular deps.
  */
+// The visible viewport. visualViewport excludes mobile browser chrome and is the
+// only value that is correct during the cold-load settle; innerWidth/Height are
+// the fallback for browsers without it.
+function viewportW() { return Math.round(window.visualViewport?.width  ?? window.innerWidth); }
+function viewportH() { return Math.round(window.visualViewport?.height ?? window.innerHeight); }
+
 export function createScene() {
   // ─── Renderer ────────────────────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({
@@ -16,7 +22,7 @@ export function createScene() {
 
   // Cap pixel ratio to 1.5 — Quest 3 native DPR can be ~1.75+, which kills GPU perf.
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(viewportW(), viewportH());
 
   // THREE must drive the loop via setAnimationLoop (not rAF) for WebXR to work.
   // We set the callback in main.js after everything is ready.
@@ -46,7 +52,7 @@ export function createScene() {
   // used for the flat desktop view.
   const camera = new THREE.PerspectiveCamera(
     70,                                      // FOV
-    window.innerWidth / window.innerHeight,  // aspect
+    viewportW() / viewportH(),  // aspect
     0.1,                                     // near clip
     100                                      // far clip
   );
@@ -99,11 +105,40 @@ export function createScene() {
   renderer.xr.addEventListener('sessionend',   () => { cameraLaser.visible = true;  });
 
   // ─── Resize handling ─────────────────────────────────────────────────────
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+  // ── Viewport sizing ─────────────────────────────────────────────────────────
+  // Mobile Safari reports window.innerHeight BEFORE its chrome (URL bar) has
+  // settled on a cold load, and CSS 100vh is the LARGE viewport height, so the
+  // canvas came up shorter than the visible area and left a black band at the
+  // bottom. A reload "fixed" it only because the second load measured a settled
+  // viewport. visualViewport is the value that actually describes what the user
+  // can see, and it fires its own resize when the chrome collapses — a plain
+  // window 'resize' listener does not reliably fire for that.
+  function applySize() {
+    const w = viewportW(), h = viewportH();
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    // updateStyle (default) also pins canvas.style in px, which overrides the
+    // stylesheet's height and removes the 100vh-vs-innerHeight mismatch.
+    renderer.setSize(w, h);
+  }
+
+  window.addEventListener('resize', applySize);
+  window.addEventListener('orientationchange', () => {
+    // Orientation reports the OLD size synchronously; re-measure after layout.
+    applySize();
+    setTimeout(applySize, 120);
+    setTimeout(applySize, 400);
   });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', applySize);
+    window.visualViewport.addEventListener('scroll', applySize);
+  }
+
+  // Re-measure on the FIRST rendered frame and again after the chrome settles,
+  // so the very first load fills edge to edge without needing a reload.
+  requestAnimationFrame(applySize);
+  setTimeout(applySize, 250);
+  setTimeout(applySize, 900);
 
   return { renderer, scene, camera, environment };
 }
