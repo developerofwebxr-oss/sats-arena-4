@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import arenaGlbUrl from '../assets/sats-arena-imperial-gold-v1.glb?url';
-import panoramaUrl from '../assets/sats-arena-gold-360-equirectangular.png?url';
+// JPEG, not PNG: an equirect skybox has no alpha, and the PNG was 2.98 MB vs
+// 665 KB here — it would have made the "lighter" mobile fallback 3.3x HEAVIER
+// than the Draco arena it replaces.
+import panoramaUrl from '../assets/sats-arena-gold-360-equirectangular.jpg?url';
 
 /**
  * arena-glb.js — the "Imperial Gold" arena as a skin environment.
@@ -43,6 +47,42 @@ const MAX_TRIANGLES      = 250000; // above this we consider the budget blown
 
 const EYE = new THREE.Vector3(0, 1.65, 0); // the notes' reference camera point
 
+/**
+ * Should this device attempt the 140k-triangle GLB arena at all?
+ *
+ * Decided by CAPABILITY, not by hoping a phone copes. A handheld running the
+ * flat/AR path has to carry the arena on a mobile GPU with a mobile thermal
+ * budget, on top of the gun and coins — and it gets no stereo benefit from the
+ * geometry. Those devices take the 360 panorama instead, which is the fallback
+ * P31 already built and validated.
+ *
+ * Headsets are NOT excluded: Quest reports coarse pointer + touch but is exactly
+ * where the real geometry matters, so an XR-capable device always gets the GLB.
+ * Desktop always gets it. Override either way with ?arena=glb / ?arena=pano.
+ */
+export async function preferGlbArena() {
+  const q = new URLSearchParams(location.search).get('arena');
+  if (q === 'glb')  return true;
+  if (q === 'pano') return false;
+
+  // HEADSET TEST — deliberately immersive-VR support, NOT the mere presence of
+  // navigator.xr. Android Chrome exposes navigator.xr for immersive-AR, so
+  // "has navigator.xr" would hand every Android phone the 140k-triangle arena,
+  // which is exactly the device this gate exists to protect. Quest supports
+  // immersive-vr; phones generally do not.
+  try {
+    if (navigator.xr?.isSessionSupported && await navigator.xr.isSessionSupported('immersive-vr')) return true;
+  } catch { /* treat a probe failure as "not a headset" */ }
+
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  const smallish = Math.min(screen.width, screen.height) < 820;
+  const lowCores = (navigator.hardwareConcurrency || 8) <= 4;
+  const lowMem   = (navigator.deviceMemory || 8) <= 4;
+
+  const handheld = coarse && smallish;
+  return !(handheld || (lowCores && lowMem));
+}
+
 let _state = {
   status: 'idle',      // idle | loading | ready | failed
   source: null,        // 'glb' | 'panorama'
@@ -75,8 +115,23 @@ export function whenArenaReady() { return loadArena(); }
 
 async function _load() {
   const t0 = performance.now();
+
+  // Capability gate FIRST — on a handheld this skips the GLB download entirely
+  // rather than fetching it and then deciding.
+  if (!(await preferGlbArena())) {
+    console.log('[arena] handheld/low-capability device → 360 panorama arena');
+    return buildPanorama({ reason: 'device capability gate (handheld or low-spec)' });
+  }
+
   try {
-    const gltf = await new GLTFLoader().loadAsync(arenaGlbUrl);
+    const loader = new GLTFLoader();
+    // The runtime arena GLB is Draco-compressed (7.48 MB -> 891 KB). Reuse the
+    // decoder weapon.js already self-hosts in public/draco/ — no CDN, and it is
+    // usually warm in cache because the gun loads first.
+    const draco = new DRACOLoader();
+    draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+    loader.setDRACOLoader(draco);
+    const gltf = await loader.loadAsync(arenaGlbUrl);
     const root = gltf.scene;
     root.name = 'SatsArena_Gold_v1';
 

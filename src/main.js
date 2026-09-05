@@ -171,11 +171,22 @@ _exposeSkinDev(skins, skinNet);
 // second writer to the same visibility would be the exact bug pattern to avoid;
 // arena-glb.js exposes setArenaShellVisible() for finer control if props are
 // ever added that SHOULD stay visible in AR.
-loadArena();
+// LOADING ARCHITECTURE — init must NEVER wait on environment assets.
+// The default skin is CLASSIC, which needs no arena at all, so downloading the
+// arena during init spent the player's first seconds (and, on cellular, tens of
+// seconds) on content they had not asked for. It now starts only AFTER the game
+// is interactive, on an idle callback, so the mode switcher, motion-permission
+// button, shooting and co-op controls are all live first. The skin picker also
+// calls loadArena() on demand, so picking GOLD ARENA never has to wait for idle.
+const _afterInteractive = (fn) => (typeof requestIdleCallback === 'function'
+  ? requestIdleCallback(fn, { timeout: 3000 })
+  : setTimeout(fn, 1200));
+
 onArenaReady((st) => {
   console.log(`[arena] ready via ${st.source}`, st.diagnostics);
   refreshSkinHud();
 });
+_afterInteractive(() => loadArena());
 
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
 // onCompositionChange fires whenever the flat-vs-headset mix of peers changes.

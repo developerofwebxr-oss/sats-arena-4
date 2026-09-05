@@ -455,14 +455,30 @@ export function setupWeapon(camera, renderer) {
   // hangs off the unmirrored group (see setSponsorModel): both hands read
   // correctly by construction, and this mapping is preserved so the sheets can
   // still be swapped per hand after the on-device check.
-  const texLoader = new THREE.TextureLoader();
-  const _logoRight = texLoader.load(sponsorLogoRightUrl);
-  const _logoLeft  = texLoader.load(sponsorLogoLeftUrl);
-  [_logoRight, _logoLeft].forEach((t) => {
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-  });
+  // DEFERRED PRELOAD — the sponsor gun + its two logo sheets are ~800 KB and are
+  // only needed once a PAID rapid-fire window opens, which cannot happen in the
+  // first seconds of a session. Fetching them during init pushed ~800 KB ahead
+  // of the player's first interaction (and on cellular, well ahead of it). They
+  // now load once the game is already playable. The swap is still instant when
+  // the window opens, because that is minutes of play away, not milliseconds.
+  const afterInteractive = (fn) => (typeof requestIdleCallback === 'function'
+    ? requestIdleCallback(fn, { timeout: 5000 })
+    : setTimeout(fn, 2000));
 
+  let _logoRight = null, _logoLeft = null;
+
+  function preloadSponsor() {
+    const texLoader = new THREE.TextureLoader();
+    _logoRight = texLoader.load(sponsorLogoRightUrl);
+    _logoLeft  = texLoader.load(sponsorLogoLeftUrl);
+    [_logoRight, _logoLeft].forEach((t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = 4;
+    });
+    _loadSponsorGun();
+  }
+
+  function _loadSponsorGun() {
   gltfLoader.load(
     sponsorGunUrl,
     (gltf) => {
@@ -482,6 +498,9 @@ export function setupWeapon(camera, renderer) {
     undefined,
     (err) => console.error('[gun:sponsor] LOAD FAILED ✗ — keeping the bitcoin gun', err),
   );
+  }
+
+  afterInteractive(preloadSponsor);
 
   // ── Sponsor swap, riding the EXISTING paid rapid-fire window ─────────────
   // isRapidFire() is the same single source of truth the HUD countdown and
