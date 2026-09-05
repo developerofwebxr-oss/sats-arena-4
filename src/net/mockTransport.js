@@ -155,13 +155,17 @@ export class MockTransport {
     if (this._botAlive) this._botLeave();
     this._joined   = false;
     this._roomName = null;
+    this._micOn    = false; // leaving the room unpublishes the mic (matches LiveKit)
   }
 
   // Outgoing poses/events accepted and discarded (local player only visible to self).
   sendPose(_pose)  {}
   sendEvent(_evt)  {}
 
-  setMicEnabled(_enabled) {}
+  // No real capture in mock, but track the flag so the mute control's REAL-state
+  // machine can be exercised in dev exactly as it behaves on LiveKit.
+  setMicEnabled(enabled) { this._micOn = !!enabled; }
+  isMicEnabled() { return !!this._micOn; }
 
   getParticipantCount() { return this._joined ? (this._botSeen ? 2 : 1) : 0; }
   getRoomName()         { return this._roomName; }
@@ -307,6 +311,7 @@ export class BCTransport {
     this._channel  = null;
     this._roomName = null;
     this._identity = null;
+    this._micOn    = false; // leaving the room unpublishes the mic (matches LiveKit)
     this._peers.clear();
     this._replied.clear();
   }
@@ -324,7 +329,9 @@ export class BCTransport {
     this._channel.postMessage({ ...evt, identity: this._identity, displayName: this._identity });
   }
 
-  setMicEnabled(_e) {}
+  // Same as MockTransport: no capture, but the flag keeps dev honest.
+  setMicEnabled(enabled) { this._micOn = !!enabled; }
+  isMicEnabled() { return !!this._micOn; }
 
   getParticipantCount() { return this._peers.size + (this._channel ? 1 : 0); }
   getRoomName()         { return this._roomName; }

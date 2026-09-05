@@ -18,6 +18,8 @@ import {
   getParticipantCount,
   getRoomName,
   setMicEnabled,
+  isMicEnabled,
+  onMicStateChange,
   getActiveTransportType,
 } from './room.js';
 import {
@@ -33,7 +35,9 @@ let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBt
 let sessionChip;
 let currentMode  = 'flat';
 let joined       = false;
-let muted        = false;
+// NOTE: there is deliberately no local `muted` boolean. The mute control reads
+// the REAL publish state from LiveKit (isMicEnabled()); a shadow copy is exactly
+// what made the old button claim "MUTE" while the mic was never published.
 let ownCode      = null; // this device's own code (never changes after load)
 let ownerToken   = null; // secret returned by /claim; held in memory only
 let _ownerPollTimer = null; // timer for polling pending join requests
@@ -49,6 +53,11 @@ export function setCoopMode(mode) {
 // decide the host/authority: you are the host iff getRoomName() === getOwnCode()
 // (the owner auto-joins their OWN code; a joiner is in the friend's code).
 export function getOwnCode() { return ownCode; }
+
+// Mute state for any non-DOM view (the in-world VR/AR menu on the staging
+// branch reads this). Derived from the REAL publish state, so the in-world row
+// and the DOM button can never disagree — neither keeps its own boolean.
+export function isCoopMuted() { return !isMicEnabled(); }
 
 // This device's display name (for competition proposal cards).
 export function getLocalName() {
@@ -156,6 +165,11 @@ export function setupCoopHud() {
     try {
       await joinSession(code, { name: savedName, mode: currentMode, ownerToken: tok });
       joined = true;
+      // The host auto-joins their OWN room, which previously skipped showJoined()
+      // entirely — so the host had no mute control on their own device. Surface
+      // just the mute button; the JOIN row stays available so the host can still
+      // join a friend's code.
+      showMuteControl();
       if (isLightningEnabled()) activateWithCode(code);
     } catch (e) {
       console.warn('[coop] auto-join own room failed', e);
@@ -166,6 +180,10 @@ export function setupCoopHud() {
   joinBtn.addEventListener('click', handleJoin);
   leaveBtn.addEventListener('click', handleLeave);
   muteBtn.addEventListener('click', handleMute);
+
+  // Repaint from the transport's own truth whenever it changes (publish,
+  // unpublish, mute, unmute, or the room going away).
+  onMicStateChange(() => _refreshMuteBtn());
 
   onPeerJoin((identity, displayName) => {
     setStatus(`${displayName} joined`, 'ok');
@@ -473,15 +491,52 @@ async function handleLeave() {
 }
 
 async function handleMute() {
-  muted = !muted;
-  await setMicEnabled(!muted);
-  muteBtn.textContent = muted ? '🔇 UNMUTE' : '🎙 MUTE';
+  // ONE PRESS to go live. We toggle against the REAL publish state, so the first
+  // press on a freshly joined (muted) session publishes the mic — the old code
+  // toggled a local boolean that started out disagreeing with reality, which
+  // cost two presses and showed the wrong label the whole time.
+  const live = isMicEnabled();
+  muteBtn.disabled = true;           // no double-fire while getUserMedia resolves
+  try {
+    await setMicEnabled(!live);
+  } catch (e) {
+    // Almost always a denied/unavailable microphone permission.
+    console.warn('[coop] mic toggle failed', e);
+    setStatus('Microphone unavailable — check permissions', 'err');
+  } finally {
+    muteBtn.disabled = false;
+    _refreshMuteBtn();               // repaint from real state, never from a guess
+  }
+}
+
+// Repaint the mute button from the REAL mic state. Called after every toggle and
+// from onMicStateChange, so the label can never drift from what is published.
+//   not transmitting → "🎙 TALK"  (press to go live)
+//   transmitting     → "🔴 MUTE"  (red dot = you are broadcasting right now)
+function _refreshMuteBtn() {
+  if (!muteBtn) return;
+  const live = isMicEnabled();
+  muteBtn.textContent = live ? '🔴 MUTE' : '🎙 TALK';
+  muteBtn.title = live
+    ? 'Your mic is live — click to mute'
+    : 'Your mic is off — click to talk';
+  muteBtn.classList.toggle('mic-live', live);
+}
+
+// Show the mute control on this device. Split out of showJoined() because the
+// HOST auto-joins their OWN room and must keep the JOIN button available to
+// also join a friend's code — so the host gets the mute control WITHOUT the
+// rest of showJoined()'s "you are a guest in someone's room" layout.
+function showMuteControl() {
+  if (!muteBtn) return;
+  muteBtn.style.display = 'inline-block';
+  _refreshMuteBtn();
 }
 
 function showJoined(code) {
   panel.querySelector('#coop-join').style.display  = 'none';
   panel.querySelector('#coop-leave').style.display = 'inline-block';
-  muteBtn.style.display = 'inline-block';
+  showMuteControl();
   panel.querySelector('#coop-active').style.display = 'block';
   codeDisplay.textContent = `CODE: ${code}`;
   _updateChip(code);
@@ -493,8 +548,7 @@ function showDisconnected() {
   panel.querySelector('#coop-leave').style.display = 'none';
   muteBtn.style.display = 'none';
   panel.querySelector('#coop-active').style.display = 'none';
-  muted = false;
-  muteBtn.textContent = '🎙 MUTE';
+  _refreshMuteBtn(); // leave() drops the room → real state is already "not live"
   if (ownCode) _updateChip(ownCode);
 }
 
@@ -626,6 +680,15 @@ function injectStyles() {
       font: 12px monospace;
       cursor: pointer;
     }
+    /* Live mic: red border + glow, so "you are broadcasting" is readable at a
+       glance and not carried by the label text alone. */
+    #coop-mute.mic-live {
+      border-color: #ff5d6c;
+      color: #ff9aa4;
+      background: rgba(255,93,108,.12);
+      text-shadow: 0 0 8px #ff5d6c66;
+    }
+    #coop-mute:disabled { opacity: .55; cursor: default; }
     #coop-status { font-size: 11px; min-height: 14px; }
     .coop-err { color: #f88; }
     .coop-ok  { color: #8f8; }
