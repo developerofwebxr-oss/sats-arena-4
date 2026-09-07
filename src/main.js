@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createScene } from './scene.js';
+import { watchForNewBuild } from './build-freshness.js';
 import { setupXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD } from './hud.js';
@@ -30,7 +31,7 @@ import { loadArena, onArenaReady, getArenaState, setArenaRenderContext } from '.
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-const { renderer, scene, camera, environment } = createScene();
+const { renderer, scene, camera, environment, syncSize } = createScene();
 
 // DEV: expose renderer/scene/camera so javascript_tool can render on demand
 // even when the tab is backgrounded and Three.js's rAF loop is suspended.
@@ -195,6 +196,16 @@ onArenaReady((st) => {
 });
 _afterInteractive(() => loadArena());
 
+// GitHub Pages serves index.html with Cache-Control: max-age=600, so for up to
+// ten minutes after a deploy a returning player can run the PREVIOUS build out
+// of their own HTTP cache — which is how a shipped fix becomes invisible to the
+// person who asked for it. There is no service worker involved (this project
+// registers none). See build-freshness.js: it re-reads index.html with
+// cache:'no-store', and reloads once if the deployed bundle is not the one
+// running. Never while presenting — being yanked out of a headset session would
+// be worse than running stale code.
+watchForNewBuild({ isBusy: () => !!renderer.xr?.isPresenting });
+
 // Peer avatar renderer. Accepts poses from room.js and draws head + hand markers.
 // onCompositionChange fires whenever the flat-vs-headset mix of peers changes.
 // anyFlatPeer = true → at least one peer has no tracked controllers (flat/mobile).
@@ -278,6 +289,12 @@ function clearBootSplash() {
 }
 
 renderer.setAnimationLoop(function animate() {
+  // Viewport watchdog FIRST, so a frame is never rendered at a size that no
+  // longer matches what the player can see. See scene.js — this is the part that
+  // does not depend on iOS Safari firing any particular event when its chrome
+  // finally settles.
+  syncSize();
+
   const delta   = clock.getDelta();
   const elapsed = clock.getElapsedTime();
 

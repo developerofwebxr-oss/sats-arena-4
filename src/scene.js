@@ -10,8 +10,12 @@ import * as THREE from 'three';
 // The visible viewport. visualViewport excludes mobile browser chrome and is the
 // only value that is correct during the cold-load settle; innerWidth/Height are
 // the fallback for browsers without it.
-function viewportW() { return Math.round(window.visualViewport?.width  ?? window.innerWidth); }
-function viewportH() { return Math.round(window.visualViewport?.height ?? window.innerHeight); }
+// CEIL, not round. visualViewport reports fractional CSS pixels on iOS, and
+// rounding a 812.5 down to 812 leaves a half-pixel strip of background showing
+// at the bottom edge. One pixel of overdraw is invisible; body is overflow:hidden
+// so the extra pixel cannot introduce a scrollbar or feed back into the measure.
+function viewportW() { return Math.ceil(window.visualViewport?.width  ?? window.innerWidth); }
+function viewportH() { return Math.ceil(window.visualViewport?.height ?? window.innerHeight); }
 
 export function createScene() {
   // ─── Renderer ────────────────────────────────────────────────────────────
@@ -113,34 +117,74 @@ export function createScene() {
   // viewport. visualViewport is the value that actually describes what the user
   // can see, and it fires its own resize when the chrome collapses — a plain
   // window 'resize' listener does not reliably fire for that.
+  // WHY THIS IS A WATCHDOG AND NOT A LIST OF EVENTS.
+  // The previous pass wired visualViewport + a couple of delayed re-measures and
+  // the band still appeared on a real iPhone's first load. The lesson is that we
+  // do not know WHEN iOS Safari's chrome settles — it can land after any of our
+  // timers, after the first touch, or on a frame that fires no event we listen
+  // for. So the events and timers below are the fast path, and the per-frame
+  // check (syncSize, driven from the render loop) is the guarantee: whenever the
+  // measured viewport stops matching the canvas, the canvas is corrected on the
+  // next frame, no matter what did or did not fire.
+  //
+  // The check is two property reads and a compare. visualViewport's width/height
+  // do not force layout the way window.innerHeight can, so this is genuinely
+  // free — and it is skipped entirely while an XR session owns the framebuffer.
+  let _lastW = 0, _lastH = 0;
+
   function applySize() {
+    // In an immersive session the headset owns the framebuffer; calling setSize
+    // there fights renderer.xr and can corrupt the projection.
+    if (renderer.xr?.isPresenting) return;
     const w = viewportW(), h = viewportH();
+    if (w === _lastW && h === _lastH) return;   // nothing changed — no churn
+    if (w <= 0 || h <= 0) return;               // iOS can report 0 mid-transition
+    _lastW = w; _lastH = h;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    // updateStyle (default) also pins canvas.style in px, which overrides the
-    // stylesheet's height and removes the 100vh-vs-innerHeight mismatch.
-    renderer.setSize(w, h);
+    // updateStyle:true (explicit) pins canvas.style in px, so the renderer's
+    // drawing-buffer size and the element's CSS size CANNOT disagree — the
+    // stylesheet's 100vh/100dvh only ever applies before this first runs.
+    renderer.setSize(w, h, true);
   }
 
+  // ── Fast path: every settle point we can actually name ──────────────────────
   window.addEventListener('resize', applySize);
+  window.addEventListener('load', applySize);
+  // pageshow covers the BFCACHE restore, which fires neither load nor resize —
+  // coming back to the game via the back button otherwise kept a stale canvas.
+  window.addEventListener('pageshow', () => { applySize(); settleBurst(); });
+  window.addEventListener('focus', applySize);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) settleBurst(); });
   window.addEventListener('orientationchange', () => {
     // Orientation reports the OLD size synchronously; re-measure after layout.
     applySize();
-    setTimeout(applySize, 120);
-    setTimeout(applySize, 400);
+    settleBurst();
   });
   if (window.visualViewport) {
     window.visualViewport.addEventListener('resize', applySize);
     window.visualViewport.addEventListener('scroll', applySize);
   }
 
-  // Re-measure on the FIRST rendered frame and again after the chrome settles,
-  // so the very first load fills edge to edge without needing a reload.
-  requestAnimationFrame(applySize);
-  setTimeout(applySize, 250);
-  setTimeout(applySize, 900);
+  /** Re-measure across the window in which mobile browser chrome settles. */
+  function settleBurst() {
+    for (const t of [0, 100, 300, 600, 1000, 2000]) setTimeout(applySize, t);
+  }
+  requestAnimationFrame(applySize);   // the first rendered frame
+  settleBurst();
 
-  return { renderer, scene, camera, environment };
+  // ── Guarantee: the per-frame size watchdog ─────────────────────────────────
+  // main.js calls this from the animation loop. Every frame for the first ~3
+  // seconds (where the chrome settle actually happens), then a cheap periodic
+  // check for the rest of the session so a later change — split view, keyboard,
+  // rotation, returning from background — can never leave a band behind either.
+  let _frames = 0;
+  function syncSize() {
+    _frames++;
+    if (_frames <= 180 || _frames % 15 === 0) applySize();
+  }
+
+  return { renderer, scene, camera, environment, syncSize, applySize };
 }
 
 // ─── Radar floor texture ─────────────────────────────────────────────────────
