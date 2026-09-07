@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { buildArena } from '../arena.js';
-import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState } from './arena-glb.js';
+import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState, getGoldDoors } from './arena-glb.js';
 import { buildClassicDecor } from './classic-decor.js';
 
 /**
@@ -149,6 +149,9 @@ const goldArena = {
       }
     },
   },
+  // P41 doors. Ticked ONLY while gold-arena is the active skin — skin-manager
+  // calls update() on the active skin alone, so Classic never pays for this.
+  update(dt) { getGoldDoors()?.update(dt); },
   gun: null,        // keep the shipped gun against the gold architecture
   coinType: null,   // and the shipped coins
   // This environment brings its own floor, so the base radar floor must be

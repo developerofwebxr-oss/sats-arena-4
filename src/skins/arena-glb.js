@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildGoldDoors } from './gold-doors.js';
 // GLTFLoader/DRACOLoader are imported DYNAMICALLY inside _load(). They are ~52 KB
 // of three/addons that nothing on the first-frame path touches, and pulling them
 // in statically put that parse cost in front of the player's first frame.
@@ -130,6 +131,12 @@ let _state = {
 };
 let _promise = null;
 const _readyCbs = [];
+
+// The door rig for the loaded arena. Null until the GLB is accepted, and null
+// forever on the panorama fallback — that asset has no panels to open.
+let _doors = null;
+/** P42 drives the doors through this. Null unless the GLB arena is live. */
+export function getGoldDoors() { return _doors; }
 
 /**
  * SHADER PRE-COMPILATION CONTEXT.
@@ -285,6 +292,14 @@ async function _load() {
 
     prepareForRuntime(root);
     root.userData.keepAlive = true; // the seam detaches rather than disposes this
+
+    // P41: turn the 42 target panels into openable doors. Built onto the ARENA
+    // ROOT (not the skin group) so they travel with the cached arena, are hidden
+    // with it in AR, and are detached rather than disposed on a skin switch.
+    // Gold-only by construction — this root only ever exists inside gold-arena.
+    _doors = buildGoldDoors(root);
+    diag.doors = _doors?.stats || null;
+    exposeDoorDevTools(_doors);
     diag.warmMs = await warmShaders(root, 'GLB arena');
 
     console.log(`[arena] GLB accepted — ${diag.triangles} tris, ${diag.sizeMetres.x}×${diag.sizeMetres.z} m, seal ${seal.misses}/${seal.rays} misses${seal.skipped ? ' (QA-recorded; ?validate to re-run in-engine)' : ' (re-run in-engine)'}`);
@@ -293,6 +308,38 @@ async function _load() {
     console.warn('[arena] GLB load failed → panorama fallback', err);
     return buildPanorama({ reason: `GLB load error: ${err?.message || err}` });
   }
+}
+
+/**
+ * ?dev door tools. P42 will drive these doors from the host; until then this is
+ * how a human (or a headless check) opens one. Behind ?dev, like the placeholder
+ * skin and the mock transport panel, so nothing here is reachable in normal play.
+ *
+ *   window.__doors            the full API (see gold-doors.js)
+ *   window.__doors.openRandom()  open a random shut door
+ *   press O / C               open / close a random door
+ */
+function exposeDoorDevTools(doors) {
+  if (!doors) return;
+  const DEV = (() => {
+    try { return import.meta.env.DEV || new URLSearchParams(location.search).has('dev'); }
+    catch { return false; }
+  })();
+  if (!DEV) return;
+
+  const pick = (wantOpen) => {
+    const ids = doors.listDoors().filter((id) => (doors.openness(id) === 1) === wantOpen);
+    return ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
+  };
+  doors.openRandom  = () => { const id = pick(false); if (id) doors.openDoor(id);  return id; };
+  doors.closeRandom = () => { const id = pick(true);  if (id) doors.closeDoor(id); return id; };
+
+  window.__doors = doors;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'o' || e.key === 'O') console.log('[doors] open',  doors.openRandom());
+    if (e.key === 'c' || e.key === 'C') console.log('[doors] close', doors.closeRandom());
+  });
+  console.log(`[doors] ?dev tools ready — window.__doors, or press O to open / C to close a random door (${doors.count} doors)`);
 }
 
 // ── In-engine validation ──────────────────────────────────────────────────────
