@@ -1,4 +1,5 @@
-import QRCode from 'qrcode';
+// qrcode (24 KB) is only needed the moment a Lightning invoice is shown, so it
+// is import()ed at the call site rather than parsed on every page load.
 import { playReloadSound } from './audio.js';
 import { grantRapidFire, isRapidFire, getRemainingSeconds } from './upgrade.js';
 import { isLightningEnabled, getSessionCode, getPaidCount, createInvoice } from './lightning.js';
@@ -309,6 +310,7 @@ async function showPaymentModal(invoice, code = getSessionCode()) {
 
   try {
     // Uppercase the bech32 invoice for QR alphanumeric mode → less dense, easier scan.
+    const { default: QRCode } = await import('qrcode');
     payModalQr.src = await QRCode.toDataURL(invoice.toUpperCase(), { margin: 1, width: 240 });
   } catch {
     payModalStatus.textContent = 'could not render QR — use Open in Wallet or Copy';

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+// GLTFLoader/DRACOLoader are import()ed lazily — see _loaders() below. Nothing
+// on the path to the first interactive frame needs them.
 import gunModelUrl from './assets/sats-arena-better-gun.glb?url';
 import sponsorGunUrl from './assets/sponsor-gun.glb?url';
 import sponsorLogoRightUrl from './assets/sponsor-logo-right.png?url';
@@ -89,11 +89,28 @@ const MIRROR_LEFT = true; // negative X scale so the left gun isn't a backwards 
 const FLASH_POS  = new THREE.Vector3(0, -0.10, -0.36);
 const FLASH_SIZE = 0.62;
 
-// ── GLTFLoader (shared) ───────────────────────────────────────────────────────
-const gltfLoader  = new GLTFLoader();
-const dracoLoader = new DRACOLoader();
-dracoLoader.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
-gltfLoader.setDRACOLoader(dracoLoader);
+// ── GLTFLoader (shared, lazily constructed) ──────────────────────────────────
+// Built on first use so the ~52 KB of three/addons parse cost lands alongside
+// the GLB fetch instead of in front of the player's first frame. The promise is
+// memoised, so the gun and the sponsor gun still share ONE loader and ONE Draco
+// decoder worker exactly as before.
+let _loaderPromise = null;
+function _loaders() {
+  if (_loaderPromise) return _loaderPromise;
+  _loaderPromise = Promise.all([
+    import('three/addons/loaders/GLTFLoader.js'),
+    import('three/addons/loaders/DRACOLoader.js'),
+  ]).then(([{ GLTFLoader }, { DRACOLoader }]) => {
+    const gltfLoader  = new GLTFLoader();
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+    // Warm the decoder worker while the GLB is still in flight.
+    dracoLoader.preload();
+    gltfLoader.setDRACOLoader(dracoLoader);
+    return gltfLoader;
+  });
+  return _loaderPromise;
+}
 
 // ── Peer-gun clone API ────────────────────────────────────────────────────────
 let _gunLoadedResolve;
@@ -405,7 +422,7 @@ export function setupWeapon(camera, renderer) {
 
   // ── Load GLB once; assign to guns ─────────────────────────────────────────
   console.log('[gun] loading GLB from', gunModelUrl);
-  gltfLoader.load(
+  _loaders().then((gltfLoader) => gltfLoader.load(
     gunModelUrl,
     (gltf) => {
       // Snapshot BEFORE transforms — peers get a clean, unpositioned copy.
@@ -440,7 +457,7 @@ export function setupWeapon(camera, renderer) {
     },
     (p) => { if (p.total) console.log(`[gun] loading ${Math.round((p.loaded / p.total) * 100)}%`); },
     (err) => console.error('[gun] LOAD FAILED ✗', err),
-  );
+  ));
 
   // ── Sponsor gun preload ───────────────────────────────────────────────────
   // Loaded ONCE at startup and cloned per gun, so the swap when the paid window
@@ -479,7 +496,7 @@ export function setupWeapon(camera, renderer) {
   }
 
   function _loadSponsorGun() {
-  gltfLoader.load(
+  _loaders().then((gltfLoader) => gltfLoader.load(
     sponsorGunUrl,
     (gltf) => {
       // Measure BEFORE parenting: once the model is inside a gun group, a world
@@ -497,7 +514,7 @@ export function setupWeapon(camera, renderer) {
     },
     undefined,
     (err) => console.error('[gun:sponsor] LOAD FAILED ✗ — keeping the bitcoin gun', err),
-  );
+  ));
   }
 
   afterInteractive(preloadSponsor);

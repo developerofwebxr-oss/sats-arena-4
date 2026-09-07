@@ -26,7 +26,7 @@ import { setupCompetition, updateCompetition, canCompete, proposeCompetition } f
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
-import { loadArena, onArenaReady, getArenaState } from './skins/arena-glb.js';
+import { loadArena, onArenaReady, getArenaState, setArenaRenderContext } from './skins/arena-glb.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -182,6 +182,13 @@ const _afterInteractive = (fn) => (typeof requestIdleCallback === 'function'
   ? requestIdleCallback(fn, { timeout: 3000 })
   : setTimeout(fn, 1200));
 
+// Give the arena loader the render context so it can PRE-COMPILE the arena's
+// shader programs and upload its textures off the frame that first shows them
+// (see warmShaders/warmTextures in arena-glb.js). Without this the whole set is
+// compiled synchronously on that one frame — the classic "frozen, then
+// everything appears" stall.
+setArenaRenderContext({ renderer, scene, camera });
+
 onArenaReady((st) => {
   console.log(`[arena] ready via ${st.source}`, st.diagnostics);
   refreshSkinHud();
@@ -253,6 +260,23 @@ function advanceGameplay(delta, elapsed) {
 // ─── Animation loop ───────────────────────────────────────────────────────────
 // setAnimationLoop is XR-aware: on desktop it acts like rAF; in VR it's driven
 // by the headset refresh (72–120 Hz) and receives an XRFrame as the second arg.
+// ── Boot splash dismissal ─────────────────────────────────────────────────────
+// index.html paints a pure-CSS splash on the browser's first paint, with no JS
+// involved. It is cleared HERE, from inside the render loop, on the first frame
+// that has actually been drawn — not on load, not on a timer. Tying it to a real
+// frame means it can never uncover a black canvas and claim the game is ready
+// before it is, and it stays up for exactly as long as the device needs.
+let _firstFrameDone = false;
+function clearBootSplash() {
+  const el = document.getElementById('boot');
+  if (!el) return;
+  el.classList.add('done');
+  // Remove after the fade so it can never eat a tap.
+  setTimeout(() => el.remove(), 500);
+  const t = Math.round(performance.now());
+  console.log(`[boot] first rendered frame at ${t}ms — splash cleared`);
+}
+
 renderer.setAnimationLoop(function animate() {
   const delta   = clock.getDelta();
   const elapsed = clock.getElapsedTime();
@@ -272,6 +296,8 @@ renderer.setAnimationLoop(function animate() {
   updateCompetition();    // opt-in match: broadcast own score, repaint dual HUD
 
   renderer.render(scene, camera);
+
+  if (!_firstFrameDone) { _firstFrameDone = true; clearBootSplash(); }
 });
 
 // DEV: __animateFrame() lets javascript_tool drive one render while the tab is

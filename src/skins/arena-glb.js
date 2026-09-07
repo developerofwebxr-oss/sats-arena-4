@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+// GLTFLoader/DRACOLoader are imported DYNAMICALLY inside _load(). They are ~52 KB
+// of three/addons that nothing on the first-frame path touches, and pulling them
+// in statically put that parse cost in front of the player's first frame.
 import arenaGlbUrl from '../assets/sats-arena-imperial-gold-v1.glb?url';
 // JPEG, not PNG: an equirect skybox has no alpha, and the PNG was 2.98 MB vs
 // 665 KB here — it would have made the "lighter" mobile fallback 3.3x HEAVIER
@@ -46,6 +47,37 @@ const MAX_SPAN_M         = 60;    // larger than this = cathedral
 const MAX_TRIANGLES      = 250000; // above this we consider the budget blown
 
 const EYE = new THREE.Vector3(0, 1.65, 0); // the notes' reference camera point
+
+/**
+ * SEAL VALIDATION IS A QA TOOL, NOT A PER-LOAD RUNTIME COST.
+ *
+ * PROFILED (Prompt 39): validateFromInside() was the single longest main-thread
+ * task in the whole boot — 18.4 s in a headless Chrome CPU profile on an Apple
+ * Silicon Mac, inside ONE uninterruptible task. It casts SEAL_RAYS rays at a
+ * 140,104-triangle mesh that has no acceleration structure, so every ray is a
+ * brute-force scan of every triangle: 4096 x 140k = ~574 million ray/triangle
+ * tests, synchronously, on the main thread, in the GLTFLoader onLoad callback.
+ * The render loop stopped dead for the whole of it. That is the "loads for ages,
+ * nothing moves" freeze.
+ *
+ * The asset is FIXED and SHIPPED, and it already passed this exact check —
+ * "seal 0/4096 misses", recorded below. Re-deriving that constant on every
+ * player's phone, every load, buys nothing. So the check now runs only in dev or
+ * with ?validate in the URL, which is where a NEW arena asset gets vetted, and
+ * even then it runs time-sliced so it can never block a frame again.
+ *
+ * The cheap structural checks (span, triangle budget) still run on every load —
+ * they are a single pass over the geometry, not a ray cast per triangle.
+ */
+const ARENA_VALIDATE = (() => {
+  try {
+    return import.meta.env.DEV || new URLSearchParams(location.search).has('validate');
+  } catch { return false; }
+})();
+
+// The recorded QA result for the shipped v1 asset, reported in diagnostics so
+// production still says what the seal state IS rather than going silent on it.
+const SEAL_QA_RESULT = { rays: 4096, misses: 0, missRatio: 0, sealed: true, source: 'QA (validated in-engine, ?validate to re-run)' };
 
 /**
  * Should this device attempt the 140k-triangle GLB arena at all?
@@ -99,6 +131,81 @@ let _state = {
 let _promise = null;
 const _readyCbs = [];
 
+/**
+ * SHADER PRE-COMPILATION CONTEXT.
+ *
+ * The arena brings ~20 primitives across 4 materials that the renderer has never
+ * seen. Without this, all of those programs are compiled and linked on the FIRST
+ * frame that shows the arena — a synchronous GL stall right at the moment the
+ * player switches skin, which reads as "frozen, then everything appears".
+ * renderer.compileAsync() builds them ahead of time, off that frame, using the
+ * real scene so lights and fog resolve to the same program variants.
+ * main.js supplies this; if nothing does, warming is simply skipped.
+ */
+let _gl = null;
+export function setArenaRenderContext(ctx) { _gl = ctx; }
+
+/**
+ * Yield the main thread until the next frame — the unit of time-slicing used by
+ * both the texture warm-up and the seal validator.
+ *
+ * requestAnimationFrame is SUSPENDED while the document is hidden, so a page
+ * opened in a background tab would sit in a slice loop forever and never report
+ * the arena ready. When hidden we fall back to a macrotask, which still yields
+ * (nothing is being rendered to stall) and lets the work finish.
+ */
+function yieldFrame() {
+  if (typeof requestAnimationFrame === 'function' && typeof document !== 'undefined' && !document.hidden) {
+    return new Promise((r) => requestAnimationFrame(() => r()));
+  }
+  return new Promise((r) => setTimeout(r, 0));
+}
+
+async function warmShaders(root, label) {
+  if (!_gl?.renderer) return null;
+  const t = performance.now();
+  try {
+    if (_gl.renderer.compileAsync) {
+      await _gl.renderer.compileAsync(root, _gl.camera, _gl.scene);
+    }
+    await warmTextures(root);
+    const ms = Math.round(performance.now() - t);
+    console.log(`[arena] GPU warm-up for ${label}: ${ms}ms (shaders + textures, off the render frame)`);
+    return ms;
+  } catch (e) {
+    // Never let a warm-up failure cost us the arena.
+    console.warn('[arena] GPU warm-up skipped', e);
+    return null;
+  }
+}
+
+/**
+ * STAGGERED TEXTURE UPLOAD.
+ *
+ * Compiling the programs is only half of the first-frame stall: each texture is
+ * also decoded and uploaded to the GPU the first time it is drawn, all in the
+ * same frame. initTexture() forces that upload now, and doing them ONE PER FRAME
+ * spreads the cost instead of trading one long stall for another.
+ */
+async function warmTextures(root) {
+  const renderer = _gl?.renderer;
+  if (!renderer?.initTexture) return;
+  const seen = new Set();
+  const texes = [];
+  root.traverse((o) => {
+    for (const m of (Array.isArray(o.material) ? o.material : (o.material ? [o.material] : []))) {
+      for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap']) {
+        const t = m?.[k];
+        if (t?.isTexture && !seen.has(t.uuid)) { seen.add(t.uuid); texes.push(t); }
+      }
+    }
+  });
+  for (const t of texes) {
+    try { renderer.initTexture(t); } catch { /* a texture we can't pre-upload is not fatal */ }
+    await yieldFrame();
+  }
+}
+
 export function getArenaState()       { return _state; }
 export function isArenaReady()        { return _state.status === 'ready'; }
 export function getArenaDiagnostics() { return _state.diagnostics; }
@@ -130,12 +237,25 @@ async function _load() {
   }
 
   try {
+    // Loader code is fetched on demand — see the import note at the top.
+    const [{ GLTFLoader }, { DRACOLoader }] = await Promise.all([
+      import('three/addons/loaders/GLTFLoader.js'),
+      import('three/addons/loaders/DRACOLoader.js'),
+    ]);
     const loader = new GLTFLoader();
     // The runtime arena GLB is Draco-compressed (7.48 MB -> 891 KB). Reuse the
     // decoder weapon.js already self-hosts in public/draco/ — no CDN, and it is
     // usually warm in cache because the gun loads first.
+    //
+    // DECODE IS OFF THE MAIN THREAD, and the Prompt 39 trace proves it: the Draco
+    // decode never appears as a main-thread task, it arrives back as a worker
+    // postMessage. What WAS on the main thread was everything we then did inside
+    // that message handler — which is what the time-slicing below fixes.
     const draco = new DRACOLoader();
     draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+    // Spin the decoder worker up now rather than at first-use, so the decode
+    // starts the moment the bytes land instead of after a cold worker boot.
+    draco.preload();
     loader.setDRACOLoader(draco);
     const gltf = await loader.loadAsync(arenaGlbUrl);
     const root = gltf.scene;
@@ -146,7 +266,9 @@ async function _load() {
     diag.loadMs = Math.round(performance.now() - t0);
 
     // ── The checks that decide GLB vs panorama ───────────────────────────────
-    const seal  = validateFromInside(shell);
+    // Cheap structural checks always; the ray-cast seal check only when asked
+    // for (see ARENA_VALIDATE above — it was an 18 s main-thread stall).
+    const seal  = ARENA_VALIDATE ? await validateFromInside(shell) : { ...SEAL_QA_RESULT, skipped: true };
     diag.seal   = seal;
     const span  = Math.max(diag.sizeMetres.x, diag.sizeMetres.z);
 
@@ -163,8 +285,9 @@ async function _load() {
 
     prepareForRuntime(root);
     root.userData.keepAlive = true; // the seam detaches rather than disposes this
+    diag.warmMs = await warmShaders(root, 'GLB arena');
 
-    console.log(`[arena] GLB accepted — ${diag.triangles} tris, ${diag.sizeMetres.x}×${diag.sizeMetres.z} m, seal ${seal.misses}/${seal.rays} misses`);
+    console.log(`[arena] GLB accepted — ${diag.triangles} tris, ${diag.sizeMetres.x}×${diag.sizeMetres.z} m, seal ${seal.misses}/${seal.rays} misses${seal.skipped ? ' (QA-recorded; ?validate to re-run in-engine)' : ' (re-run in-engine)'}`);
     return { status: 'ready', source: 'glb', root, shell, diagnostics: diag };
   } catch (err) {
     console.warn('[arena] GLB load failed → panorama fallback', err);
@@ -180,11 +303,19 @@ async function _load() {
  * sphere (Fibonacci) and counts how many escape without hitting anything.
  * A single gap to the void shows up here even when a render looks solid.
  */
-export function validateFromInside(shell, rays = SEAL_RAYS) {
+export async function validateFromInside(shell, rays = SEAL_RAYS, { sliceMs = 4 } = {}) {
   const raycaster = new THREE.Raycaster();
   raycaster.far = 200;
   const dir = new THREE.Vector3();
   let misses = 0, minDist = Infinity, maxDist = 0;
+
+  // TIME-SLICED. A single ray against this un-accelerated 140k-triangle shell
+  // costs ~4.5 ms, so the old synchronous loop owned the main thread for the
+  // whole sweep. Yielding every `sliceMs` keeps each slice inside one frame's
+  // budget: the sweep still takes as long as it takes, but the render loop,
+  // input and the mode switcher all keep running through it.
+  const t0 = performance.now();
+  let sliceStart = t0;
 
   const golden = Math.PI * (3 - Math.sqrt(5));
   for (let i = 0; i < rays; i++) {
@@ -196,9 +327,16 @@ export function validateFromInside(shell, rays = SEAL_RAYS) {
 
     raycaster.set(EYE, dir);
     const hit = raycaster.intersectObject(shell, true)[0];
-    if (!hit) { misses++; continue; }
-    if (hit.distance < minDist) minDist = hit.distance;
-    if (hit.distance > maxDist) maxDist = hit.distance;
+    if (!hit) { misses++; }
+    else {
+      if (hit.distance < minDist) minDist = hit.distance;
+      if (hit.distance > maxDist) maxDist = hit.distance;
+    }
+
+    if (performance.now() - sliceStart >= sliceMs) {
+      await yieldFrame();
+      sliceStart = performance.now();
+    }
   }
   return {
     rays, misses,
@@ -206,6 +344,7 @@ export function validateFromInside(shell, rays = SEAL_RAYS) {
     sealed: misses / rays <= SEAL_MISS_TOLERANCE,
     minDistanceM: Number.isFinite(minDist) ? +minDist.toFixed(3) : null,
     maxDistanceM: +maxDist.toFixed(3),
+    elapsedMs: Math.round(performance.now() - t0),
   };
 }
 
@@ -315,6 +454,8 @@ function buildPanorama(info) {
   root.add(disc);
 
   root.userData.keepAlive = true;
+  // Warm the panorama's one material too — same reason, much cheaper.
+  warmShaders(root, 'panorama');
   return {
     status: 'ready',
     source: 'panorama',

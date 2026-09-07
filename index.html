@@ -34,6 +34,104 @@
 
       /* Mode switcher (SCREEN / VR / AR) styles live in src/modeswitcher.js. */
 
+
+      /* ── Boot splash ─────────────────────────────────────────────────────
+         PURE HTML + CSS, inline, above the module script — so it paints on the
+         browser's FIRST paint with no JavaScript involved at all. Nothing here
+         waits on the 650 KB bundle, the gun GLB or the arena; the player sees
+         the game exists within one frame of the HTML arriving instead of
+         staring at a black rectangle wondering if the link worked.
+
+         SIGNATURE: the loader IS the game's own crosshair. The reticle you aim
+         with becomes the thing that tells you it is loading — an acquiring
+         sight, not a generic spinner. Same two shipped tokens as the rest of
+         the HUD (#f7931a bitcoin orange, #00e5ff cyan) and the same monospace,
+         wide-tracked, uppercase idiom, so the splash and the game read as one
+         object rather than a vendor loading screen bolted on the front.
+
+         main.js removes it on the FIRST RENDERED FRAME (see #boot handling
+         there) — it is tied to a real frame, not to a timer, so it can never
+         claim the game is ready before it is. */
+      #boot {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 22px;
+        background: #000;
+        /* A single faint orange bloom behind the reticle so the black isn't dead. */
+        background-image: radial-gradient(circle at 50% 44%, rgba(247,147,26,0.10), transparent 60%);
+        transition: opacity .45s ease;
+      }
+      #boot.done { opacity: 0; pointer-events: none; }
+
+      /* The reticle: orange arms (the crosshair), cyan ring (acquiring). */
+      #boot-sight {
+        position: relative;
+        width: 92px;
+        height: 92px;
+      }
+      /* The two orange arms run the full width/height; the ring below is opaque
+         and paints OVER their middles, so what is left is four tick marks at the
+         cardinal points around a ring — a sight, rather than a plus sign with a
+         stray arc through it. */
+      #boot-sight::before,
+      #boot-sight::after {
+        content: '';
+        position: absolute;
+        background: #f7931a;
+        box-shadow: 0 0 8px rgba(247,147,26,0.85);
+      }
+      #boot-sight::before { left: 0; top: 45px; width: 92px; height: 2px; }
+      #boot-sight::after  { top: 0; left: 45px; width: 2px; height: 92px; }
+      #boot-ring {
+        position: absolute;
+        inset: 14px;
+        /* z-index so the ring paints above BOTH arms. Without it ::after (the
+           vertical arm) paints after the element's children and speared the
+           aperture, while ::before was correctly masked — an asymmetry that
+           read as a rendering bug. */
+        z-index: 1;
+        background: #000;                       /* masks the arms' middles */
+        border: 2px solid rgba(0,229,255,0.26); /* the ring reads as a ring… */
+        /* …and two opposed bright quadrants sweep round it. Opposed rather than
+           one, so a paused frame (reduced motion, a slow device) still looks
+           deliberate instead of half-drawn. */
+        border-top-color: #00e5ff;
+        border-bottom-color: #00e5ff;
+        border-radius: 50%;
+        box-shadow: 0 0 16px rgba(0,229,255,0.4);
+        animation: boot-lock 1.3s linear infinite;
+      }
+      @keyframes boot-lock { to { transform: rotate(360deg); } }
+
+      #boot-word {
+        color: #f7931a;
+        font: 700 17px/1 monospace;
+        letter-spacing: 0.34em;
+        text-indent: 0.34em;   /* balance the trailing letter-space */
+        text-shadow: 0 0 12px rgba(247,147,26,0.75);
+      }
+      #boot-status {
+        color: #00e5ff;
+        font: 400 10px/1 monospace;
+        letter-spacing: 0.3em;
+        text-indent: 0.3em;
+        opacity: 0.7;
+        animation: boot-breathe 1.8s ease-in-out infinite;
+      }
+      @keyframes boot-breathe { 50% { opacity: 0.3; } }
+
+      /* Motion is decoration here, never information — the splash still reads
+         perfectly as "working" without it. */
+      @media (prefers-reduced-motion: reduce) {
+        #boot-ring   { animation: none; border-color: rgba(0,229,255,0.55); }
+        #boot-status { animation: none; opacity: 0.7; }
+      }
+
       /* Crosshair — pure CSS, zero Three.js cost.
          Fixed to screen centre so it's always your aim point. */
       #crosshair {
@@ -69,6 +167,11 @@
     </style>
   </head>
   <body>
+    <div id="boot" role="status" aria-label="Loading Sats Arena">
+      <div id="boot-sight"><div id="boot-ring"></div></div>
+      <div id="boot-word">SATS ARENA</div>
+      <div id="boot-status">LOADING</div>
+    </div>
     <div id="crosshair"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
