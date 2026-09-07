@@ -1,61 +1,152 @@
 import * as THREE from 'three';
-import { createTextSprite } from '../vrui.js';
 
 /**
- * classic-decor.js — neon skyline, living void and Sats Arena / ₿ branding for
- * the CLASSIC skin. Purely cosmetic.
+ * classic-decor.js — the CLASSIC skin's horizon: a COLOSSEUM OF LIGHT.
+ * Purely cosmetic.
  *
- * THE VOID STAYS BLACK. scene.background and scene.fog are NOT touched — the
- * sky/fog ownership question is still parked (armode.js restores both on XR
- * sessionend, so a skin-owned background would be silently reverted). Everything
- * here is added INTO the black instead.
+ * ── What this replaced, and why ──────────────────────────────────────────────
+ * The first pass built the horizon from wireframe BOXES — edges-only cuboids in
+ * two rings — plus a flat "SATS ARENA" sprite hanging in the play space and
+ * seven loose ₿ glyphs drifting around. It was cheap and it read cheap: a box
+ * outline is the shape you get when you have not decided on a shape, and a
+ * sprite floating at mid-distance reads as UI that escaped the HUD, not as
+ * architecture. The verdict was "ugly", and the fix is not narrower boxes.
  *
- * ...which runs straight into a constraint: scene.fog is Fog(0x050508, 10, 40),
- * so anything past 40 units is faded to the background and invisible. Rather
- * than touch the fog, every material here sets `fog: false` — a MATERIAL flag,
- * not a scene one. Distant neon then reads at full brightness against black,
- * which is exactly the night-city look, and the fog still does its job on the
- * arena itself.
+ * So the concept changed rather than its parameters. You stand at the centre of
+ * a circular arena; the horizon should say you are inside something built to be
+ * watched in. That is a colosseum — a ring of tall, slender, arched portals,
+ * each a hairline neon rim with light spilling from somewhere beyond it.
  *
- * NO BLOOM. UnrealBloomPass would be the usual way to make neon glow, but a
- * post-processing composer fights the WebXR render path and this is a
- * cosmetic-only change. Glow comes from additive blending on unlit materials
- * instead — the cheap route, and it degrades identically in every mode.
+ * THE SIGNATURE is the arch pair: a SHARP rim and, set just inside it, a SOFT
+ * inner gradient that is nearly nothing at the base and blooms at the crown. Two
+ * elements, drawn separately on purpose. A single glowing shape reads as a lit
+ * object; a sharp edge around a soft interior reads as an OPENING with light
+ * behind it. That difference is the whole idea, and it is why the arches are
+ * built as real curved ribbons — sampled leg-arc-leg profiles offset along their
+ * own normals — instead of anything box-derived.
+ *
+ * ── What is deliberately NOT here ───────────────────────────────────────────
+ * Restraint is the brief. Bitcoin orange appears in exactly two roles: the three
+ * landmark gates and the single horizon mark. There are three ₿ keystones, on
+ * those three gates only, so the glyph means "this is a gate" rather than
+ * decorating everything. The loose floating ₿ are gone entirely.
+ *
+ * ── Inherited constraints (all still true) ──────────────────────────────────
+ * THE VOID STAYS BLACK. scene.background and scene.fog are NOT touched — that
+ * ownership question is still parked (armode.js restores both on XR sessionend,
+ * so a skin-owned background would be silently reverted). Everything here is
+ * added INTO the black.
+ *
+ * ...which runs into scene.fog = Fog(0x050508, 10, 40): anything past 40 units
+ * fades to the background. Rather than touch the fog, every material here sets
+ * `fog: false` — a MATERIAL flag, not a scene one.
+ *
+ * NO BLOOM. UnrealBloomPass fights the WebXR render path, and this is a
+ * cosmetic-only change. Glow is additive blending on unlit materials, which
+ * degrades identically in every mode.
  *
  * Everything is parented into the caller's group, which is the P30
- * "skin:classic" named group, so the leak assertion still governs it and Gold
- * Arena is unaffected. That group is a child of `environment`, which armode.js
- * hides wholesale in passthrough — so this decor is AR-suppressed for free,
- * with no second visibility writer.
+ * "skin:classic" named group, so the leak assertion governs it and Gold Arena is
+ * unaffected. That group is a child of `environment`, which armode.js hides
+ * wholesale in passthrough — so this decor is AR-suppressed for free, with no
+ * second visibility writer.
  *
- * Budget: the skyline is EDGES ONLY (zero triangles), merged into ONE
- * LineSegments via vertex colours; particles are three capped Points layers.
+ * Budget: every arch rim in the scene is ONE merged BufferGeometry (one draw
+ * call), every arch glow is a second, and both are flat ribbons of a few
+ * thousand triangles. Counts are reported in `stats`.
  */
 
 // Classic's existing neon palette — scene.js radar, hud.js, vrui.js. Nothing new.
 const CYAN    = new THREE.Color(0x00e5ff);
 const MAGENTA = new THREE.Color(0xb14bff);
 const ORANGE  = new THREE.Color(0xf7931a);
-const GOLD    = new THREE.Color(0xf7931a);
 
-// The arena boundary is radius 10 / height 6 (arena.js). The skyline sits far
-// beyond it so it reads as a horizon, not another wall — and tall enough to
-// clear the 6-unit walls from the player's eye at 1.6.
-// Distances chosen from the projected angle, not by eye: at r=115 a 30-unit
-// tower subtends ~15deg, which reads as a skyline. The first pass sat at r=52,
-// where the same tower subtends ~27deg and was clipped by the top of the frame —
-// it read as boxes crowding the player rather than a city on the horizon.
-// Tuned against the actual camera: pitch -0.2rad with a 60deg FOV leaves roughly
-// -41deg..+19deg visible, so tower tops must stay under ~19deg of elevation or
-// they get clipped by the top of the frame. Ring radius is then chosen for
-// DENSITY — circumference/count/width has to fill the horizon or it reads as
-// scattered boxes rather than a city (the r=115/28 pass left obvious gaps).
-//   near: 2*pi*78/30  => one every ~16u at ~10u wide  => ~62% fill
-// Widths kept narrow relative to height: an edges-only box that is wide AND tall
-// reads as a floating frame rather than a tower, because its long top edge cuts
-// across the sky with nothing to anchor it.
-const NEAR_RING = { radius:  78, count: 30, hMin:  8, hMax: 22, wMin: 5, wMax: 11, dim: 0.85 };
-const FAR_RING  = { radius: 118, count: 24, hMin: 16, hMax: 32, wMin: 7, wMax: 13, dim: 0.45 };
+/**
+ * ── Composition, derived rather than eyeballed ──────────────────────────────
+ * The camera sits at y=1.6 with a -0.2 rad pitch and a 60deg FOV, which leaves
+ * roughly -41deg..+19deg of elevation on screen. Anything whose top crosses
+ * ~19deg is clipped by the frame — that is what made the first pass's towers
+ * read as boxes crowding the player.
+ *
+ * NEAR ring at r=62: a 20-unit crown subtends atan((20-1.6)/62) = 16.5deg —
+ * tall and dramatic, and still fully inside the frame.
+ *
+ * SLENDERNESS is the point. 6 wide x 20 tall is 1:3.3. At r=62, 26 arches sit
+ * one every 15 units, so a 6-wide arch fills ~40% of the horizon and the gaps
+ * stay BLACK. A colonnade you can see through, not a fence — the previous pass
+ * chased ~62% fill and got a wall of clutter.
+ *
+ * FAR ring at r=92, offset half a step in angle so it shows through the near
+ * gaps, dimmed to 0.30. That is the parallax layer: it gives the colosseum
+ * depth without adding anything the eye has to read.
+ *
+ * THE HARD CEILING ON DISTANCE IS THE CAMERA, NOT THE FOG. scene.js builds the
+ * camera with far = 100, so ANYTHING past 100 units is clipped away entirely and
+ * silently. The previous pass put its far ring at r=118 and its near ring at
+ * r=78 — the far ring was outside the frustum and never drew at all, which is
+ * part of why that horizon read thin. Every radius here is chosen so the whole
+ * object, corners included, stays inside 100. The camera is NOT touched: it is
+ * shared with Gold Arena, AR and the XR rig, and widening it for decoration
+ * would be a scene-wide change made for a cosmetic reason.
+ *
+ * The camera's real vertical FOV is 70deg (not the 60 assumed earlier), so at
+ * a -0.2 rad pitch the frame reaches about +23.5deg of elevation — that is the
+ * height budget everything below is fitted into.
+ */
+const NEAR_RING = {
+  radius: 62,  count: 30, offset: 0,
+  hMin: 17, hMax: 22, wMin: 3.6, wMax: 4.8, rim: 0.26, dim: 1.00, glow: 0.15,
+};
+const FAR_RING = {
+  radius: 92, count: 22, offset: 0.5,
+  hMin: 24, hMax: 31, wMin: 5.0, wMax: 6.8, rim: 0.32, dim: 0.30, glow: 0.06,
+};
+
+// The three GATES: taller, orange-rimmed, ₿-keystoned. At 0deg (under the
+// marquee) and +/-120deg, so wherever you turn there is one landmark in view
+// without any two of them crowding each other.
+// ANGLE CONVENTION: position is (sin a, 0, cos a) * r, so a=0 is +Z — BEHIND a
+// camera that looks down -Z. The marquee hangs at -Z, i.e. a = PI, and the
+// central gate has to be the one underneath it. Getting this wrong put the gate
+// directly behind the player and left the marquee floating over an ordinary arch.
+const MARQUEE_ANGLE = Math.PI;
+const GATE_ANGLES = [
+  MARQUEE_ANGLE,
+  MARQUEE_ANGLE + (2 * Math.PI) / 3,
+  MARQUEE_ANGLE + (4 * Math.PI) / 3,
+];
+// GATES ARE WIDE AND LOW, not tall. The first attempt made them the tallest
+// thing on the horizon, which put the central gate's crown straight through the
+// marquee and off the top of the frame. Architecturally the grand entrance is a
+// BROAD low arch with the name above it — so the gates read as landmarks by
+// being wider, warmer and keystoned, and the vertical budget above them is left
+// for the sign. 10 wide x 15 tall against the colonnade's 4 x 20 is a clear
+// silhouette difference at a glance.
+const GATE = { radius: 62, height: 15.0, width: 10.0, rim: 0.34, glow: 0.09 };
+
+// MARQUEE: in the SAME plane as the colonnade (r=62), crowning the central gate
+// rather than hovering somewhere behind it. Sized so its band spans about three
+// times the gate's opening, which is the proportion a stadium façade uses.
+//
+// The vertical budget is unforgiving: a 60deg vertical FOV pitched -0.2 rad
+// leaves about +18.5deg of headroom, so at r=62 nothing may sit above y ~= 22.4.
+// Bottom edge 16.6 clears the 15.0 gate crown; top edge 22.2 clears the frame.
+const MARQUEE = { radius: 62, y: 19.4, width: 30, height: 5.6 };
+
+// One large, faint, slowly turning holographic mark, behind and above it all.
+// THE HORIZON MARK IS FRUSTUM-BOUND, AND ITS ROTATION IS PART OF THE SUM.
+// It is a rotating quad, so the distance that matters is its far TOP CORNER
+// mid-swing, not its centre:
+//     d = sqrt((r + (size/2)*sin(swing))^2 + (y + size/2)^2)
+// At r=94, size 30, swing 0.56 that came to 108 units — past the camera's 100
+// far plane, so the mark's corners were being clipped away as it turned. Caught
+// by measuring the farthest actual vertex rather than trusting a bounding
+// sphere. These numbers give d = 95.9, with real margin:
+//     (84 + 13*sin(0.35))^2 + (24 + 13)^2  ->  95.9u
+// Its centre still lands at 14.9deg of elevation against the marquee's 16.3, so
+// it haloes directly BEHIND the wordmark, and it is drawn first (renderOrder -3)
+// so the colonnade paints over it and it reads as the most distant thing there.
+const HORIZON_MARK = { radius: 84, y: 24, size: 26, opacity: 0.30, swing: 0.35 };
 
 const PARTICLE_LAYERS = [
   { count: 240, size: 0.16, alpha: 0.40 },  // dust
@@ -67,7 +158,12 @@ const PARTICLE_OUTER = 70;
 const PARTICLE_TOP   = 40;
 
 const STREAM_COUNT = 10;     // falling "data-stream" lines
-const GLYPH_COUNT  = 7;      // drifting holographic ₿
+
+/** Owner-facing A/B: ?classic=wall turns the colonnade into an arched-window wall. */
+function wallVariant() {
+  try { return new URLSearchParams(location.search).get('classic') === 'wall'; }
+  catch { return false; }
+}
 
 /**
  * Build the Classic skin's decor into `group`.
@@ -78,72 +174,95 @@ export function buildClassicDecor(group) {
   decor.name = 'ClassicNeonDecor';
   group.add(decor);
 
-  const stats = { buildings: 0, lineVertices: 0, points: 0, sprites: 0, triangles: 0, drawCalls: 0 };
+  const stats = {
+    arches: 0, gates: 0, triangles: 0, points: 0, lineVertices: 0,
+    drawCalls: 0, variant: wallVariant() ? 'arched-window wall' : 'portal ring',
+  };
+  const rand = mulberry32(0x5A75); // deterministic: the horizon is identical every load
 
-  // ── 1. NEON SKYLINE ─────────────────────────────────────────────────────────
-  // Boxes as EDGE LINES only. All buildings from both rings go into ONE
-  // BufferGeometry with per-vertex colours, so the whole skyline is a single
-  // draw call and zero triangles. Colour carries both the neon hue and the
-  // depth cue (the far ring is dimmed rather than fogged).
-  const pos = [];
-  const col = [];
+  // ── 1. THE COLOSSEUM ────────────────────────────────────────────────────────
+  // Two merged buffers for the whole horizon: one for every rim, one for every
+  // inner glow. Both carry per-vertex colour, so hue and the depth dimming ride
+  // in the geometry and neither needs a second material.
+  const rim  = new MergedRibbon();
+  const glow = new MergedFill();
   const _c = new THREE.Color();
 
-  function addBuilding(cx, cz, w, h, d, colour, dim) {
-    const x0 = cx - w / 2, x1 = cx + w / 2;
-    const z0 = cz - d / 2, z1 = cz + d / 2;
-    const y0 = 0,          y1 = h;
-    // 12 edges of a box
-    const E = [
-      [x0,y0,z0, x1,y0,z0], [x1,y0,z0, x1,y0,z1], [x1,y0,z1, x0,y0,z1], [x0,y0,z1, x0,y0,z0],
-      [x0,y1,z0, x1,y1,z0], [x1,y1,z0, x1,y1,z1], [x1,y1,z1, x0,y1,z1], [x0,y1,z1, x0,y1,z0],
-      [x0,y0,z0, x0,y1,z0], [x1,y0,z0, x1,y1,z0], [x1,y0,z1, x1,y1,z1], [x0,y0,z1, x0,y1,z1],
-    ];
+  function placeArch({ angle, radius, width, height, thickness, colour, dim, glowAmt }) {
+    // Face the arch inward: its local +Z points at the player, so the ribbon is
+    // seen flat-on from the centre of the arena.
+    const m = new THREE.Matrix4()
+      .makeRotationY(angle)
+      .setPosition(Math.sin(angle) * radius, 0, Math.cos(angle) * radius);
+
+    const path = archPath(width, height);
     _c.copy(colour).multiplyScalar(dim);
-    for (const e of E) {
-      pos.push(e[0], e[1], e[2], e[3], e[4], e[5]);
-      // Vertical edges fade toward the base so towers feel grounded in the dark.
-      col.push(_c.r, _c.g, _c.b, _c.r, _c.g, _c.b);
-    }
-    stats.buildings++;
+    rim.addRibbon(path, thickness, m, _c);
+    glow.addArchFill(path, m, _c, glowAmt);
+    stats.arches++;
   }
 
-  const rand = mulberry32(0x5A75); // deterministic: the skyline is the same every load
   for (const ring of [NEAR_RING, FAR_RING]) {
-    const dim = ring.dim;  // depth cue without fog — the far ring reads recessed
     for (let i = 0; i < ring.count; i++) {
-      // Jitter the angle so it never reads as a regular fence.
-      const a = (i / ring.count) * Math.PI * 2 + (rand() - 0.5) * 0.16;
-      const r = ring.radius * (0.9 + rand() * 0.22);
-      const h = ring.hMin + rand() * (ring.hMax - ring.hMin);
-      const w = ring.wMin + rand() * (ring.wMax - ring.wMin);
-      const d = ring.wMin + rand() * (ring.wMax - ring.wMin);
-      // Mostly cyan, magenta accents, the occasional bitcoin-orange landmark.
-      // Orange is the rarest — a bitcoin-gold landmark, not a third of the city.
-      const roll = rand();
-      const colour = roll > 0.93 ? ORANGE : roll > 0.66 ? MAGENTA : CYAN;
-      addBuilding(Math.sin(a) * r, Math.cos(a) * r, w, h, d, colour, dim);
+      const angle = ((i + ring.offset) / ring.count) * Math.PI * 2;
+      // Skip the near-ring slots the gates occupy, so a gate REPLACES an arch
+      // rather than standing inside one.
+      if (ring === NEAR_RING && GATE_ANGLES.some((g) => angularGap(angle, g) < 0.14)) continue;
+
+      // Gentle variation only. Every arch differing is noise; none differing is
+      // wallpaper. ~15% on height reads as hand-built without reading random.
+      const height = ring.hMin + rand() * (ring.hMax - ring.hMin);
+      const width  = ring.wMin + rand() * (ring.wMax - ring.wMin);
+      // Cyan is the material of the building; magenta is an accent, roughly one
+      // arch in four. Orange is NOT in the rotation — it belongs to the gates.
+      const colour = rand() > 0.74 ? MAGENTA : CYAN;
+      placeArch({
+        angle, radius: ring.radius, width, height,
+        thickness: ring.rim, colour, dim: ring.dim, glowAmt: ring.glow,
+      });
     }
   }
 
-  const skyGeo = new THREE.BufferGeometry();
-  skyGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  skyGeo.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
-  const skyline = new THREE.LineSegments(skyGeo, new THREE.LineBasicMaterial({
-    vertexColors: true,
-    transparent: true,
-    opacity: 0.8,
-    blending: THREE.AdditiveBlending,  // stands in for bloom
-    depthWrite: false,
-    fog: false,                        // <- past fog.far without touching scene.fog
-  }));
-  skyline.name = 'NeonSkyline';
-  skyline.frustumCulled = false;
-  decor.add(skyline);
-  stats.lineVertices += pos.length / 3;
-  stats.drawCalls++;
+  for (const angle of GATE_ANGLES) {
+    placeArch({
+      angle, radius: GATE.radius, width: GATE.width, height: GATE.height,
+      thickness: GATE.rim, colour: ORANGE, dim: 1.0, glowAmt: GATE.glow,
+    });
+    stats.gates++;
+  }
 
-  // ── 2. LIVING VOID ──────────────────────────────────────────────────────────
+  // ALTERNATE FRAMING (?classic=wall): a low continuous band running behind the
+  // near ring with a lit top edge, so the arches read as WINDOWS cut into one
+  // architectural mass instead of free-standing portals. Same arches either way
+  // — only the mass behind them changes.
+  if (wallVariant()) {
+    const wall = buildWallBand(NEAR_RING.radius + 1.2, 9.5, 96);
+    decor.add(wall.mesh);
+    stats.triangles += wall.triangles;
+    stats.drawCalls++;
+
+    const capGeo = new THREE.BufferGeometry().setAttribute(
+      'position', new THREE.Float32BufferAttribute(ringLine(NEAR_RING.radius + 1.2, 9.5, 96), 3));
+    const cap = new THREE.LineLoop(capGeo, new THREE.LineBasicMaterial({
+      color: 0x00e5ff, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+    }));
+    cap.name = 'WallCap';
+    cap.frustumCulled = false;
+    decor.add(cap);
+    stats.lineVertices += 96;
+    stats.drawCalls++;
+  }
+
+  const rimMesh = rim.build('ArchRims');
+  decor.add(rimMesh);
+  stats.triangles += rim.triangles; stats.drawCalls++;
+
+  const glowMesh = glow.build('ArchGlow');
+  decor.add(glowMesh);
+  stats.triangles += glow.triangles; stats.drawCalls++;
+
+  // ── 2. LIVING VOID (kept exactly as shipped) ────────────────────────────────
   // Round points (a radial-alpha sprite — the default square Points look is the
   // giveaway of an unfinished scene). Three capped layers give size variety
   // without a custom shader; per-point colour gives brightness variety.
@@ -153,29 +272,21 @@ export function buildClassicDecor(group) {
   for (const layer of PARTICLE_LAYERS) {
     const p = [], c = [];
     for (let i = 0; i < layer.count; i++) {
-      // Shell between INNER and OUTER so nothing spawns in the player's face.
       const a  = rand() * Math.PI * 2;
       const rr = PARTICLE_INNER + rand() * (PARTICLE_OUTER - PARTICLE_INNER);
       const y  = 1 + rand() * PARTICLE_TOP;
       p.push(Math.sin(a) * rr, y, Math.cos(a) * rr);
-      // Mostly cool, a few warm — varied brightness so it never looks uniform.
       const t = rand();
-      _c.copy(t > 0.9 ? GOLD : t > 0.68 ? MAGENTA : CYAN).multiplyScalar(0.45 + rand() * 0.55);
+      _c.copy(t > 0.9 ? ORANGE : t > 0.68 ? MAGENTA : CYAN).multiplyScalar(0.45 + rand() * 0.55);
       c.push(_c.r, _c.g, _c.b);
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3));
     g.setAttribute('color',    new THREE.Float32BufferAttribute(c, 3));
     const pts = new THREE.Points(g, new THREE.PointsMaterial({
-      size: layer.size,
-      map: dotTex,
-      vertexColors: true,
-      transparent: true,
-      opacity: layer.alpha,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      sizeAttenuation: true,
-      fog: false,
+      size: layer.size, map: dotTex, vertexColors: true, transparent: true,
+      opacity: layer.alpha, blending: THREE.AdditiveBlending,
+      depthWrite: false, sizeAttenuation: true, fog: false,
     }));
     pts.frustumCulled = false;
     decor.add(pts);
@@ -209,85 +320,323 @@ export function buildClassicDecor(group) {
   stats.lineVertices += STREAM_COUNT * 2;
   stats.drawCalls++;
 
-  // ── 3. SATS ARENA + ₿ BRANDING ──────────────────────────────────────────────
-  // Signage, not a monolith: one readable wordmark on the horizon, two small ₿
-  // signs out in the skyline, and a few holographic ₿ drifting in the void.
-  // Canvas-texture sprites (the project's existing 3D-text approach) — no
-  // TextGeometry anywhere.
-  const sign = createTextSprite(42, '#00e5ff');
-  sign.setText('SATS ARENA');
-  sign.mesh.name = 'SkylineSign';
-  // Elevation kept under the ~19deg clip so the wordmark is actually on screen.
-  sign.mesh.position.set(0, 15, -(FAR_RING.radius * 0.80));
-  sign.mesh.material.transparent = true;
-  sign.mesh.material.opacity = 0.95;
-  sign.mesh.material.blending = THREE.AdditiveBlending;
-  sign.mesh.material.depthWrite = false;
-  sign.mesh.material.fog = false;
-  sign.mesh.frustumCulled = false;
-  decor.add(sign.mesh);
-  stats.sprites++; stats.triangles += 2; stats.drawCalls++;
+  // ── 3. THE MARQUEE ──────────────────────────────────────────────────────────
+  // A landmark, not a label: wide, far, framed by its own light-bar, fixed above
+  // the central gate and facing the centre of the arena. FrontSide on purpose —
+  // turn your back on the scoreboard and it is simply behind you, which is what
+  // a stadium does. A double-sided plane would show the wordmark MIRRORED from
+  // behind, which is worse than showing nothing.
+  const marqueeTex = makeMarqueeTexture('SATS ARENA');
+  const marquee = new THREE.Mesh(
+    new THREE.PlaneGeometry(MARQUEE.width, MARQUEE.height),
+    new THREE.MeshBasicMaterial({
+      map: marqueeTex, transparent: true, side: THREE.FrontSide,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.98,
+    }),
+  );
+  marquee.name = 'ArenaMarquee';
+  marquee.position.set(0, MARQUEE.y, -MARQUEE.radius);
+  marquee.frustumCulled = false;
+  decor.add(marquee);
+  stats.triangles += 2; stats.drawCalls++;
 
-  // Building-mounted ₿ marks + drifting holographic glyphs. Sprites, so they
-  // stay legible from any angle (the skill's billboarding rule) without any
-  // per-frame lookAt work.
-  const glyphTex = makeGlyphTexture('₿', '#f7931a');
-  const glyphMat = new THREE.SpriteMaterial({
+  // A hairline light-bar under the wordmark, the width of the marquee. It ties
+  // the sign to the gate below it, so the wordmark sits ON something instead of
+  // hanging in the dark.
+  const barY = MARQUEE.y - MARQUEE.height * 0.52;
+  const barGeo = new THREE.BufferGeometry().setAttribute('position',
+    new THREE.Float32BufferAttribute([
+      -MARQUEE.width * 0.46, barY, -MARQUEE.radius,
+       MARQUEE.width * 0.46, barY, -MARQUEE.radius,
+    ], 3));
+  const bar = new THREE.LineSegments(barGeo, new THREE.LineBasicMaterial({
+    color: 0x00e5ff, transparent: true, opacity: 0.7,
+    blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+  }));
+  bar.name = 'MarqueeBar';
+  bar.frustumCulled = false;
+  decor.add(bar);
+  stats.lineVertices += 2; stats.drawCalls++;
+
+  // ── 4. THE HORIZON MARK ─────────────────────────────────────────────────────
+  // ONE ₿, huge, faint, far behind the marquee. It turns slowly through a
+  // LIMITED arc rather than spinning: a full rotation would take it edge-on and
+  // it would vanish, whereas a slow oscillation reads as a projected volume seen
+  // from slightly different sides — a hologram, not a decal.
+  // TWO textures, because the two jobs are opposite. The keystones are small and
+  // near, so a crisp OUTLINE reads as an engraved emblem. The horizon mark is
+  // enormous and faint, and an outline at that scale and opacity simply vanished
+  // — a hairline stroke spread over 38 world units at 128 metres is sub-pixel.
+  // It needs to be a soft MASS: filled, heavily bloomed, low alpha.
+  const glyphTex   = makeGlyphTexture('₿', '#f7931a');
+  const horizonTex = makeHorizonGlyphTexture('₿', '#f7931a');
+  const horizonMark = new THREE.Mesh(
+    new THREE.PlaneGeometry(HORIZON_MARK.size, HORIZON_MARK.size),
+    new THREE.MeshBasicMaterial({
+      map: horizonTex, transparent: true, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
+      opacity: HORIZON_MARK.opacity,
+    }),
+  );
+  horizonMark.name = 'HorizonMark';
+  horizonMark.position.set(0, HORIZON_MARK.y, -HORIZON_MARK.radius);
+  horizonMark.frustumCulled = false;
+  horizonMark.renderOrder = -3;   // behind the arch glow and everything else
+  decor.add(horizonMark);
+  stats.triangles += 2; stats.drawCalls++;
+
+  // ₿ keystones — three only, one at the crown of each gate. The glyph says
+  // "gate", so it appears exactly where a gate is. Sprites, so they stay legible
+  // from any angle without per-frame lookAt work.
+  const keystoneMat = new THREE.SpriteMaterial({
     map: glyphTex, transparent: true, blending: THREE.AdditiveBlending,
-    depthWrite: false, fog: false, opacity: 0.85,
+    depthWrite: false, fog: false, opacity: 0.62,
   });
-
-  // two on the skyline
-  [[-52, 14, -66], [63, 11, 47]].forEach((p, i) => {
-    const s = new THREE.Sprite(glyphMat);
-    s.name = `SkylineGlyph${i}`;
-    s.position.set(p[0], p[1], p[2]);
-    s.scale.setScalar(9);
+  // The CENTRAL gate is crowned by the marquee, so it does not also get a
+  // keystone — two ornaments stacked on one arch is exactly the clutter this
+  // redesign is removing. Two keystones, on the two side gates.
+  for (const angle of GATE_ANGLES.filter((a) => a !== MARQUEE_ANGLE)) {
+    const s = new THREE.Sprite(keystoneMat);
+    s.name = 'GateKeystone';
+    s.position.set(
+      Math.sin(angle) * (GATE.radius - 0.4),
+      GATE.height + 2.2,
+      Math.cos(angle) * (GATE.radius - 0.4),
+    );
+    s.scale.setScalar(3.6);
     s.frustumCulled = false;
     decor.add(s);
-    stats.sprites++; stats.triangles += 2; stats.drawCalls++;
-  });
-
-  // drifting in the void
-  const glyphs = [];
-  for (let i = 0; i < GLYPH_COUNT; i++) {
-    const a = rand() * Math.PI * 2;
-    const r = 16 + rand() * 26;
-    const s = new THREE.Sprite(glyphMat.clone());
-    s.material.opacity = 0.16 + rand() * 0.20;   // faint — texture of the place
-    s.position.set(Math.sin(a) * r, 4 + rand() * 20, Math.cos(a) * r);
-    s.scale.setScalar(1.6 + rand() * 2.2);
-    s.frustumCulled = false;
-    decor.add(s);
-    glyphs.push({ sprite: s, phase: rand() * Math.PI * 2, bob: 0.4 + rand() * 0.8 });
-    stats.sprites++; stats.triangles += 2; stats.drawCalls++;
+    stats.triangles += 2; stats.drawCalls++;
   }
 
   // ── Animation ───────────────────────────────────────────────────────────────
-  // Cheap by construction: the particle drift is a slow rotation of whole Points
-  // objects (no per-vertex CPU work); only the 10 stream segments and 7 glyphs
-  // touch data per frame.
+  // Cheap by construction: the arches are STATIC (a merged buffer nobody
+  // touches), the particle drift is a whole-object rotation, and only the 10
+  // stream segments and the two branding elements do per-frame work.
+  const glowMat = glowMesh.material;
   function update(dt, elapsed) {
     for (let i = 0; i < particleGroups.length; i++) {
-      // Layered speeds so the field has parallax rather than moving as one lump.
       particleGroups[i].rotation.y += dt * (0.006 + i * 0.004);
     }
     for (let i = 0; i < STREAM_COUNT; i++) {
       const m = streamMeta[i];
       m.y -= dt * m.speed;
-      if (m.y < 1) m.y = PARTICLE_TOP + rand() * 8;   // wrap to the top
+      if (m.y < 1) m.y = PARTICLE_TOP + rand() * 8;
       const o = i * 6;
       streamPos[o + 0] = m.x; streamPos[o + 1] = m.y;         streamPos[o + 2] = m.z;
       streamPos[o + 3] = m.x; streamPos[o + 4] = m.y - m.len; streamPos[o + 5] = m.z;
     }
     streamGeo.attributes.position.needsUpdate = true;
 
-    for (const g of glyphs) {
-      g.sprite.position.y += Math.sin(elapsed * 0.5 + g.phase) * dt * g.bob;
-    }
+    // The portals BREATHE: one shared opacity on the merged glow, so the whole
+    // colosseum brightens and dims together, like a single light source beyond
+    // the wall. Two detuned sines so the cycle never audibly repeats. One
+    // material write per frame, not one per arch.
+    glowMat.opacity = 0.86 + Math.sin(elapsed * 0.23) * 0.09 + Math.sin(elapsed * 0.37) * 0.05;
+
+    // The horizon mark turns through +/-20deg and flickers faintly. The arc is
+    // limited by BOTH readability (a full spin goes edge-on and vanishes) and
+    // the far plane (see HORIZON_MARK above) — do not widen it without redoing
+    // that distance sum.
+    horizonMark.rotation.y = Math.sin(elapsed * 0.11) * HORIZON_MARK.swing;
+    horizonMark.material.opacity = HORIZON_MARK.opacity
+      * (0.82 + Math.sin(elapsed * 1.7) * 0.10 + Math.sin(elapsed * 4.3) * 0.06);
   }
 
   return { update, stats };
+}
+
+// ── Arch geometry ────────────────────────────────────────────────────────────
+
+/**
+ * The centreline of one arch: up the left leg, around a semicircular head, down
+ * the right leg. Returned as a flat polyline in the arch's own XY plane, which
+ * every consumer below either offsets (the rim) or fills (the glow).
+ *
+ * This is why the arches are not boxes. A box outline has four corners and no
+ * curve; this path is sampled around a real semicircle, so the crown is round
+ * and the rim thickness follows the curve instead of stepping around it.
+ */
+function archPath(width, height, headSegments = 18) {
+  const hw = width / 2;
+  const legTop = Math.max(0.1, height - hw);   // where the semicircle starts
+  const pts = [];
+  // Left leg, bottom to top. A few samples so the ribbon offset stays even.
+  for (let i = 0; i <= 3; i++) pts.push({ x: -hw, y: (legTop * i) / 3 });
+  // Semicircular head, left to right.
+  for (let i = 1; i < headSegments; i++) {
+    const t = (i / headSegments) * Math.PI;    // pi -> 0, going left to right
+    pts.push({ x: -hw * Math.cos(t), y: legTop + hw * Math.sin(t) });
+  }
+  // Right leg, top to bottom.
+  for (let i = 3; i >= 0; i--) pts.push({ x: hw, y: (legTop * i) / 3 });
+  return pts;
+}
+
+/** Outward unit normals along a polyline, averaged at the joints. */
+function pathNormals(pts) {
+  const n = [];
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    let tx = b.x - a.x, ty = b.y - a.y;
+    const len = Math.hypot(tx, ty) || 1;
+    tx /= len; ty /= len;
+    // Rotate the tangent -90deg; for this path that points away from the centre.
+    n.push({ x: ty, y: -tx });
+  }
+  return n;
+}
+
+/** Accumulates arch RIMS into one buffer: a constant-width band along the path. */
+class MergedRibbon {
+  constructor() { this.pos = []; this.col = []; this.triangles = 0; }
+
+  addRibbon(pts, thickness, matrix, colour) {
+    const nrm = pathNormals(pts);
+    const h = thickness / 2;
+    const v = new THREE.Vector3();
+    const push = (x, y, shade) => {
+      v.set(x, y, 0).applyMatrix4(matrix);
+      this.pos.push(v.x, v.y, v.z);
+      this.col.push(colour.r * shade, colour.g * shade, colour.b * shade);
+    };
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[i], p1 = pts[i + 1], n0 = nrm[i], n1 = nrm[i + 1];
+      // Rims fade toward the ground so the arches feel planted in the dark
+      // rather than pasted on it — the same trick that grounded the old towers,
+      // now following a curve.
+      const s0 = footFade(p0.y), s1 = footFade(p1.y);
+      const a = [p0.x - n0.x * h, p0.y - n0.y * h, s0];
+      const b = [p0.x + n0.x * h, p0.y + n0.y * h, s0];
+      const c = [p1.x + n1.x * h, p1.y + n1.y * h, s1];
+      const d = [p1.x - n1.x * h, p1.y - n1.y * h, s1];
+      push(a[0], a[1], a[2]); push(b[0], b[1], b[2]); push(c[0], c[1], c[2]);
+      push(a[0], a[1], a[2]); push(c[0], c[1], c[2]); push(d[0], d[1], d[2]);
+      this.triangles += 2;
+    }
+  }
+
+  build(name) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('color',    new THREE.Float32BufferAttribute(this.col, 3));
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.95,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+      side: THREE.DoubleSide, fog: false,
+    }));
+    mesh.name = name;
+    mesh.frustumCulled = false;
+    return mesh;
+  }
+}
+
+/**
+ * Accumulates the arch INTERIORS into one buffer — the soft light beyond the
+ * portal. Filled as a fan from the centre of the arch's base, coloured by
+ * height: essentially nothing at the foot, blooming under the crown.
+ */
+class MergedFill {
+  constructor() { this.pos = []; this.col = []; this.triangles = 0; }
+
+  addArchFill(pts, matrix, colour, amount) {
+    const v = new THREE.Vector3();
+    // Inset slightly so the fill sits INSIDE the rim rather than under it.
+    const nrm = pathNormals(pts);
+    const inset = pts.map((p, i) => ({ x: p.x - nrm[i].x * 0.18, y: p.y - nrm[i].y * 0.18 }));
+    const top = Math.max(...inset.map((p) => p.y)) || 1;
+    const apex = { x: 0, y: 0 };  // fan origin: the centre of the arch's base
+    const halfW = Math.max(...inset.map((p) => Math.abs(p.x))) || 1;
+    const push = (p) => {
+      v.set(p.x, p.y, 0).applyMatrix4(matrix);
+      this.pos.push(v.x, v.y, v.z);
+      // TWO falloffs, and both are needed. A vertical gradient alone fills the
+      // opening edge-to-edge at the top, which is what made the first attempt
+      // read as a rounded SLAB — a tombstone, not a portal. Adding a horizontal
+      // falloff pulls the light into a soft column down the middle, so the
+      // opening reads as depth with something glowing far behind it.
+      //   vertical:   cubed, so the bloom gathers under the crown
+      //   horizontal: fades to nothing at the jambs, keeping the rim the
+      //               sharpest thing in the arch
+      const t = Math.max(0, p.y / top);
+      const u = 1 - Math.min(1, Math.abs(p.x) / halfW);
+      const s = amount * t * t * t * (0.25 + 0.75 * u);
+      this.col.push(colour.r * s, colour.g * s, colour.b * s);
+    };
+    for (let i = 0; i < inset.length - 1; i++) {
+      push(apex); push(inset[i]); push(inset[i + 1]);
+      this.triangles++;
+    }
+  }
+
+  build(name) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
+    g.setAttribute('color',    new THREE.Float32BufferAttribute(this.col, 3));
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+      side: THREE.DoubleSide, fog: false,
+    }));
+    mesh.name = name;
+    mesh.frustumCulled = false;
+    mesh.renderOrder = -1;   // behind the rims
+    return mesh;
+  }
+}
+
+/** Rim brightness near the ground — dim at the foot, full by ~3 units up. */
+function footFade(y) { return Math.min(1, 0.12 + (y / 3.2) * 0.88); }
+
+/** Shortest angular distance between two headings, in radians. */
+function angularGap(a, b) {
+  let d = Math.abs(a - b) % (Math.PI * 2);
+  if (d > Math.PI) d = Math.PI * 2 - d;
+  return d;
+}
+
+/** Alternate framing: a dark mass behind the arches, lit only along its top. */
+function buildWallBand(radius, height, segments) {
+  const pos = [], col = [];
+  const c = new THREE.Color(0x1d3a6b);
+  for (let i = 0; i < segments; i++) {
+    const a0 = (i / segments) * Math.PI * 2;
+    const a1 = ((i + 1) / segments) * Math.PI * 2;
+    const x0 = Math.sin(a0) * radius, z0 = Math.cos(a0) * radius;
+    const x1 = Math.sin(a1) * radius, z1 = Math.cos(a1) * radius;
+    const quad = [[x0, 0, z0, 0], [x1, 0, z1, 0], [x1, height, z1, 1], [x0, height, z0, 1]];
+    for (const tri of [[0, 1, 2], [0, 2, 3]]) {
+      for (const idx of tri) {
+        const q = quad[idx];
+        pos.push(q[0], q[1], q[2]);
+        const s = 0.06 + q[3] * 0.34;   // near-black at the base, lit at the cap
+        col.push(c.r * s, c.g * s, c.b * s);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color',    new THREE.Float32BufferAttribute(col, 3));
+  const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+    vertexColors: true, transparent: true, opacity: 0.95,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+    side: THREE.DoubleSide, fog: false,
+  }));
+  mesh.name = 'ArchedWindowWall';
+  mesh.frustumCulled = false;
+  mesh.renderOrder = -2;
+  return { mesh, triangles: segments * 2 };
+}
+
+/** Flat ring of points at a height — the wall's lit cap. */
+function ringLine(radius, y, segments) {
+  const p = [];
+  for (let i = 0; i < segments; i++) {
+    const a = (i / segments) * Math.PI * 2;
+    p.push(Math.sin(a) * radius, y, Math.cos(a) * radius);
+  }
+  return p;
 }
 
 // ── Textures ─────────────────────────────────────────────────────────────────
@@ -309,26 +658,117 @@ function makeDotTexture() {
   return t;
 }
 
-/** Glowing glyph on transparent — same canvas-text treatment as the rest. */
-function makeGlyphTexture(ch, colour) {
-  const S = 128;
+/**
+ * The wordmark as NEON TUBE, drawn in three passes on one canvas:
+ *   1. a wide outer halo      — the light the tube throws onto the air
+ *   2. a mid-weight stroke    — the glass
+ *   3. a thin near-white fill — the filament itself
+ * A plain filled glyph with a drop shadow reads as text with an effect applied;
+ * the three-pass build reads as something that is actually emitting. Tracking is
+ * wide and applied per glyph (canvas letterSpacing is not reliable everywhere)
+ * because a marquee is read at distance, where tight tracking becomes a smear.
+ */
+function makeMarqueeTexture(text) {
+  const W = 1024, H = 192;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const x = c.getContext('2d');
+  const chars = text.split('');
+  const FONT = 'bold 104px monospace';
+  const TRACK = 26;                      // extra px between glyphs
+
+  x.font = FONT;
+  const widths = chars.map((ch) => x.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) + TRACK * (chars.length - 1);
+  const startX = (W - total) / 2;
+  const baseY = H / 2;
+
+  const pass = (colour, blur, lineWidth, fill) => {
+    x.font = FONT;
+    x.textAlign = 'left';
+    x.textBaseline = 'middle';
+    x.shadowColor = colour;
+    x.shadowBlur = blur;
+    x.strokeStyle = colour;
+    x.fillStyle = colour;
+    x.lineWidth = lineWidth;
+    let cx = startX;
+    for (let i = 0; i < chars.length; i++) {
+      if (fill) x.fillText(chars[i], cx, baseY);
+      else      x.strokeText(chars[i], cx, baseY);
+      cx += widths[i] + TRACK;
+    }
+  };
+
+  pass('rgba(0,150,190,0.85)', 44, 13, false);  // outer halo
+  pass('#00e5ff',              22, 7,  false);  // glass
+  pass('#eaffff',              10, 0,  true);   // filament
+
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+
+/**
+ * The horizon mark: a FILLED glyph under a heavy bloom, on a big canvas. Drawn
+ * as a soft mass rather than an outline because at 38 world units and 0.30 alpha
+ * an outline is thinner than a pixel and disappears entirely.
+ */
+function makeHorizonGlyphTexture(ch, colour) {
+  const S = 512;
   const c = document.createElement('canvas');
   c.width = c.height = S;
   const x = c.getContext('2d');
   x.textAlign = 'center';
   x.textBaseline = 'middle';
-  x.font = `bold ${Math.round(S * 0.72)}px monospace`;
+  x.font = `bold ${Math.round(S * 0.66)}px monospace`;
+  const cy = S / 2 + S * 0.02;
+  // Halo first, then the body — the halo is what survives at low opacity and
+  // gives the mark its "projected volume" edge.
   x.shadowColor = colour;
-  x.shadowBlur = 26;
+  x.shadowBlur = 90;
   x.fillStyle = colour;
+  x.globalAlpha = 0.5;
+  x.fillText(ch, S / 2, cy);
+  x.shadowBlur = 40;
+  x.globalAlpha = 0.8;
+  x.fillText(ch, S / 2, cy);
+  // A brighter core edge so it does not read as a smudge.
+  x.shadowBlur = 0;
+  x.globalAlpha = 1;
+  x.lineWidth = 5;
+  x.strokeStyle = '#ffd79a';
+  x.strokeText(ch, S / 2, cy);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = 4;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** Glowing glyph on transparent — outlined, so it reads as an engraved emblem. */
+function makeGlyphTexture(ch, colour) {
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d');
+  x.textAlign = 'center';
+  x.textBaseline = 'middle';
+  x.font = `bold ${Math.round(S * 0.7)}px monospace`;
+  x.shadowColor = colour;
+  x.shadowBlur = 40;
+  x.strokeStyle = colour;
+  x.lineWidth = 6;
+  x.strokeText(ch, S / 2, S / 2 + S * 0.02);
+  x.fillStyle = colour;
+  x.globalAlpha = 0.55;
   x.fillText(ch, S / 2, S / 2 + S * 0.02);
-  x.fillText(ch, S / 2, S / 2 + S * 0.02); // twice = hotter core
   const t = new THREE.CanvasTexture(c);
   t.needsUpdate = true;
   return t;
 }
 
-/** Small deterministic PRNG so the skyline is identical on every load. */
+/** Small deterministic PRNG so the horizon is identical on every load. */
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function () {
