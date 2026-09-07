@@ -30,6 +30,7 @@ import {
   setOwnerToken,
   setPaymentToken,
 } from '../lightning.js';
+import { registerPanel } from '../panel-layout.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
 let sessionChip;
@@ -107,6 +108,11 @@ export function setupCoopHud() {
   `;
 
   document.body.appendChild(panel);
+
+  // P43: hand this panel and its toggle to the shared layout manager. It watches
+  // the panel's own style attribute, so every close path here (the toggle, the
+  // ✕, the document-click handler) is covered without any of them being edited.
+  registerPanel({ id: 'coop', panel, button: toggle });
 
   sessionChip = document.createElement('div');
   sessionChip.id = 'session-chip';

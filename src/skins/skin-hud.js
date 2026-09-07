@@ -1,6 +1,7 @@
 import { listSkins } from './registry.js';
 import { isSkinUnlocked, skinPriceSats } from './payment-provider.js';
 import { loadArena } from './arena-glb.js';
+import { registerPanel } from '../panel-layout.js';
 
 /**
  * skin-hud.js — the DOM control for skins (flat/mobile).
@@ -70,6 +71,10 @@ export function setupSkinHud({ skins, net }) {
   overlay.style.display = 'none';
   overlay.innerHTML = `<div class="skin-ov-inner"><div class="skin-ov-spin"></div><div id="skin-ov-text">Switching skin…</div></div>`;
   document.body.appendChild(overlay);
+
+  // P43: shared bottom-left layout. See panel-layout.js — CO-OP's panel used to
+  // cover both this panel and the button that opens it.
+  registerPanel({ id: 'skin', panel, button: toggleBtn });
 
   toastEl = document.createElement('div');
   toastEl.id = 'skin-toast';
