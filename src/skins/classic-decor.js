@@ -68,15 +68,40 @@ const ORANGE  = new THREE.Color(0xf7931a);
  * ~19deg is clipped by the frame — that is what made the first pass's towers
  * read as boxes crowding the player.
  *
- * NEAR ring at r=62: a 20-unit crown subtends atan((20-1.6)/62) = 16.5deg —
- * tall and dramatic, and still fully inside the frame.
+ * NEAR ring at r=58: a 20-unit crown subtends atan((20-1.6)/58) = 17.6deg, and
+ * the tallest arch on the inside of the jitter still clears the frame's ~23.5deg
+ * ceiling. r=52 was tried and rejected: it cropped the crowns of the arches at
+ * the left and right frame edges, which reads as an accident rather than as a
+ * ring continuing past you.
+ *
+ * ── WHY IT NOW READS AS A RING ──────────────────────────────────────────────
+ * First review said "I don't see a ring, just arches", and that was a real
+ * geometry problem, not a framing one. Every arch faces the arena centre, and
+ * the player stands AT the centre — so every arch is seen dead-on, and a circle
+ * centred on the viewer projects to a perfectly HORIZONTAL line. There was no
+ * curvature information on screen at all.
+ *
+ * (A base plinth arc was tried first and removed: being centred on the player,
+ * it drew as a dead-straight line across the frame, which made the colonnade
+ * read MORE like a flat backdrop, not less.)
+ *
+ * Two changes fix it at the source:
+ *   1. r 62 -> 58. Closer means each arch subtends more, fewer fit across the
+ *      frame, and the tangent projection compresses their spacing harder toward
+ *      the edges — where they now also get cut by the frame, which is what says
+ *      "this continues past you".
+ *   2. A +/-6% per-arch radius jitter. A PERFECT circle centred on the eye is
+ *      degenerate: every arch is equidistant, so nothing is nearer or farther
+ *      and the row is flat by construction. Nudging each arch in or out breaks
+ *      that, giving genuine near/far cues along the row. It costs one multiply
+ *      at build time and nothing at runtime.
  *
  * SLENDERNESS is the point. 6 wide x 20 tall is 1:3.3. At r=62, 26 arches sit
  * one every 15 units, so a 6-wide arch fills ~40% of the horizon and the gaps
  * stay BLACK. A colonnade you can see through, not a fence — the previous pass
  * chased ~62% fill and got a wall of clutter.
  *
- * FAR ring at r=92, offset half a step in angle so it shows through the near
+ * FAR ring at r=88, offset half a step in angle so it shows through the near
  * gaps, dimmed to 0.30. That is the parallax layer: it gives the colosseum
  * depth without adding anything the eye has to read.
  *
@@ -94,11 +119,11 @@ const ORANGE  = new THREE.Color(0xf7931a);
  * height budget everything below is fitted into.
  */
 const NEAR_RING = {
-  radius: 62,  count: 30, offset: 0,
+  radius: 58,  count: 30, offset: 0, jitter: 0.06,
   hMin: 17, hMax: 22, wMin: 3.6, wMax: 4.8, rim: 0.26, dim: 1.00, glow: 0.15,
 };
 const FAR_RING = {
-  radius: 92, count: 22, offset: 0.5,
+  radius: 88, count: 22, offset: 0.5, jitter: 0.05,
   hMin: 24, hMax: 31, wMin: 5.0, wMax: 6.8, rim: 0.32, dim: 0.30, glow: 0.06,
 };
 
@@ -122,7 +147,7 @@ const GATE_ANGLES = [
 // being wider, warmer and keystoned, and the vertical budget above them is left
 // for the sign. 10 wide x 15 tall against the colonnade's 4 x 20 is a clear
 // silhouette difference at a glance.
-const GATE = { radius: 62, height: 15.0, width: 10.0, rim: 0.34, glow: 0.09 };
+const GATE = { radius: 58, height: 15.0, width: 10.0, rim: 0.34, glow: 0.09 };
 
 // MARQUEE: in the SAME plane as the colonnade (r=62), crowning the central gate
 // rather than hovering somewhere behind it. Sized so its band spans about three
@@ -131,7 +156,7 @@ const GATE = { radius: 62, height: 15.0, width: 10.0, rim: 0.34, glow: 0.09 };
 // The vertical budget is unforgiving: a 60deg vertical FOV pitched -0.2 rad
 // leaves about +18.5deg of headroom, so at r=62 nothing may sit above y ~= 22.4.
 // Bottom edge 16.6 clears the 15.0 gate crown; top edge 22.2 clears the frame.
-const MARQUEE = { radius: 62, y: 19.4, width: 30, height: 5.6 };
+const MARQUEE = { radius: 58, y: 19.4, width: 30, height: 5.6 };
 
 // One large, faint, slowly turning holographic mark, behind and above it all.
 // THE HORIZON MARK IS FRUSTUM-BOUND, AND ITS ROTATION IS PART OF THE SUM.
@@ -216,8 +241,11 @@ export function buildClassicDecor(group) {
       // Cyan is the material of the building; magenta is an accent, roughly one
       // arch in four. Orange is NOT in the rotation — it belongs to the gates.
       const colour = rand() > 0.74 ? MAGENTA : CYAN;
+      // Push each arch slightly in or out of the nominal radius — see the
+      // WHY IT NOW READS AS A RING note above.
+      const radius = ring.radius * (1 + (rand() - 0.5) * 2 * ring.jitter);
       placeArch({
-        angle, radius: ring.radius, width, height,
+        angle, radius, width, height,
         thickness: ring.rim, colour, dim: ring.dim, glowAmt: ring.glow,
       });
     }
