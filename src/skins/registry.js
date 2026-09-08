@@ -45,7 +45,13 @@ const classic = {
   name: 'CLASSIC',
   environment: {
     build(group) {
-      buildArena(group); // identical geometry to the original main.js call
+      // P50: Classic hides the boundary WIREFRAME only — the wall outlines and
+      // the cyan accent ring, whose top edges are the thin orange/cyan lines
+      // that cross overhead in a headset. The wall PANELS stay, and so does
+      // every logical bound (coin spawn radii live in targets.js SPAWN_MODES and
+      // never read this file). Flags are per-skin: anything else calling
+      // buildArena still gets the original look.
+      buildArena(group, { showWallEdges: false, showCeilingRing: false });
       // Neon skyline / living void / branding. Parented into the same
       // skin:classic group, so the P30 leak assertion still governs it and it
       // inherits the AR shell-off via `environment`.
