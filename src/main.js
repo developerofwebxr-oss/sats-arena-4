@@ -60,6 +60,10 @@ const weapon = setupWeapon(camera, renderer);
 // (which rides updateWeapon) untestable headlessly.
 if (import.meta.env.DEV) window.__weapon = weapon;
 
+// DEV: the in-world menu, so a headless check can open it and screenshot the
+// themed panel (it is normally only reachable from an XR controller's X button).
+if (import.meta.env.DEV) setTimeout(() => { window.__vrMenu = vrMenu; }, 0);
+
 // In-world VR ACTIVATE panel. Set up before setupXR so its select handler can be
 // given to the controllers (it takes precedence over shooting when pointed at).
 const vrui = setupVrUI(scene, camera, renderer);

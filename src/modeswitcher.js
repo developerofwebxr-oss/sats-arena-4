@@ -168,9 +168,9 @@ export function createDomSwitcher(controller) {
 
   // Each entry: mode key, label, accent color, and the action it triggers.
   const defs = [
-    { mode: 'screen', label: 'SCREEN', color: '#00e5ff', action: controller.exitToScreen },
-    { mode: 'vr',     label: 'VR',     color: '#b14bff', action: controller.enterVR },
-    { mode: 'ar',     label: 'AR',     color: '#f7931a', action: controller.enterAR },
+    { mode: 'screen', label: 'SCREEN', color: 'var(--ui-primary)', action: controller.exitToScreen },
+    { mode: 'vr',     label: 'VR',     color: 'var(--ui-accent)', action: controller.enterVR },
+    { mode: 'ar',     label: 'AR',     color: 'var(--ui-glow)', action: controller.enterAR },
   ];
 
   const buttons = defs.map((def) => {
@@ -249,7 +249,7 @@ function injectStyles() {
     .mode-btn {
       min-width: 96px;
       padding: 10px 14px;
-      background: rgba(0,0,0,0.78);
+      background: var(--ui-panel-chip);
       color: var(--accent);
       border: 1px solid var(--accent);
       cursor: pointer;
@@ -267,11 +267,11 @@ function injectStyles() {
       .mode-btn .mode-sub  { font-size: 9px; }
     }
     .mode-btn:hover:not(.disabled):not(.checking) {
-      background: color-mix(in srgb, var(--accent) 15%, rgba(0,0,0,0.78));
+      background: color-mix(in srgb, var(--accent) 15%, var(--ui-panel-chip));
     }
     /* Active mode — filled glow in its accent color. */
     .mode-btn.active {
-      background: color-mix(in srgb, var(--accent) 22%, rgba(0,0,0,0.78));
+      background: color-mix(in srgb, var(--accent) 22%, var(--ui-panel-chip));
       box-shadow: 0 0 16px var(--accent), inset 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
       text-shadow: 0 0 8px var(--accent);
     }
@@ -279,15 +279,15 @@ function injectStyles() {
     .mode-btn.checking {
       opacity: 0.5;
       cursor: default;
-      color: #888;
-      border-color: #555;
+      color: var(--ui-text-muted);
+      border-color: var(--ui-text-muted);
     }
     /* Unsupported — greyed with reason sublabel. */
     .mode-btn.disabled {
       opacity: 0.35;
       cursor: not-allowed;
-      color: #888;
-      border-color: #555;
+      color: var(--ui-text-muted);
+      border-color: var(--ui-text-muted);
       box-shadow: none;
     }
   `;

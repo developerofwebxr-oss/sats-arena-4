@@ -148,7 +148,10 @@
       #crosshair::after {
         content: '';
         position: absolute;
-        background: rgba(247, 147, 26, 0.85);
+        /* P51: follows the skin. The fallback is Classic's bitcoin orange and is
+           what paints before any JS has run — theme.js overwrites --ui-glow-strong
+           on :root as soon as it loads, and again on every skin change. */
+        background: var(--ui-glow-strong, rgba(247, 147, 26, 0.85));
       }
       /* Horizontal bar */
       #crosshair::before {

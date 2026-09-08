@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getTheme, onThemeChange } from './theme.js';
 import { createTextSprite } from './vrui.js';
 
 /**
@@ -29,13 +30,19 @@ import { createTextSprite } from './vrui.js';
 
 // ── Palette — the game's existing in-world/HUD colours (scene.js, hud.js,
 // vrui.js, competition.js). Nothing new is introduced here. ───────────────────
-const CYAN    = '#00e5ff'; // primary UI (SHOOT button, radar, session chip)
-const MAGENTA = '#b14bff'; // competition + rapid-fire (matches #cmp-compete)
-const ORANGE  = '#f7931a'; // bitcoin accent (score, laser)
-const GREEN   = '#4dff9e'; // competition "win" green → approve
-const RED     = '#ff5d6c'; // competition "lose" red → deny / destructive
-const DIM     = '#5a6b7d'; // unavailable
-const PANEL_BG = 'rgba(8,8,14,0.92)'; // identical to the ACTIVATE panel
+// P51: colours come from the active skin's theme, not from literals. The menu is
+// a canvas texture, so unlike the DOM it cannot restyle itself when the theme
+// changes — it has to be told, and it repaints (setupVrMenu subscribes below).
+// `T` is read at DRAW time, never captured, so a repaint always uses the newest
+// palette. Roles are unchanged; only the pigment moves.
+let T = getTheme();
+const CYAN     = () => T.primary;    // primary UI (SHOOT button, radar, session chip)
+const MAGENTA  = () => T.accent;     // competition + rapid-fire (matches #cmp-compete)
+const ORANGE   = () => T.glow;       // bitcoin accent (score, laser)
+const GREEN    = () => T.ok;         // approve / connected
+const RED      = () => T.danger;     // deny / destructive — stays red in every skin
+const DIM      = () => T.textMuted;  // unavailable
+const PANEL_BG = () => T.alpha(T.panelBg, 0.92); // matches the ACTIVATE panel
 
 // ── Panel geometry ───────────────────────────────────────────────────────────
 // 640×768 texture on a 0.85×1.02 m quad at 1.5 m ≈ 1 texel per display pixel on
@@ -84,13 +91,14 @@ export function setupVrMenu(scene, renderer, deps) {
     new THREE.PlaneGeometry(PANEL_W, PANEL_H),
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }),
   );
+  panel.name = 'VrMenuPanel';
   panel.visible = false;
   panel.renderOrder = 10; // draw after the world so it reads clearly in AR
   scene.add(panel);
 
   // ── Head-locked text sprites (same helper as the rest of the in-world HUD) ──
-  const noticeSprite = createTextSprite(1.3, CYAN);   // "X wants to join — press X"
-  const toastSprite  = createTextSprite(1.0, ORANGE); // gentle feedback
+  const noticeSprite = createTextSprite(1.3, CYAN());   // "X wants to join — press X"
+  const toastSprite  = createTextSprite(1.0, ORANGE()); // gentle feedback
   noticeSprite.mesh.visible = false;
   toastSprite.mesh.visible  = false;
   scene.add(noticeSprite.mesh, toastSprite.mesh);
@@ -99,6 +107,11 @@ export function setupVrMenu(scene, renderer, deps) {
   let open      = false;
   let hoverId   = null;   // row id currently under a controller laser
   let lastSig   = null;   // repaint-on-change guard
+
+  // Skin changed -> new palette -> the baked canvas is stale. Clearing the
+  // repaint guard is all that is needed: the next updateVrMenu() sees a changed
+  // signature and redraws with the new T. No extra repaint path to keep in sync.
+  onThemeChange((t) => { T = t; lastSig = null; });
   let pending   = [];     // mirrored pending join requests (from coop-hud.js)
   let seenReqId = null;   // last request id we announced, so we notify once
   let noticeUntil = 0;
@@ -132,12 +145,12 @@ export function setupVrMenu(scene, renderer, deps) {
     const joined = deps.isCoopJoined();
     const muted  = deps.isCoopMuted();
     return [
-      { id: 'resume',   label: 'RESUME',                          color: CYAN },
-      { id: 'recenter', label: 'RECENTER VIEW',                   color: CYAN },
-      { id: 'mute',     label: muted ? 'UNMUTE MIC' : 'MUTE MIC', color: muted ? ORANGE : CYAN, dim: !joined },
-      { id: 'compete',  label: 'COMPETE · 4:20',                  color: MAGENTA, dim: !deps.canCompete() },
-      { id: 'leave',    label: 'LEAVE CO-OP',                     color: RED,     dim: !joined },
-      { id: 'exit',     label: 'EXIT TO SCREEN',                  color: RED },
+      { id: 'resume',   label: 'RESUME',                          color: CYAN() },
+      { id: 'recenter', label: 'RECENTER VIEW',                   color: CYAN() },
+      { id: 'mute',     label: muted ? 'UNMUTE MIC' : 'MUTE MIC', color: muted ? ORANGE() : CYAN(), dim: !joined },
+      { id: 'compete',  label: 'COMPETE · 4:20',                  color: MAGENTA(), dim: !deps.canCompete() },
+      { id: 'leave',    label: 'LEAVE CO-OP',                     color: RED(),     dim: !joined },
+      { id: 'exit',     label: 'EXIT TO SCREEN',                  color: RED() },
     ];
   }
 
@@ -386,11 +399,11 @@ export function setupVrMenu(scene, renderer, deps) {
 
     // Panel body + glowing border (same treatment as the ACTIVATE panel).
     roundRect(ctx, 4, 4, CANVAS_W - 8, CANVAS_H - 8, 18);
-    ctx.fillStyle = PANEL_BG;
+    ctx.fillStyle = PANEL_BG();
     ctx.fill();
-    ctx.strokeStyle = CYAN;
+    ctx.strokeStyle = CYAN();
     ctx.lineWidth = 4;
-    ctx.shadowColor = CYAN;
+    ctx.shadowColor = CYAN();
     ctx.shadowBlur = 22;
     ctx.stroke();
     ctx.shadowBlur = 0;
@@ -399,8 +412,8 @@ export function setupVrMenu(scene, renderer, deps) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = 'bold 38px monospace';
-    ctx.fillStyle = CYAN;
-    ctx.shadowColor = CYAN;
+    ctx.fillStyle = CYAN();
+    ctx.shadowColor = CYAN();
     ctx.shadowBlur = 14;
     ctx.fillText('MENU', CANVAS_W / 2, TITLE_H / 2 + 3);
     ctx.shadowBlur = 0;
@@ -408,18 +421,18 @@ export function setupVrMenu(scene, renderer, deps) {
     if (pending.length > 0) {
       ctx.beginPath();
       ctx.arc(CANVAS_W - 46, TITLE_H / 2 + 3, 13, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN;
-      ctx.shadowColor = GREEN;
+      ctx.fillStyle = GREEN();
+      ctx.shadowColor = GREEN();
       ctx.shadowBlur = 16;
       ctx.fill();
       ctx.shadowBlur = 0;
-      ctx.fillStyle = '#04060a';
+      ctx.fillStyle = T.alpha(T.panelBg, 1);
       ctx.font = 'bold 17px monospace';
       ctx.fillText(String(pending.length), CANVAS_W - 46, TITLE_H / 2 + 4);
     }
 
     // Divider under the title.
-    ctx.strokeStyle = 'rgba(0,229,255,0.25)';
+    ctx.strokeStyle = hexA(T.primary, 0.25);
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(24, TITLE_H);
@@ -429,12 +442,12 @@ export function setupVrMenu(scene, renderer, deps) {
     // Rows.
     items.forEach((item, i) => {
       const y = ROW_TOP + i * ROW_PITCH;
-      drawRow(item.label, item.dim ? DIM : item.color, 20, y, CANVAS_W - 40, ROW_H,
+      drawRow(item.label, item.dim ? DIM() : item.color, 20, y, CANVAS_W - 40, ROW_H,
               hoverId === item.id, item.dim);
     });
 
     // Divider above the knock zone — groups actions vs. join requests.
-    ctx.strokeStyle = 'rgba(0,229,255,0.18)';
+    ctx.strokeStyle = hexA(T.primary, 0.18);
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(24, KNOCK_TOP - 12);
@@ -445,7 +458,7 @@ export function setupVrMenu(scene, renderer, deps) {
     const top = pending[0];
     if (top) {
       ctx.font = 'bold 26px monospace';
-      ctx.fillStyle = GREEN;
+      ctx.fillStyle = GREEN();
       ctx.textAlign = 'center';
       ctx.fillText(`${trim(top.requesterName || 'Someone', 22)} WANTS TO JOIN`,
                    CANVAS_W / 2, KNOCK_TOP + 15);
@@ -453,26 +466,27 @@ export function setupVrMenu(scene, renderer, deps) {
       const bh = KNOCK_H - 32;
       // These two carry a faint resting outline (the action rows don't) so the
       // player can see there are two separate laser targets before hovering.
-      drawRow('✓ APPROVE', GREEN, 20, by, CANVAS_W / 2 - 28, bh, hoverId === 'approve', false, 26, true);
-      drawRow('✗ DENY',    RED,   CANVAS_W / 2 + 8, by, CANVAS_W / 2 - 28, bh, hoverId === 'deny', false, 26, true);
+      drawRow('✓ APPROVE', GREEN(), 20, by, CANVAS_W / 2 - 28, bh, hoverId === 'approve', false, 26, true);
+      drawRow('✗ DENY',    RED(),   CANVAS_W / 2 + 8, by, CANVAS_W / 2 - 28, bh, hoverId === 'deny', false, 26, true);
     } else {
       ctx.font = 'bold 24px monospace';
-      ctx.fillStyle = DIM;
+      ctx.fillStyle = DIM();
       ctx.textAlign = 'center';
       ctx.fillText('NO PENDING REQUESTS', CANVAS_W / 2, KNOCK_TOP + KNOCK_H / 2);
     }
 
     // Footer hint.
     ctx.font = 'bold 19px monospace';
-    ctx.fillStyle = 'rgba(0,229,255,0.45)';
+    ctx.fillStyle = hexA(T.primary, 0.45);
     ctx.textAlign = 'center';
     ctx.fillText('POINT + TRIGGER   ·   X TO CLOSE', CANVAS_W / 2, HINT_Y);
 
     tex.needsUpdate = true; // upload only on change
   }
 
-  // One menu row: hover fill/border matches the DOM SHOOT button treatment
-  // (rgba(0,229,255,.18) on a 2px cyan border) so in-world and DOM feel alike.
+  // One menu row: hover fill/border matches the DOM SHOOT button treatment —
+  // the primary colour at 18% on a 2px primary border — so in-world and DOM feel
+  // alike in every skin, not just the one they were originally tuned against.
   function drawRow(label, color, x, y, w, h, hovered, dim, fontPx = 34, outline = false) {
     if (outline && !hovered) {
       roundRect(ctx, x, y, w, h, 10);
@@ -482,7 +496,7 @@ export function setupVrMenu(scene, renderer, deps) {
     }
     if (hovered) {
       roundRect(ctx, x, y, w, h, 10);
-      ctx.fillStyle = dim ? 'rgba(90,107,125,0.16)' : hexA(color, 0.18);
+      ctx.fillStyle = dim ? hexA(T.textMuted, 0.16) : hexA(color, 0.18);
       ctx.fill();
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;

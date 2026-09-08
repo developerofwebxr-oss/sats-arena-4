@@ -113,7 +113,7 @@ export function setupCoopHud() {
   sessionChip.style.cssText = `
     position: fixed; top: 16px; left: 16px; z-index: 8000;
     font: 700 13px/1 monospace; letter-spacing: .18em;
-    color: #7df; text-shadow: 0 0 8px #7df;
+    color: var(--ui-primary); text-shadow: 0 0 8px var(--ui-primary);
     pointer-events: none; user-select: none; display: none;
   `;
   document.body.appendChild(sessionChip);
@@ -567,21 +567,21 @@ function injectStyles() {
       bottom: 16px;
       left: 16px;
       z-index: 9000;
-      background: rgba(0,0,0,0.75);
-      color: #7df;
-      border: 1px solid #7df;
+      background: var(--ui-panel-chip);
+      color: var(--ui-primary);
+      border: 1px solid var(--ui-primary);
       border-radius: 6px;
       padding: 8px 14px;
       font: 700 13px/1 monospace;
       cursor: pointer;
       letter-spacing: .08em;
     }
-    #coop-toggle:hover { background: rgba(0,120,180,0.4); }
+    #coop-toggle:hover { background: var(--ui-primary-faint); }
     /* Red dot alert when someone is knocking and the panel is closed */
     .coop-badge {
       position: absolute; top: -5px; right: -5px;
       width: 10px; height: 10px; border-radius: 50%;
-      background: #f44; border: 1.5px solid #111;
+      background: var(--ui-danger); border: 1.5px solid var(--ui-panel-solid);
       animation: coop-pulse 1.2s ease-in-out infinite;
     }
     @keyframes coop-pulse {
@@ -608,20 +608,20 @@ function injectStyles() {
       bottom: 54px;
       left: 16px;
       z-index: 9000;
-      background: rgba(0,0,0,0.88);
-      border: 1px solid #7df;
+      background: var(--ui-panel);
+      border: 1px solid var(--ui-primary);
       border-radius: 10px;
       padding: 14px 16px 12px;
       width: 240px;
       flex-direction: column;
       gap: 10px;
       font-family: monospace;
-      color: #ddf;
+      color: var(--ui-text);
     }
     #coop-title {
       font: 700 12px/1 monospace;
       letter-spacing: .15em;
-      color: #7df;
+      color: var(--ui-primary);
       margin-bottom: 2px;
       padding-right: 20px;
     }
@@ -631,7 +631,7 @@ function injectStyles() {
       right: 10px;
       background: none;
       border: none;
-      color: #7df;
+      color: var(--ui-primary);
       font: 700 15px/1 monospace;
       cursor: pointer;
       padding: 2px 5px;
@@ -640,14 +640,14 @@ function injectStyles() {
     }
     #coop-close:hover { opacity: 1; }
     .coop-row { display: flex; flex-direction: column; gap: 4px; }
-    .coop-label { font-size: 10px; letter-spacing: .12em; color: #7df; opacity:.7; }
-    .coop-hint { font-size: 9px; color: #7df; opacity: .55; letter-spacing: .03em; }
+    .coop-label { font-size: 10px; letter-spacing: .12em; color: var(--ui-primary); opacity:.7; }
+    .coop-hint { font-size: 9px; color: var(--ui-primary); opacity: .55; letter-spacing: .03em; }
 
     #coop-panel input {
-      background: rgba(255,255,255,0.07);
-      border: 1px solid #7df6;
+      background: var(--ui-field);
+      border: 1px solid var(--ui-primary-line);
       border-radius: 5px;
-      color: #eef;
+      color: var(--ui-text);
       font: 15px monospace;
       padding: 6px 8px;
       width: 100%;
@@ -665,42 +665,42 @@ function injectStyles() {
       letter-spacing: .1em;
       cursor: pointer;
     }
-    #coop-join { background: #7df; color: #003; }
+    #coop-join { background: var(--ui-primary); color: var(--ui-panel-solid); }
     #coop-join:disabled { opacity: .5; cursor: default; }
-    #coop-leave { background: #433; color: #faa; border: 1px solid #f66; }
+    #coop-leave { background: var(--ui-danger-faint); color: var(--ui-danger); border: 1px solid var(--ui-danger); }
     #coop-mute  {
       padding: 6px 8px;
       border-radius: 6px;
-      border: 1px solid #7df6;
-      background: rgba(0,0,0,.5);
-      color: #adf;
+      border: 1px solid var(--ui-primary-line);
+      background: var(--ui-panel-chip);
+      color: var(--ui-text);
       font: 12px monospace;
       cursor: pointer;
     }
     /* Live mic: red border + glow, so "you are broadcasting" is readable at a
        glance and not carried by the label text alone. */
     #coop-mute.mic-live {
-      border-color: #ff5d6c;
-      color: #ff9aa4;
-      background: rgba(255,93,108,.12);
-      text-shadow: 0 0 8px #ff5d6c66;
+      border-color: var(--ui-danger);
+      color: var(--ui-danger);
+      background: var(--ui-danger-faint);
+      text-shadow: 0 0 8px var(--ui-danger-line);
     }
     #coop-mute:disabled { opacity: .55; cursor: default; }
     #coop-status { font-size: 11px; min-height: 14px; }
-    .coop-err { color: #f88; }
-    .coop-ok  { color: #8f8; }
-    #coop-active { border-top: 1px solid #7df3; padding-top: 8px; }
+    .coop-err { color: var(--ui-danger); }
+    .coop-ok  { color: var(--ui-ok); }
+    #coop-active { border-top: 1px solid var(--ui-primary-dim); padding-top: 8px; }
     #coop-code-display {
       font: 700 18px monospace;
       letter-spacing: .2em;
-      color: #ffe;
+      color: var(--ui-text);
       text-align: center;
     }
-    #coop-count { font-size: 11px; color: #adf; text-align: center; margin-top: 4px; }
+    #coop-count { font-size: 11px; color: var(--ui-text); text-align: center; margin-top: 4px; }
 
     /* Knock / approval cards */
     #coop-requests:not(:empty) {
-      border-top: 1px solid #7df3;
+      border-top: 1px solid var(--ui-primary-dim);
       padding-top: 8px;
       display: flex;
       flex-direction: column;
@@ -710,14 +710,14 @@ function injectStyles() {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      background: rgba(100,200,255,0.08);
-      border: 1px solid #7df5;
+      background: var(--ui-primary-faint);
+      border: 1px solid var(--ui-primary-line);
       border-radius: 6px;
       padding: 5px 8px;
       gap: 6px;
     }
-    .req-info { font-size: 10px; color: #cef; line-height: 1.3; flex: 1; }
-    .req-name { font-weight: 700; color: #7df; display: block; }
+    .req-info { font-size: 10px; color: var(--ui-text); line-height: 1.3; flex: 1; }
+    .req-name { font-weight: 700; color: var(--ui-primary); display: block; }
     .req-code { font-size: 9px; opacity: .7; }
     .req-btns { display: flex; gap: 4px; flex-shrink: 0; }
     .req-approve, .req-deny {
@@ -727,10 +727,10 @@ function injectStyles() {
       cursor: pointer;
       padding: 3px 7px;
     }
-    .req-approve { background: #3a6; color: #fff; }
-    .req-approve:hover { background: #4c8; }
-    .req-deny    { background: #633; color: #faa; }
-    .req-deny:hover { background: #855; }
+    .req-approve { background: var(--ui-ok); color: var(--ui-on-ok); }
+    .req-approve:hover { background: var(--ui-ok); filter: brightness(1.15); }
+    .req-deny    { background: var(--ui-danger-faint); color: var(--ui-danger); }
+    .req-deny:hover { background: var(--ui-danger-line); }
   `;
   document.head.appendChild(s);
 }

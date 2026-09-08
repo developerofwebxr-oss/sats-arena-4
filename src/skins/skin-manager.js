@@ -1,5 +1,6 @@
 import { Group } from 'three';
 import { getSkin, DEFAULT_SKIN_ID } from './registry.js';
+import { applyTheme } from '../theme.js';
 import { applyTint, restoreTint, restoreAllTints } from './appearance.js';
 
 /**
@@ -32,6 +33,12 @@ export function setupSkins({ scene, environment, getGunRoots, getTargetGroup }) 
   function build(skinId) {
     const skin = getSkin(skinId);
     if (!skin) throw new Error(`[skins] unknown skin "${skinId}"`);
+
+    // P51: the UI follows the skin. Applied FIRST, before any geometry, so the
+    // DOM has already restyled by the time the new world appears — a HUD that
+    // recolours a frame after the arena does reads as a glitch. This is the ONE
+    // place a theme is applied; nothing else in the codebase calls applyTheme.
+    applyTheme(skin.ui, skin.id);
 
     const group = new Group();
     group.name = groupName(skin.id);
