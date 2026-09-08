@@ -42,27 +42,45 @@ const ORANGE   = () => T.glow;       // bitcoin accent (score, laser)
 const GREEN    = () => T.ok;         // approve / connected
 const RED      = () => T.danger;     // deny / destructive — stays red in every skin
 const DIM      = () => T.textMuted;  // unavailable
-const PANEL_BG = () => T.alpha(T.panelBg, 0.92); // matches the ACTIVATE panel
+// 0.96 rather than 0.92: at 1.5 m the Gold arena showed through enough to
+// fight the header text. Still translucent, but the panel wins.
+const PANEL_BG = () => T.alpha(T.panelBg, 0.96);
 
 // ── Panel geometry ───────────────────────────────────────────────────────────
-// 640×768 texture on a 0.85×1.02 m quad at 1.5 m ≈ 1 texel per display pixel on
-// a Quest 2 (~20 px/°), so labels stay crisp without wasting memory.
-const CANVAS_W = 640;
-const CANVAS_H = 768;
-const PANEL_W  = 0.85;                              // metres
-const PANEL_H  = PANEL_W * (CANVAS_H / CANVAS_W);   // 1.02 m
+// 720x920 texture on a 0.88 m wide quad at 1.5 m. That works out at ~21.6 canvas
+// px per degree of view against a Quest 2's ~20 px/deg, so one texel is roughly
+// one display pixel — crisp without wasting memory. The panel subtends ~34deg
+// wide by ~41deg tall, which fits inside a comfortable glance.
+const CANVAS_W = 720;
+// Height is set by the WORST CASE, not the common one: header + PLAY(4) +
+// CO-OP(3 with reasons + a pending request) + the exit footer. Sizing for the
+// solo state and letting the full state overflow is exactly what happened on the
+// first pass — EXIT TO SCREEN was pushed off the bottom edge the moment someone
+// knocked. layout() now warns in dev if content ever exceeds this again.
+const CANVAS_H = 1060;
+const PANEL_W  = 0.86;                              // metres
+const PANEL_H  = PANEL_W * (CANVAS_H / CANVAS_W);   // 1.27 m ≈ 46deg tall at 1.5 m
 const DISTANCE = 1.5;                               // metres ahead of the head
 
-// ── Row layout (canvas px, y from top). Drawing and hit-testing both read
-// these, so a highlighted row is always exactly the row you select. ───────────
-const TITLE_H   = 84;
-const ROW_TOP   = 96;
-const ROW_H     = 78;
-const ROW_PITCH = 88;   // ROW_H + 10 px gap
-const ROW_COUNT = 6;    // last row ends at 614
-const KNOCK_TOP = 624;
-const KNOCK_H   = 88;   // ends at 712
-const HINT_Y    = 736;  // clear of the 762 px border
+// ── Type scale ───────────────────────────────────────────────────────────────
+// FOUR sizes and no more. The old menu mixed 38/34/26/24/19 px with no system,
+// so nothing read as a hierarchy — it read as inconsistency. Every string below
+// picks one of these, and the only thing that varies within a level is weight.
+// The smallest, HINT at 18 px, is 0.83deg tall at 1.5 m — well above the ~0.5deg
+// legibility floor, so even the quietest text is readable rather than decorative.
+const F_BRAND   = 22;   // SATS ARENA wordmark
+const F_CODE    = 62;   // the host code — the biggest thing on the panel, by design
+const F_TITLE   = 28;   // row labels
+const F_LABEL   = 19;   // section labels, meta, status
+const F_HINT    = 18;   // the footer hint and inline reasons
+
+// ── Vertical rhythm (canvas px) ──────────────────────────────────────────────
+const PAD        = 26;  // panel inset
+const ROW_H      = 54;
+const ROW_REASON = 72;  // a row carrying an inline reason: label line + reason line
+const ROW_GAP    = 6;
+const SECTION_GAP = 12; // above a section label
+const LABEL_H    = 22;
 
 // ── Head-locked sprite offsets (metres from the head; -Z forward). Tunable
 // on-device, same convention as vrui.js. ─────────────────────────────────────
@@ -71,13 +89,14 @@ const TOAST_OFFSET  = new THREE.Vector3(0,  0.02, -2.0); // gentle action toasts
 const NOTICE_SECS   = 6.0;
 const TOAST_SECS    = 2.8;
 
+// Two-tap confirm window on LEAVE. Long enough to be a deliberate second tap,
+// short enough that it cannot still be armed when you come back to the menu.
+const CONFIRM_MS = 3000;
+
 /**
  * @param scene     THREE.Scene
  * @param renderer  THREE.WebGLRenderer (XR-enabled)
- * @param deps      the EXISTING actions this menu drives:
- *   recenterView, coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
- *   canCompete, proposeCompetition, exitToScreen, onPendingRequests,
- *   approveJoinRequest, denyJoinRequest, getControllers
+ * @param deps      the EXISTING actions this menu drives (see main.js)
  */
 export function setupVrMenu(scene, renderer, deps) {
   // ── The panel: one quad, one canvas texture ────────────────────────────────
@@ -97,25 +116,32 @@ export function setupVrMenu(scene, renderer, deps) {
   scene.add(panel);
 
   // ── Head-locked text sprites (same helper as the rest of the in-world HUD) ──
-  const noticeSprite = createTextSprite(1.3, CYAN());   // "X wants to join — press X"
-  const toastSprite  = createTextSprite(1.0, ORANGE()); // gentle feedback
+  const noticeSprite = createTextSprite(1.3, T.primary);
+  const toastSprite  = createTextSprite(1.0, T.glow);
   noticeSprite.mesh.visible = false;
   toastSprite.mesh.visible  = false;
+  noticeSprite.mesh.name = 'VrMenuNotice';
+  toastSprite.mesh.name  = 'VrMenuToast';
   scene.add(noticeSprite.mesh, toastSprite.mesh);
 
   // ── State ──────────────────────────────────────────────────────────────────
   let open      = false;
-  let hoverId   = null;   // row id currently under a controller laser
-  let lastSig   = null;   // repaint-on-change guard
-
-  // Skin changed -> new palette -> the baked canvas is stale. Clearing the
-  // repaint guard is all that is needed: the next updateVrMenu() sees a changed
-  // signature and redraws with the new T. No extra repaint path to keep in sync.
-  onThemeChange((t) => { T = t; lastSig = null; });
-  let pending   = [];     // mirrored pending join requests (from coop-hud.js)
-  let seenReqId = null;   // last request id we announced, so we notify once
+  let view      = 'root';  // 'root' | 'skins' — the only sub-list in this pass
+  let hoverId   = null;
+  let lastSig   = null;
+  let pending   = [];
+  let seenReqId = null;
   let noticeUntil = 0;
   let toastUntil  = 0;
+  let confirmUntil = 0;    // LEAVE is armed until this timestamp
+  let rows = [];           // the laid-out model; draw AND hit-test both read it
+
+  onThemeChange((t) => {
+    T = t;
+    noticeSprite.setColor(t.primary);
+    toastSprite.setColor(t.glow);
+    lastSig = null;        // force a repaint with the new palette
+  });
 
   const raycaster = new THREE.Raycaster();
   const _camPos  = new THREE.Vector3();
@@ -130,7 +156,6 @@ export function setupVrMenu(scene, renderer, deps) {
     pending = list || [];
     const top = pending[0];
     if (top && top.requestId !== seenReqId) {
-      // A NEW knock arrived: announce it once, in-world.
       seenReqId = top.requestId;
       noticeSprite.setText(`${top.requesterName || 'Someone'} wants to join\npress X to open the menu`);
       noticeUntil = performance.now() + NOTICE_SECS * 1000;
@@ -138,36 +163,191 @@ export function setupVrMenu(scene, renderer, deps) {
     if (!top) seenReqId = null;
   });
 
-  // ── Items ──────────────────────────────────────────────────────────────────
-  // Row order is FIXED so it stays predictable in a headset; unavailable items
-  // are dimmed (and explain themselves on tap) rather than disappearing.
-  function currentItems() {
-    const joined = deps.isCoopJoined();
-    const muted  = deps.isCoopMuted();
-    return [
-      { id: 'resume',   label: 'RESUME',                          color: CYAN() },
-      { id: 'recenter', label: 'RECENTER VIEW',                   color: CYAN() },
-      { id: 'mute',     label: muted ? 'UNMUTE MIC' : 'MUTE MIC', color: muted ? ORANGE() : CYAN(), dim: !joined },
-      { id: 'compete',  label: 'COMPETE · 4:20',                  color: MAGENTA(), dim: !deps.canCompete() },
-      { id: 'leave',    label: 'LEAVE CO-OP',                     color: RED(),     dim: !joined },
-      { id: 'exit',     label: 'EXIT TO SCREEN',                  color: RED() },
-    ];
+  // ── The information architecture ───────────────────────────────────────────
+  /**
+   * Build the menu as SECTIONS grouped by intent, then lay them out. The old
+   * menu was six equal rows in no order — Resume next to Exit, Mute next to
+   * Compete — so every visit meant re-reading the whole list. Grouping means you
+   * navigate to a region, not to a line.
+   *
+   * Availability has THREE states, not two:
+   *   enabled      normal
+   *   unavailable  dimmed AND carrying the reason inline ("needs 2 players"),
+   *                because a dimmed row with no explanation is a dead end
+   *   hidden       omitted entirely — Requests when nobody is knocking, Leave
+   *                when you are not in a session, Recenter when the runtime
+   *                cannot offer it. No dead rows.
+   */
+  function buildModel() {
+    const joined  = deps.isCoopJoined();
+    const muted   = deps.isCoopMuted();
+    const peers   = deps.getParticipantCount ? deps.getParticipantCount() : 0;
+    const inMatch = deps.isMatchActive ? deps.isMatchActive() : false;
+    const code    = deps.getOwnCode ? deps.getOwnCode() : null;
+
+    if (view === 'skins') return buildSkinsModel();
+
+    const out = [];
+
+    // 1 ── HEADER: brand, the host code, and where you stand.
+    out.push({ kind: 'header', code, status: statusLine(joined, peers, inMatch) });
+
+    // 2 ── PLAY
+    out.push({ kind: 'section', label: 'PLAY' });
+    out.push({ kind: 'item', id: 'resume', label: 'RESUME', tone: 'primary' });
+
+    // RECENTER is now a real one — xr.js re-origins the XR reference space so
+    // "here, facing this way" becomes the world origin and forward. The row is
+    // HIDDEN, not dimmed, when the runtime cannot offer an offset space: the
+    // whole reason for replacing the old row is that it did nothing in VR, and
+    // a dimmed replacement would be the same failure with better manners.
+    if (!deps.canRecenter || deps.canRecenter()) {
+      out.push({ kind: 'item', id: 'recenter', label: 'RECENTER VIEW', tone: 'primary' });
+    }
+
+    if (deps.listSkins) {
+      const active = deps.getActiveSkinId ? deps.getActiveSkinId() : null;
+      const name = (deps.listSkins().find((s) => s.id === active) || {}).name || '—';
+      const gate = deps.canSwitchSkin ? deps.canSwitchSkin() : { ok: true };
+      out.push({
+        kind: 'submenu', id: 'skins', label: 'SKIN', meta: name, tone: 'primary',
+        reason: gate.ok ? null : gate.reason,
+      });
+    }
+
+    // RAPID FIRE. In a headset the DOM pay modal is invisible, so what is
+    // surfaced here is the half that WORKS in-world: spending a banked charge.
+    // Buying still needs the phone, and the row says so rather than opening a
+    // QR nobody can see.
+    const live    = deps.isRapidFire ? deps.isRapidFire() : false;
+    const charges = deps.getAvailableCharges ? deps.getAvailableCharges() : 0;
+    if (live) {
+      const secs = deps.getRemainingSeconds ? Math.ceil(deps.getRemainingSeconds()) : 0;
+      out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: `${secs}s LEFT`,
+                 tone: 'glow', state: 'unavailable', reason: 'already running' });
+    } else if (charges > 0) {
+      out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: `${charges} READY`, tone: 'glow' });
+    } else {
+      out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: '21 SATS', tone: 'glow',
+                 state: 'unavailable', reason: 'pay on your phone — it upgrades both players' });
+    }
+
+    // 3 ── CO-OP
+    out.push({ kind: 'section', label: 'CO-OP' });
+    out.push({
+      kind: 'toggle', id: 'mic', label: 'MIC', on: !muted, tone: 'primary',
+      state: joined ? 'enabled' : 'unavailable',
+      reason: joined ? null : 'join a session first',
+    });
+    out.push({
+      kind: 'submenu', id: 'join', label: 'JOIN A FRIEND', tone: 'primary',
+      state: 'unavailable', reason: 'share YOUR code above — they join from their phone',
+    });
+    out.push({
+      kind: 'item', id: 'compete', label: 'COMPETE', meta: '4:20', tone: 'accent',
+      state: deps.canCompete() ? 'enabled' : 'unavailable',
+      reason: deps.canCompete() ? null
+            : inMatch ? 'a match is already running' : 'needs 2 players',
+    });
+    // Requests only exist when somebody is knocking; there is no empty state.
+    if (pending.length > 0) {
+      out.push({ kind: 'request', id: 'request', name: pending[0].requesterName || 'Someone',
+                 more: pending.length - 1 });
+    }
+
+    // 4 ── EXIT, separated. Danger lives HERE and nowhere else.
+    out.push({ kind: 'rule' });
+    if (joined) {
+      const armed = performance.now() < confirmUntil;
+      out.push({ kind: 'item', id: 'leave', tone: 'danger',
+                 label: armed ? 'TAP AGAIN TO LEAVE' : 'LEAVE CO-OP',
+                 meta: armed ? 'ARE YOU SURE?' : null, armed });
+    }
+    out.push({ kind: 'item', id: 'exit', label: 'EXIT TO SCREEN', tone: 'danger' });
+    return out;
   }
 
-  // ── Hit-testing: map a hit UV on the single quad to a row id ───────────────
+  function buildSkinsModel() {
+    const active = deps.getActiveSkinId ? deps.getActiveSkinId() : null;
+    const gate   = deps.canSwitchSkin ? deps.canSwitchSkin() : { ok: true };
+    const out = [
+      { kind: 'header', code: deps.getOwnCode ? deps.getOwnCode() : null,
+        status: statusLine(deps.isCoopJoined(), deps.getParticipantCount?.() || 0,
+                           deps.isMatchActive?.() || false) },
+      { kind: 'section', label: 'SKIN' },
+    ];
+    for (const skin of (deps.listSkins ? deps.listSkins() : [])) {
+      const isActive = skin.id === active;
+      const loading  = !!skin.isReady && !skin.isReady();
+      out.push({
+        kind: 'item', id: `skin:${skin.id}`, label: skin.name,
+        meta: isActive ? 'ACTIVE' : loading ? 'LOADING…' : null,
+        tone: isActive ? 'ok' : 'primary',
+        state: isActive || loading || !gate.ok ? 'unavailable' : 'enabled',
+        // The ACTIVE skin carries a reason too. Its "ACTIVE" badge already
+        // implies why it is not tappable, but leaving reason null made it the
+        // one non-enabled row in the whole menu that says nothing when you tap
+        // it — an exception to the rule is how the rule gets forgotten.
+        reason: isActive ? 'already active'
+              : loading  ? 'still downloading'
+              : gate.ok  ? null : gate.reason,
+      });
+    }
+    out.push({ kind: 'rule' });
+    out.push({ kind: 'item', id: 'back', label: '‹ BACK', tone: 'primary' });
+    return out;
+  }
+
+  function statusLine(joined, peers, inMatch) {
+    if (inMatch) return 'MATCH IN PROGRESS';
+    if (!joined) return 'SOLO · WAITING FOR A FRIEND';
+    const friends = Math.max(0, peers - 1);
+    if (friends <= 0) return 'CONNECTED · WAITING FOR A FRIEND';
+    return friends === 1 ? '1 FRIEND CONNECTED' : `${friends} FRIENDS CONNECTED`;
+  }
+
+  // ── Layout: assign a y and height to every entry ──────────────────────────
+  // ONE pass produces the array that both draw() and idAt() consume, so a
+  // highlighted row is always exactly the row that will fire. Nothing here is a
+  // fixed index, which is what lets rows appear and disappear safely.
+  function layout(model) {
+    const laid = [];
+    let y = PAD;
+    for (const e of model) {
+      let h;
+      switch (e.kind) {
+        case 'header':  h = 168; break;
+        case 'section': h = LABEL_H + SECTION_GAP; break;
+        case 'rule':    h = 20; break;
+        case 'request': h = 84; break;
+        default:        h = e.reason ? ROW_REASON : ROW_H; break;
+      }
+      laid.push({ ...e, y, h });
+      y += h + (e.kind === 'section' || e.kind === 'rule' ? 0 : ROW_GAP);
+    }
+    // The footer hint owns the last ~30 px. If content ever runs past it, a row
+    // is being drawn off the panel — which is how EXIT TO SCREEN disappeared the
+    // first time this was built. Fail loudly in dev rather than silently clip.
+    const limit = CANVAS_H - 34;
+    if (import.meta.env.DEV && y > limit) {
+      console.warn(`[vr-menu] layout overflows by ${Math.round(y - limit)}px ` +
+                   `(${laid.length} entries) — the panel is too short for this state`);
+    }
+    return laid;
+  }
+
+  // ── Hit-testing: canvas point → row id ────────────────────────────────────
   // PlaneGeometry uv: u 0→1 left→right, v 0→1 bottom→top. CanvasTexture is
   // flipY by default, so canvas y = (1 - v) * CANVAS_H.
   function idAt(px, py) {
-    if (py >= ROW_TOP && py < ROW_TOP + ROW_COUNT * ROW_PITCH) {
-      const i = Math.floor((py - ROW_TOP) / ROW_PITCH);
-      // Reject the inter-row gap so the laser can't select a row it isn't on.
-      if ((py - ROW_TOP) - i * ROW_PITCH > ROW_H) return null;
-      const items = currentItems();
-      return items[i] ? items[i].id : null;
-    }
-    // Knock row: only interactive while a request is actually pending.
-    if (pending.length > 0 && py >= KNOCK_TOP + 30 && py < KNOCK_TOP + KNOCK_H) {
-      return px < CANVAS_W / 2 ? 'approve' : 'deny';
+    for (const r of rows) {
+      if (py < r.y || py >= r.y + r.h) continue;
+      if (r.kind === 'request') {
+        // Two targets on one row: approve left, deny right.
+        return px < CANVAS_W / 2 ? 'approve' : 'deny';
+      }
+      if (r.kind === 'item' || r.kind === 'toggle' || r.kind === 'submenu') return r.id;
+      return null; // header / section label / rule — inert by design
     }
     return null;
   }
@@ -180,35 +360,26 @@ export function setupVrMenu(scene, renderer, deps) {
   }
 
   // ── Open / close ───────────────────────────────────────────────────────────
-  // Spawn from head YAW only at the head's world eye height, then face the
-  // player level — so the panel sits straight ahead at eye level however the
-  // head was pitched or rolled when X was pressed.
+  // UNCHANGED from P26: spawn from head YAW only at the head's world eye height,
+  // then face the player level, and stay world-fixed.
   function placePanel() {
     const cam = renderer.xr.getCamera();
     cam.getWorldPosition(_camPos);
     cam.getWorldQuaternion(_camQuat);
 
-    // Forward flattened onto the horizontal plane = pure yaw.
     _fwd.set(0, 0, -1).applyQuaternion(_camQuat);
     _fwd.y = 0;
     if (_fwd.lengthSq() < 1e-6) _fwd.set(0, 0, -1); // looking straight up/down
     _fwd.normalize();
 
     // NOTE ON EYE HEIGHT: _camPos.y is the head's height in WORLD space, which
-    // is true eye level under every reference space we request — with
-    // local-floor/bounded-floor the floor is Y=0 so this is the real eye
-    // height, and with the 'local' fallback the origin IS the head so this is
-    // still eye level. modeCtrl.state.eyeOffset is deliberately NOT added: that
-    // offset is a publish-time convention for telling peers a floor-relative
-    // eyeY (see pose-publisher.js), and adding it here would push the panel
-    // 1.6 m above the player's eyes in the 'local' fallback.
+    // is true eye level under every reference space we request. eyeOffset is
+    // deliberately NOT added — see the P26 note in git history.
     panel.position.set(
       _camPos.x + _fwd.x * DISTANCE,
       _camPos.y,
       _camPos.z + _fwd.z * DISTANCE,
     );
-    // Face the head, level: look at the head's position at the panel's own
-    // height, so there's no pitch in the panel itself.
     panel.lookAt(_camPos.x, panel.position.y, _camPos.z);
   }
 
@@ -216,20 +387,21 @@ export function setupVrMenu(scene, renderer, deps) {
     if (!renderer.xr.isPresenting) return; // headset VR/AR only
     placePanel();
     open = true;
+    view = 'root';        // always open at the top level
+    confirmUntil = 0;     // never re-open with LEAVE still armed
     panel.visible = true;
     hoverId = null;
-    lastSig = null; // force a repaint on the frame we open
+    lastSig = null;
   }
 
   function closeMenu() {
     open = false;
     panel.visible = false;
     hoverId = null;
+    confirmUntil = 0;
   }
 
-  function toggleMenu() {
-    if (open) closeMenu(); else openMenu();
-  }
+  function toggleMenu() { if (open) closeMenu(); else openMenu(); }
 
   // A native headset exit (or Exit to screen) must never leave the menu latched
   // open — that would keep suppressing the trigger on the next session.
@@ -242,13 +414,20 @@ export function setupVrMenu(scene, renderer, deps) {
 
   // ── Selection — every branch calls EXISTING logic ──────────────────────────
   function activate(id) {
-    const items = currentItems();
-    const item  = items.find((it) => it.id === id);
+    const row = rows.find((r) => r.id === id);
 
-    // Dimmed rows explain themselves instead of doing nothing.
-    if (item && item.dim) {
-      if (id === 'compete') toast('Need a second player to compete');
-      else                  toast('Not connected to a session');
+    // Unavailable rows say WHY rather than doing nothing.
+    if (row && row.state === 'unavailable' && id !== 'approve' && id !== 'deny') {
+      if (row.reason) toast(row.reason);
+      return;
+    }
+
+    if (id && id.startsWith('skin:')) {
+      const skinId = id.slice(5);
+      const res = deps.requestSkin ? deps.requestSkin(skinId) : { ok: false, reason: 'unavailable' };
+      if (!res.ok) toast(res.reason || 'Cannot switch right now');
+      else { view = 'root'; toast('Switching skin…'); }
+      lastSig = null;
       return;
     }
 
@@ -257,37 +436,67 @@ export function setupVrMenu(scene, renderer, deps) {
         closeMenu();
         break;
 
-      case 'recenter':
-        deps.recenterView(); // movement.js — the same action as the DOM RECENTER button
-        placePanel();        // and re-drop the panel straight ahead of the player
+      case 'recenter': {
+        // Re-origin the XR space, then re-drop the panel so it is straight ahead
+        // of the player's NEW forward rather than left behind at the old one.
+        const done = deps.recenterXR ? deps.recenterXR() : false;
+        if (done) { placePanel(); toast('View recentred'); }
+        else toast('Recenter unavailable in this session');
+        break;
+      }
+
+      case 'skins':
+        view = 'skins';
+        lastSig = null;
         break;
 
-      case 'mute':
-        deps.coopToggleMute(); // coop-hud.js handleMute() — same as the DOM MUTE button
+      case 'back':
+        view = 'root';
+        lastSig = null;
+        break;
+
+      case 'rapid':
+        // The in-world half of the pay flow: spend a banked charge. Buying needs
+        // the phone, and that row is marked unavailable-with-reason above, so we
+        // only reach here when a charge exists.
+        if (deps.activateCharge) deps.activateCharge();
+        closeMenu();
+        toast('Rapid fire activated');
+        break;
+
+      case 'mic':
+        deps.coopToggleMute(); // coop-hud.js handleMute() — reads LiveKit truth
+        lastSig = null;
         break;
 
       case 'compete':
-        deps.proposeCompetition(); // competition.js propose() — same as #cmp-compete
+        deps.proposeCompetition(); // competition.js propose()
         closeMenu();
         toast('Match proposed — waiting for opponent');
         break;
 
-      case 'leave':
-        deps.coopLeave();      // coop-hud.js handleLeave() — same as the DOM LEAVE button
+      case 'leave': {
+        // Light confirm: a laser slip cannot dump a session. The first tap arms
+        // the row (it relabels itself), the second within CONFIRM_MS commits.
+        const now = performance.now();
+        if (now >= confirmUntil) { confirmUntil = now + CONFIRM_MS; lastSig = null; break; }
+        confirmUntil = 0;
+        deps.coopLeave();
         closeMenu();
         toast('Left session');
         break;
+      }
 
       case 'exit':
-        closeMenu();           // close first so nothing is latched across the session end
-        deps.exitToScreen();   // modeswitcher.js exitToScreen()
+        closeMenu();          // close first so nothing is latched across session end
+        deps.exitToScreen();  // modeswitcher.js exitToScreen()
         break;
 
       case 'approve': {
         const req = pending[0];
         if (!req) return;
-        deps.approveJoinRequest(req.requestId); // coop-hud.js _approveRequest()
-        pending = pending.slice(1);             // optimistic; the poll re-syncs
+        deps.approveJoinRequest(req.requestId);
+        pending = pending.slice(1);   // optimistic; the poll re-syncs
         toast(`${req.requesterName || 'Player'} approved`);
         break;
       }
@@ -295,7 +504,7 @@ export function setupVrMenu(scene, renderer, deps) {
       case 'deny': {
         const req = pending[0];
         if (!req) return;
-        deps.denyJoinRequest(req.requestId);    // coop-hud.js _denyRequest()
+        deps.denyJoinRequest(req.requestId);
         pending = pending.slice(1);
         toast(`${req.requesterName || 'Player'} denied`);
         break;
@@ -307,19 +516,14 @@ export function setupVrMenu(scene, renderer, deps) {
   }
 
   // ── Trigger routing ────────────────────────────────────────────────────────
-  // Called from xr.js's tracked-controller selectstart, BEFORE the ACTIVATE
-  // panel handler and before the shot. Returning true consumes the trigger.
-  //
   // While the menu is open this returns true for EVERY tracked-controller
   // trigger — including one that misses the panel — so the gun cannot fire out
-  // from under a menu the player is reading. The moment the menu closes it
-  // returns false again on the first line, so firing is restored with no
-  // residual state to unwind.
+  // from under a menu the player is reading.
   function handleControllerSelect(origin, direction) {
     if (!open) return false;
     const id = pick(origin, direction);
     if (id) activate(id);
-    return true; // menu open ⇒ trigger belongs to the menu, never to the gun
+    return true;
   }
 
   // ── Per-frame update ───────────────────────────────────────────────────────
@@ -327,7 +531,6 @@ export function setupVrMenu(scene, renderer, deps) {
     const presenting = renderer.xr.isPresenting;
 
     if (!presenting) {
-      // Flat/mobile keep the DOM UI; hide every in-world element.
       if (open) closeMenu();
       noticeSprite.mesh.visible = false;
       toastSprite.mesh.visible  = false;
@@ -338,7 +541,6 @@ export function setupVrMenu(scene, renderer, deps) {
     cam.getWorldPosition(_camPos);
     cam.getWorldQuaternion(_camQuat);
 
-    // Hover: raycast from each connected tracked controller.
     if (open) {
       let hit = null;
       const controllers = deps.getControllers ? deps.getControllers() : [];
@@ -354,7 +556,6 @@ export function setupVrMenu(scene, renderer, deps) {
       repaintIfChanged();
     }
 
-    // Knock notice, then the persistent badge chip while the menu is closed.
     const now = performance.now();
     const showNotice = now < noticeUntil;
     if (showNotice) {
@@ -381,24 +582,31 @@ export function setupVrMenu(scene, renderer, deps) {
   function repaintIfChanged() {
     const top = pending[0];
     const sig = [
-      hoverId,
-      deps.isCoopMuted(),
-      deps.isCoopJoined(),
-      deps.canCompete(),
-      pending.length,
-      top ? top.requestId : '',
+      view, hoverId,
+      deps.isCoopMuted(), deps.isCoopJoined(), deps.canCompete(),
+      deps.getParticipantCount ? deps.getParticipantCount() : 0,
+      deps.isMatchActive ? deps.isMatchActive() : false,
+      deps.getOwnCode ? deps.getOwnCode() : '',
+      deps.getActiveSkinId ? deps.getActiveSkinId() : '',
+      deps.isRapidFire ? deps.isRapidFire() : false,
+      deps.isRapidFire && deps.isRapidFire() && deps.getRemainingSeconds
+        ? Math.ceil(deps.getRemainingSeconds()) : 0,
+      deps.getAvailableCharges ? deps.getAvailableCharges() : 0,
+      pending.length, top ? top.requestId : '',
+      performance.now() < confirmUntil,
     ].join('|');
     if (sig === lastSig) return;
     lastSig = sig;
     repaint();
   }
 
+  // ── Paint ─────────────────────────────────────────────────────────────────
   function repaint() {
-    const items = currentItems();
+    rows = layout(buildModel());
     ctx.clearRect(0, 0, CANVAS_W, CANVAS_H);
 
     // Panel body + glowing border (same treatment as the ACTIVATE panel).
-    roundRect(ctx, 4, 4, CANVAS_W - 8, CANVAS_H - 8, 18);
+    roundRect(ctx, 4, 4, CANVAS_W - 8, CANVAS_H - 8, 20);
     ctx.fillStyle = PANEL_BG();
     ctx.fill();
     ctx.strokeStyle = CYAN();
@@ -408,114 +616,309 @@ export function setupVrMenu(scene, renderer, deps) {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
-    // Title, with a badge when someone is knocking.
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 38px monospace';
-    ctx.fillStyle = CYAN();
-    ctx.shadowColor = CYAN();
-    ctx.shadowBlur = 14;
-    ctx.fillText('MENU', CANVAS_W / 2, TITLE_H / 2 + 3);
-    ctx.shadowBlur = 0;
-
-    if (pending.length > 0) {
-      ctx.beginPath();
-      ctx.arc(CANVAS_W - 46, TITLE_H / 2 + 3, 13, 0, Math.PI * 2);
-      ctx.fillStyle = GREEN();
-      ctx.shadowColor = GREEN();
-      ctx.shadowBlur = 16;
-      ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.fillStyle = T.alpha(T.panelBg, 1);
-      ctx.font = 'bold 17px monospace';
-      ctx.fillText(String(pending.length), CANVAS_W - 46, TITLE_H / 2 + 4);
+    for (const r of rows) {
+      switch (r.kind) {
+        case 'header':  drawHeader(r);  break;
+        case 'section': drawSection(r); break;
+        case 'rule':    drawRule(r);    break;
+        case 'request': drawRequest(r); break;
+        case 'toggle':  drawToggle(r);  break;
+        case 'submenu': drawSubmenu(r); break;
+        default:        drawItem(r);    break;
+      }
     }
 
-    // Divider under the title.
-    ctx.strokeStyle = hexA(T.primary, 0.25);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(24, TITLE_H);
-    ctx.lineTo(CANVAS_W - 24, TITLE_H);
-    ctx.stroke();
-
-    // Rows.
-    items.forEach((item, i) => {
-      const y = ROW_TOP + i * ROW_PITCH;
-      drawRow(item.label, item.dim ? DIM() : item.color, 20, y, CANVAS_W - 40, ROW_H,
-              hoverId === item.id, item.dim);
-    });
-
-    // Divider above the knock zone — groups actions vs. join requests.
-    ctx.strokeStyle = hexA(T.primary, 0.18);
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(24, KNOCK_TOP - 12);
-    ctx.lineTo(CANVAS_W - 24, KNOCK_TOP - 12);
-    ctx.stroke();
-
-    // Knock row.
-    const top = pending[0];
-    if (top) {
-      ctx.font = 'bold 26px monospace';
-      ctx.fillStyle = GREEN();
-      ctx.textAlign = 'center';
-      ctx.fillText(`${trim(top.requesterName || 'Someone', 22)} WANTS TO JOIN`,
-                   CANVAS_W / 2, KNOCK_TOP + 15);
-      const by = KNOCK_TOP + 32;
-      const bh = KNOCK_H - 32;
-      // These two carry a faint resting outline (the action rows don't) so the
-      // player can see there are two separate laser targets before hovering.
-      drawRow('✓ APPROVE', GREEN(), 20, by, CANVAS_W / 2 - 28, bh, hoverId === 'approve', false, 26, true);
-      drawRow('✗ DENY',    RED(),   CANVAS_W / 2 + 8, by, CANVAS_W / 2 - 28, bh, hoverId === 'deny', false, 26, true);
-    } else {
-      ctx.font = 'bold 24px monospace';
-      ctx.fillStyle = DIM();
-      ctx.textAlign = 'center';
-      ctx.fillText('NO PENDING REQUESTS', CANVAS_W / 2, KNOCK_TOP + KNOCK_H / 2);
-    }
-
-    // Footer hint.
-    ctx.font = 'bold 19px monospace';
+    // Footer hint — quiet, and smaller than every other string on the panel.
+    ctx.font = `bold ${F_HINT}px monospace`;
     ctx.fillStyle = hexA(T.primary, 0.45);
     ctx.textAlign = 'center';
-    ctx.fillText('POINT + TRIGGER   ·   X TO CLOSE', CANVAS_W / 2, HINT_Y);
+    ctx.textBaseline = 'middle';
+    ctx.fillText('POINT + TRIGGER   ·   X TO CLOSE', CANVAS_W / 2, CANVAS_H - 26);
 
     tex.needsUpdate = true; // upload only on change
   }
 
-  // One menu row: hover fill/border matches the DOM SHOOT button treatment —
-  // the primary colour at 18% on a 2px primary border — so in-world and DOM feel
-  // alike in every skin, not just the one they were originally tuned against.
-  function drawRow(label, color, x, y, w, h, hovered, dim, fontPx = 34, outline = false) {
-    if (outline && !hovered) {
-      roundRect(ctx, x, y, w, h, 10);
-      ctx.strokeStyle = hexA(color, 0.35);
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    if (hovered) {
-      roundRect(ctx, x, y, w, h, 10);
-      ctx.fillStyle = dim ? hexA(T.textMuted, 0.16) : hexA(color, 0.18);
-      ctx.fill();
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.shadowColor = color;
-      ctx.shadowBlur = 14;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-    }
-    ctx.font = `bold ${fontPx}px monospace`;
-    ctx.fillStyle = color;
+  /**
+   * The header does the single most important job on this panel: it makes
+   * HOSTING require zero typing. The code is the largest thing here on purpose —
+   * a headset player reads it out or a friend reads it off a shared screen, and
+   * that is the whole join flow from this side.
+   */
+  function drawHeader(r) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    if (!dim) { ctx.shadowColor = color; ctx.shadowBlur = hovered ? 16 : 8; }
+
+    ctx.font = `bold ${F_BRAND}px monospace`;
+    ctx.fillStyle = hexA(T.primary, 0.72);
+    ctx.fillText('S A T S   A R E N A', CANVAS_W / 2, r.y + 14);
+
+    const boxY = r.y + 28;
+    const boxH = r.h - 28;   // 140 px of code block
+    roundRect(ctx, PAD, boxY, CANVAS_W - PAD * 2, boxH, 14);
+    ctx.fillStyle = hexA(T.glow, 0.07);
+    ctx.fill();
+    ctx.strokeStyle = hexA(T.glow, 0.30);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.font = `bold ${F_LABEL}px monospace`;
+    ctx.fillStyle = T.textMuted;
+    ctx.fillText('YOUR CODE', CANVAS_W / 2, boxY + 18);
+
+    // Until the session code arrives, say so. Showing placeholder dots under
+    // "friends enter this to join" would be inviting the player to read out a
+    // code that does not exist yet.
+    const haveCode = !!r.code;
+    ctx.font = `bold ${haveCode ? F_CODE : F_TITLE}px monospace`;
+    ctx.fillStyle = haveCode ? T.glow : T.textMuted;
+    if (haveCode) { ctx.shadowColor = T.glow; ctx.shadowBlur = 18; }
+    ctx.fillText(haveCode ? r.code : 'GETTING CODE…', CANVAS_W / 2, boxY + 64);
+    ctx.shadowBlur = 0;
+
+    ctx.font = `${F_HINT}px monospace`;
+    ctx.fillStyle = T.textMuted;
+    ctx.fillText(haveCode ? 'friends enter this to join' : 'one moment', CANVAS_W / 2, boxY + 108);
+
+    ctx.font = `bold ${F_LABEL}px monospace`;
+    ctx.fillStyle = hexA(T.ok, 0.95);
+    ctx.fillText(r.status, CANVAS_W / 2, boxY + 128);
+  }
+
+  function drawSection(r) {
+    ctx.font = `bold ${F_LABEL}px monospace`;
+    ctx.fillStyle = hexA(T.textMuted, 0.9);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const y = r.y + SECTION_GAP + LABEL_H / 2;
+    ctx.fillText(spaced(r.label), PAD + 4, y);
+    // A hairline that runs from the label to the panel edge ties the group
+    // together without adding a box around it.
+    const w = ctx.measureText(spaced(r.label)).width;
+    ctx.strokeStyle = hexA(T.textMuted, 0.28);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD + 14 + w, y);
+    ctx.lineTo(CANVAS_W - PAD, y);
+    ctx.stroke();
+  }
+
+  function drawRule(r) {
+    ctx.strokeStyle = hexA(T.danger, 0.28);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PAD, r.y + r.h / 2);
+    ctx.lineTo(CANVAS_W - PAD, r.y + r.h / 2);
+    ctx.stroke();
+  }
+
+  /** Colour by INTENT, resolved from the P51 tokens. Danger only in the footer. */
+  function toneColour(tone) {
+    switch (tone) {
+      case 'accent': return T.accent;
+      case 'danger': return T.danger;
+      case 'glow':   return T.glow;
+      case 'ok':     return T.ok;
+      default:       return T.primary;
+    }
+  }
+
+  function drawItem(r) {
+    const unavailable = r.state === 'unavailable';
+    const colour = unavailable ? T.textMuted : toneColour(r.tone);
+    const hovered = hoverId === r.id;
+    const rowH = r.h;
+    const labelY = r.reason ? r.y + 26 : r.y + rowH / 2;
+
+    drawRowChrome(r, colour, hovered, unavailable, rowH);
+
+    ctx.font = `bold ${F_TITLE}px monospace`;
+    ctx.fillStyle = colour;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    if (!unavailable) { ctx.shadowColor = colour; ctx.shadowBlur = hovered ? 16 : 8; }
+    ctx.fillText(r.label, PAD + 22, labelY);
+    ctx.shadowBlur = 0;
+
+    if (r.meta) {
+      ctx.font = `bold ${F_LABEL}px monospace`;
+      ctx.fillStyle = unavailable ? hexA(T.textMuted, 0.85) : hexA(colour, 0.85);
+      ctx.textAlign = 'right';
+      ctx.fillText(r.meta, CANVAS_W - PAD - 22, labelY);
+    }
+    if (r.reason) drawReason(r);
+  }
+
+  // The reason is the row's SECOND LINE, inside its own height — not a floating
+  // caption underneath it. That keeps a row one hit target and one visual unit,
+  // and it is why rows with a reason are simply taller.
+  function drawReason(r) {
+    ctx.font = `${F_HINT}px monospace`;
+    ctx.fillStyle = hexA(T.textMuted, 0.85);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.reason, PAD + 22, r.y + r.h - 18);
+  }
+
+  function drawSubmenuArrow(r, colour, labelY) {
+    ctx.font = `bold ${F_TITLE}px monospace`;
+    ctx.fillStyle = hexA(colour, 0.8);
+    ctx.textAlign = 'right';
+    ctx.fillText('›', CANVAS_W - PAD - 22, labelY - 2);
+  }
+
+  /** A submenu row is an item plus a chevron, and its meta sits inside the row. */
+  function drawSubmenu(r) {
+    const unavailable = r.state === 'unavailable';
+    const colour = unavailable ? T.textMuted : toneColour(r.tone);
+    const hovered = hoverId === r.id;
+    const labelY = r.reason ? r.y + 26 : r.y + r.h / 2;
+    drawRowChrome(r, colour, hovered, unavailable, r.h);
+
+    ctx.font = `bold ${F_TITLE}px monospace`;
+    ctx.fillStyle = colour;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    if (!unavailable) { ctx.shadowColor = colour; ctx.shadowBlur = hovered ? 16 : 8; }
+    ctx.fillText(r.label, PAD + 22, labelY);
+    ctx.shadowBlur = 0;
+
+    if (r.meta) {
+      ctx.font = `bold ${F_LABEL}px monospace`;
+      ctx.fillStyle = hexA(colour, 0.85);
+      ctx.textAlign = 'right';
+      ctx.fillText(r.meta, CANVAS_W - PAD - 46, labelY);
+    }
+    drawSubmenuArrow(r, colour, labelY);
+    if (r.reason) drawReason(r);
+  }
+
+  /**
+   * A toggle is drawn as a SWITCH with a visible position, not as a label that
+   * flips between "MUTE" and "UNMUTE". The old row made you read a verb and work
+   * out whether it described the current state or the action — a switch shows
+   * the state and the action at once. ON/OFF reflects LiveKit's real publish
+   * state via isCoopMuted(), so it cannot lie the way a local boolean did.
+   */
+  function drawToggle(r) {
+    const unavailable = r.state === 'unavailable';
+    const colour = unavailable ? T.textMuted : (r.on ? T.ok : T.textMuted);
+    const hovered = hoverId === r.id;
+    const labelY = r.reason ? r.y + 26 : r.y + r.h / 2;
+    drawRowChrome(r, unavailable ? T.textMuted : toneColour(r.tone), hovered, unavailable, r.h);
+
+    ctx.font = `bold ${F_TITLE}px monospace`;
+    ctx.fillStyle = unavailable ? T.textMuted : toneColour(r.tone);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(r.label, PAD + 22, labelY);
+
+    // The switch itself.
+    const sw = 86, sh = 34;
+    const sx = CANVAS_W - PAD - 22 - sw;
+    const sy = labelY - sh / 2;
+    roundRect(ctx, sx, sy, sw, sh, sh / 2);
+    ctx.fillStyle = r.on && !unavailable ? hexA(T.ok, 0.28) : hexA(T.textMuted, 0.18);
+    ctx.fill();
+    ctx.strokeStyle = hexA(colour, 0.8);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    const knobR = sh / 2 - 6;
+    const knobX = r.on ? sx + sw - knobR - 6 : sx + knobR + 6;
+    ctx.beginPath();
+    ctx.arc(knobX, sy + sh / 2, knobR, 0, Math.PI * 2);
+    ctx.fillStyle = colour;
+    if (!unavailable) { ctx.shadowColor = colour; ctx.shadowBlur = 12; }
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.font = `bold ${F_HINT}px monospace`;
+    ctx.fillStyle = hexA(colour, 0.95);
+    ctx.textAlign = 'right';
+    ctx.fillText(r.on ? 'ON' : 'OFF', sx - 12, labelY);
+
+    if (r.reason) drawReason(r);
+  }
+
+  /** Approve / deny, only ever drawn when someone is actually knocking. */
+  function drawRequest(r) {
+    ctx.font = `bold ${F_LABEL}px monospace`;
+    ctx.fillStyle = T.ok;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const label = `${trim(r.name, 18)} WANTS TO JOIN`
+                + (r.more > 0 ? `  (+${r.more} MORE)` : '');
+    ctx.fillText(label, PAD + 4, r.y + 14);
+
+    const by = r.y + 30;
+    const bh = r.h - 30;
+    const half = (CANVAS_W - PAD * 2 - 12) / 2;
+    drawPill('✓ APPROVE', T.ok,     PAD,               by, half, bh, hoverId === 'approve');
+    drawPill('✗ DENY',    T.danger, PAD + half + 12,   by, half, bh, hoverId === 'deny');
+  }
+
+  function drawPill(label, colour, x, y, w, h, hovered) {
+    roundRect(ctx, x, y, w, h, 10);
+    ctx.fillStyle = hovered ? hexA(colour, 0.22) : hexA(colour, 0.08);
+    ctx.fill();
+    ctx.strokeStyle = hovered ? colour : hexA(colour, 0.45);
+    ctx.lineWidth = 2;
+    if (hovered) { ctx.shadowColor = colour; ctx.shadowBlur = 14; }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.font = `bold ${F_TITLE - 4}px monospace`;
+    ctx.fillStyle = colour;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText(label, x + w / 2, y + h / 2);
+  }
+
+  /** Hover fill/border, shared by every interactive row so they feel identical. */
+  function drawRowChrome(r, colour, hovered, unavailable, h) {
+    if (r.armed) {
+      // An armed LEAVE is not merely hovered — it is waiting for a decision, and
+      // it should look like it whether or not the laser is still on it.
+      roundRect(ctx, PAD, r.y, CANVAS_W - PAD * 2, h, 12);
+      ctx.fillStyle = hexA(T.danger, 0.22);
+      ctx.fill();
+      ctx.strokeStyle = T.danger;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      return;
+    }
+    if (!hovered) return;
+    roundRect(ctx, PAD, r.y, CANVAS_W - PAD * 2, h, 12);
+    ctx.fillStyle = unavailable ? hexA(T.textMuted, 0.14) : hexA(colour, 0.18);
+    ctx.fill();
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = colour;
+    ctx.shadowBlur = 14;
+    ctx.stroke();
     ctx.shadowBlur = 0;
   }
 
+  function spaced(s) { return String(s).split('').join(' '); }
+
   // Paint an initial frame so the first open never shows an empty quad.
   repaint();
+
+  // DEV: a headless check cannot join a session, receive a knock, or press a
+  // controller trigger, so it needs to drive the same state those would produce.
+  // Exposing the deps object and the view/pending fields lets it exercise the
+  // REAL model and paint path rather than a mock of them.
+  if (import.meta.env.DEV) {
+    window.__vrMenuDev = {
+      deps,
+      setView:      (v)    => { view = v; lastSig = null; },
+      pushRequests: (list) => { pending = list || []; lastSig = null; },
+      setHover:     (id)   => { hoverId = id; lastSig = null; },
+      forceRepaint: ()     => { lastSig = null; repaintIfChanged(); },
+      rows:         ()     => rows.map(({ id, kind, label, meta, state, reason, y, h }) =>
+                                ({ id, kind, label, meta, state, reason, y, h })),
+      activate,
+    };
+  }
 
   return { updateVrMenu, handleControllerSelect, toggleMenu, isMenuOpen: () => open };
 }

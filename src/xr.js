@@ -178,3 +178,72 @@ function buildController(index, renderer, scene, shootFromRay, onControllerSelec
 
   return state;
 }
+
+/**
+ * recenterXRView(renderer) — a REAL headset recenter.
+ *
+ * The menu's old RECENTER row called movement.js's recenterView(), which resets
+ * the FLAT camera's yaw/pitch. In a headset that camera is not driving anything
+ * — the headset pose is — so the row was INERT in the exact mode it appeared in.
+ *
+ * The correct move is to re-origin the XR REFERENCE SPACE. You cannot re-request
+ * a reference space mid-session, but you do not need to: getOffsetReferenceSpace
+ * returns a new space whose origin sits at a given transform within the current
+ * one. Passing the head's present XZ and YAW makes "here, facing this way" the
+ * new origin and forward, which is exactly what recenter means.
+ *
+ *   - Y is deliberately left at 0. The floor is the floor; lifting the origin to
+ *     the head's height would put the player's eyes 1.6 m under the world.
+ *   - Only YAW is taken from the head. Pitch or roll in the offset would tilt
+ *     the entire world, which is both wrong and a fast route to nausea.
+ *   - It composes: each call offsets the CURRENT space, so recentring twice
+ *     behaves like recentring once from where you now stand.
+ *
+ * @returns {boolean} true if the view was recentred; false when there is no
+ *   session or the runtime does not offer offset spaces (caller decides what to
+ *   do about it — see vr-menu.js, which hides the row rather than showing a dead one).
+ */
+export function recenterXRView(renderer) {
+  const xr = renderer?.xr;
+  if (!xr || !xr.isPresenting) return false;
+
+  const base = xr.getReferenceSpace?.();
+  // XRRigidTransform is not defined outside WebXR, and getOffsetReferenceSpace
+  // is optional in the spec — check both before committing to the call.
+  if (!base || typeof base.getOffsetReferenceSpace !== 'function') return false;
+  if (typeof XRRigidTransform === 'undefined') return false;
+
+  const cam = xr.getCamera();
+  const p = new THREE.Vector3();
+  const q = new THREE.Quaternion();
+  cam.getWorldPosition(p);
+  cam.getWorldQuaternion(q);
+
+  // Yaw only. YXZ order puts yaw in .y and keeps it stable when the head is
+  // pitched, which XYZ does not.
+  const yaw = new THREE.Euler().setFromQuaternion(q, 'YXZ').y;
+  const half = yaw / 2;
+
+  try {
+    xr.setReferenceSpace(base.getOffsetReferenceSpace(new XRRigidTransform(
+      { x: p.x, y: 0, z: p.z, w: 1 },
+      { x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) },
+    )));
+    return true;
+  } catch (err) {
+    console.warn('[xr] recenter failed', err);
+    return false;
+  }
+}
+
+/**
+ * Can this session be recentred? Used to HIDE the menu row rather than offer a
+ * control that would do nothing — the whole point of replacing the old one.
+ */
+export function canRecenterXR(renderer) {
+  const xr = renderer?.xr;
+  if (!xr || !xr.isPresenting) return false;
+  const base = xr.getReferenceSpace?.();
+  return !!base && typeof base.getOffsetReferenceSpace === 'function'
+      && typeof XRRigidTransform !== 'undefined';
+}
