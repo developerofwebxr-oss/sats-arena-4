@@ -226,3 +226,42 @@ export function playSatoshiHitSound() {
     playTone(c, freq * 2, 'sine', 0.10, 0.005, duration * 0.7, t); // shimmer
   });
 }
+
+/**
+ * playDoorTargetEmergePlaceholder() — STAND-IN for the Satoshi laugh.
+ *
+ * ── THE REAL LAUGH IS OWED FROM P45 ─────────────────────────────────────────
+ * P45 has NOT been run in this repo: there is no src/assets/sfx/ directory and
+ * no satoshi-laugh file. Rather than invent or generate a laugh, this plays a
+ * deliberately synthetic three-note taunt so the beat is audible and the
+ * emerge/hold/retract timing can actually be felt while testing. It is not
+ * pretending to be the laugh and should not ship as one.
+ *
+ * ── Swapping it is one line ─────────────────────────────────────────────────
+ * The door-target config takes a FUNCTION in `sounds.emerge`, not a URL, so P45
+ * can drop in whatever it produces — a decoded sample, a different synth, a
+ * positional source — without this module or door-targets.js changing shape:
+ *
+ *     sounds: { emerge: playSatoshiLaugh, hit: playSatoshiHitSound }
+ *
+ * It routes through the SAME shared AudioContext as every other sound here, so
+ * it inherits the existing lazy-create-on-gesture behaviour that satisfies iOS
+ * and Chrome autoplay policy. There is no second audio path.
+ */
+export function playDoorTargetEmergePlaceholder() {
+  const c   = getCtx();
+  const now = c.currentTime;
+
+  // Descending and slightly detuned — reads as "something just appeared and it
+  // is not on your side", without impersonating a laugh.
+  const notes = [
+    { freq: 392, startOffset: 0.00, duration: 0.16 },
+    { freq: 330, startOffset: 0.11, duration: 0.16 },
+    { freq: 262, startOffset: 0.22, duration: 0.30 },
+  ];
+  notes.forEach(({ freq, startOffset, duration }) => {
+    const t = now + startOffset;
+    playTone(c, freq,        'sawtooth', 0.13, 0.01, duration, t);
+    playTone(c, freq * 1.01, 'sawtooth', 0.10, 0.01, duration, t); // detune beat
+  });
+}

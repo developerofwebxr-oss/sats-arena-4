@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { buildGoldDoors } from './gold-doors.js';
+import { setupDoorTargets } from './door-targets.js';
+import { playDoorTargetEmergePlaceholder, playSatoshiHitSound } from '../audio.js';
+import satoshiFaceUrl from '../assets/satoshi-face.png?url';
 // GLTFLoader/DRACOLoader are imported DYNAMICALLY inside _load(). They are ~52 KB
 // of three/addons that nothing on the first-frame path touches, and pulling them
 // in statically put that parse cost in front of the player's first frame.
@@ -135,8 +138,61 @@ const _readyCbs = [];
 // The door rig for the loaded arena. Null until the GLB is accepted, and null
 // forever on the panorama fallback — that asset has no panels to open.
 let _doors = null;
-/** P42 drives the doors through this. Null unless the GLB arena is live. */
+/** P42b drives the doors through this. Null unless the GLB arena is live. */
 export function getGoldDoors() { return _doors; }
+
+// ── The Satoshi door-target (config #1) ──────────────────────────────────────
+// The SYSTEM is generic (door-targets.js); this is the only Satoshi-specific
+// code, and it is a config object. P47's Snapper is meant to be a second one of
+// these with no changes to the system.
+let _satoshi = null;
+export function getSatoshiTarget() { return _satoshi; }
+
+/**
+ * @param {object} hooks  { isSuppressed, onLocalScore, getCamera }
+ * Called from main.js once the scene exists. Idempotent.
+ */
+export function setupSatoshiTarget(hooks) {
+  if (_satoshi || !_doors || !_state.root) return _satoshi;
+  const tex = new THREE.TextureLoader().load(satoshiFaceUrl);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+
+  _satoshi = setupDoorTargets({
+    doors: _doors,
+    // Parented to the ARENA ROOT, so it is Gold-only, travels with the cached
+    // arena across skin switches, and is hidden with `environment` in AR.
+    parent: _state.root,
+    ...hooks,
+    config: {
+      id: 'satoshi',
+      // The swappable face mount. `kind:'plane'` is the sprite-plane path;
+      // swapping in a modelled head later means `{ kind:'object3d', object }`
+      // and nothing else changes.
+      model: { kind: 'plane', texture: tex, size: [0.78, 0.78] },
+      points: 42,
+      // RARE on purpose: at 20-40 s a player sees maybe two in a 4:20 match, so
+      // it stays an event rather than becoming the main scoring loop.
+      spawnCadence: [20, 40],
+      holdTime: 7,
+      emergeSeconds: 0.45,
+      emergeStyle: 'pop',
+      offset: 0.55,
+      bob: { amplitude: 0.05, hz: 0.5 },
+      sounds: {
+        // P45 HAS NOT RUN IN THIS REPO — there is no src/assets/sfx/ and no
+        // satoshi-laugh file. This is a clearly-marked placeholder, not a laugh.
+        // Swapping it is one line: replace this with P45's player.
+        emerge: playDoorTargetEmergePlaceholder,
+        hit: playSatoshiHitSound,   // already in audio.js — the jackpot arpeggio
+      },
+    },
+  });
+  if (_satoshi) console.log('[door-target] satoshi armed — +42, ' +
+    `every ${_satoshi.config.spawnCadence.join('-')}s, holds ${_satoshi.config.holdTime}s ` +
+    '(emerge sound = PLACEHOLDER, real laugh owed from P45)');
+  return _satoshi;
+}
 
 /**
  * SHADER PRE-COMPILATION CONTEXT.

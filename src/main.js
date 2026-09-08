@@ -5,13 +5,15 @@ import { setupXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD } from './hud.js';
 import { setupInput } from './input.js';
-import { setupShooter } from './shoot.js';
+import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
 import { setupWeapon } from './weapon.js';
 import { setupARMode } from './armode.js';
+import { isARSession } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
+import { recordHit } from './score.js';
 import { setupVrUI } from './vrui.js';
 import { setupVrMenu } from './vr-menu.js';
 import {
@@ -27,7 +29,8 @@ import { setupCompetition, updateCompetition, canCompete, proposeCompetition } f
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
-import { loadArena, onArenaReady, getArenaState, setArenaRenderContext } from './skins/arena-glb.js';
+import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
+         setupSatoshiTarget, getSatoshiTarget } from './skins/arena-glb.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -193,6 +196,19 @@ setArenaRenderContext({ renderer, scene, camera });
 onArenaReady((st) => {
   console.log(`[arena] ready via ${st.source}`, st.diagnostics);
   refreshSkinHud();
+
+  // P42b: arm the Satoshi door-target once the GLB arena (and therefore its
+  // doors) exists. The panorama fallback has no doors, so nothing arms there.
+  const satoshi = setupSatoshiTarget({
+    // AR is explicitly OFF, not merely invisible: armode hides the whole arena
+    // in passthrough, so a target there would be an unseeable thing making a
+    // noise and awarding points nobody could earn.
+    isSuppressed: () => isARSession(),
+    onLocalScore: (points) => recordHit(points),   // score.js — competition reads this
+    getCamera: () => camera,
+  });
+  // Give the door target first refusal on every shot, ahead of the coins.
+  if (satoshi) setDoorTargetHitTest(satoshi.tryHit);
 });
 _afterInteractive(() => loadArena());
 
@@ -305,6 +321,13 @@ renderer.setAnimationLoop(function animate() {
   updateControllers();    // refresh controller ray lines each frame
   updateRapidFireHUD();   // refresh countdown + upgrade button state (shows the frozen value)
   skins.updateSkin(delta, elapsed); // cosmetic skin animation (Classic's neon void)
+  // P42b: the door-target scheduler. Only ticks while Gold Arena is the active
+  // skin — otherwise its doors are not in the scene and a spawn would be
+  // invisible. Inside the gameplay guard is deliberate: a paused skin switch
+  // must not advance the cadence or strand a target mid-emerge.
+  if (!skins.isPaused() && skins.getActiveSkinId() === 'gold-arena') {
+    getSatoshiTarget()?.update(delta);
+  }
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
   vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
   tickTransport();        // flush mock/bc impairment queues

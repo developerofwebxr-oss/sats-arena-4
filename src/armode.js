@@ -23,6 +23,12 @@
 let _handheldAR = false;
 export function isHandheldAR() { return _handheldAR; }
 
+// True during ANY passthrough session — phone OR headset. isHandheldAR() only
+// covers the phone, but P42b needs "is the arena hidden behind passthrough",
+// which is true for Quest AR as well.
+let _arSession = false;
+export function isARSession() { return _arSession; }
+
 export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode }) {
   // Remember the original VR-world look so we can restore it after AR.
   const originalBackground = scene.background;
@@ -39,6 +45,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     if (!isAR) {
       // ── Immersive VR (arena) ── keep the fake world, weapon on hand.
       _handheldAR = false;
+      _arSession  = false;
       scene.background = originalBackground;
       scene.fog        = originalFog;
       environment.visible = true;
@@ -50,6 +57,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     // ── AR (passthrough) ── strip the fake world so the room shows through.
     // background = null and fog = null are essential: anything else paints
     // over the camera feed and you'd see black instead of your room.
+    _arSession = true;
     scene.background = null;
     scene.fog        = null;
     environment.visible = false; // hides walls, radar floor, ceiling ring as one
@@ -76,6 +84,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
   renderer.xr.addEventListener('sessionend', () => {
     // Restore the flat / VR world for the fallback experiences.
     _handheldAR = false;
+    _arSession  = false;
     scene.background = originalBackground;
     scene.fog        = originalFog;
     environment.visible = true;
