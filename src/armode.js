@@ -20,8 +20,24 @@
  *   isHandheldAR()  — true while in a handheld AR session (read by xr.js for aim)
  */
 
+import { setScoreHidden } from './hud.js';
+
 let _handheldAR = false;
 export function isHandheldAR() { return _handheldAR; }
+
+/**
+ * A2: keep the DOM score in step with handheld AR.
+ *
+ * In phone AR the score is already drawn in-world by vrui.js (it shows the
+ * sprite whenever a session is presenting), so the top-left DOM score is a
+ * duplicate. This declares the reason; hud.js's arbiter owns the property and
+ * ORs it with competition.js's match reason, so a match ending mid-AR-session
+ * cannot un-hide it. Called on EVERY transition, including the ones that set
+ * _handheldAR back to false, so the reason is never left stale.
+ */
+function syncScoreVisibility() {
+  setScoreHidden('handheldAR', _handheldAR);
+}
 
 export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode }) {
   // Remember the original VR-world look so we can restore it after AR.
@@ -39,6 +55,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     if (!isAR) {
       // ── Immersive VR (arena) ── keep the fake world, weapon on hand.
       _handheldAR = false;
+      syncScoreVisibility();
       scene.background = originalBackground;
       scene.fog        = originalFog;
       environment.visible = true;
@@ -61,6 +78,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     const enabled = session.enabledFeatures || [];
     _handheldAR =
       session.interactionMode === 'screen-space' || enabled.includes('dom-overlay');
+    syncScoreVisibility();
 
     if (_handheldAR) {
       // Phone: no hand to hold the gun; rely on the dom-overlay crosshair.
@@ -76,6 +94,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
   renderer.xr.addEventListener('sessionend', () => {
     // Restore the flat / VR world for the fallback experiences.
     _handheldAR = false;
+    syncScoreVisibility();
     scene.background = originalBackground;
     scene.fog        = originalFog;
     environment.visible = true;

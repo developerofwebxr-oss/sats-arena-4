@@ -33,6 +33,7 @@ import {
 } from './room.js';
 import { getOwnCode, getLocalName } from './coop-hud.js';
 import { getScore, resetScore } from '../score.js';
+import { setScoreHidden } from '../hud.js';
 
 // Round length. Dev override: ?cmpsecs=10 shortens it for testing.
 const ROUND_SECONDS = (() => {
@@ -419,11 +420,13 @@ function showScoreHud() {
 }
 function hideScoreHud() { scoreHud.style.display = 'none'; }
 
-// Toggle hud.js's normal single-score element (top-left) without touching hud.js.
-// Hidden during a match (dual-score HUD takes over); restored in toIdle().
+// Declare our REASON for hiding hud.js's single-score element; hud.js owns the
+// property. It used to write #score.style.display directly from here, which made
+// this a second writer to something handheld AR also needs to hide (A2) — the
+// last one to run would have clobbered the other. Now both go through the
+// arbiter and neither can clear the other's hide.
 function setCoopScoreHidden(hidden) {
-  const el = document.getElementById('score');
-  if (el) el.style.display = hidden ? 'none' : '';
+  setScoreHidden('match', hidden);
 }
 function paintScoreHud() {
   scoreHud.querySelector('#cmp-you-n').textContent = String(getScore());

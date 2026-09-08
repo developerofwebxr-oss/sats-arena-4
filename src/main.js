@@ -142,6 +142,10 @@ setupARMode({ renderer, scene, environment, weapon, setSpawnMode });
 // enterVR / enterAR / exitToScreen methods.
 modeCtrl = setupModeSwitcher(renderer);
 
+// DEV: the mode controller, so a headless check can drive enterVR/enterAR
+// against a stubbed WebXR and assert the A3 call ORDER (end -> request -> set).
+if (import.meta.env.DEV) window.__modeCtrl = modeCtrl;
+
 // Keep the co-op module aware of the current XR mode so it publishes the right
 // pose joints (VR: head+2 hands; flat/AR: head+aim marker).
 modeCtrl.subscribe((state) => setCoopMode(state.activeMode));

@@ -77,9 +77,49 @@ export function createModeController(renderer) {
 
   // ── Mode switching — the reusable methods (DOM + future 3D both call these) ──
 
+  /**
+   * A3: end whatever immersive session is running, and WAIT for it.
+   *
+   * Only one immersive session may exist at a time, so requesting immersive-ar
+   * while immersive-vr was still live simply failed — AR<->VR did nothing and
+   * you had to go out to SCREEN and back in. Awaiting the end is the point: the
+   * request has to happen after the old session is actually gone, not merely
+   * after we asked it to go.
+   *
+   * A failure here is deliberately swallowed rather than thrown. If the old
+   * session refuses to end, the requestSession that follows will fail on its own
+   * and be reported there; turning this into a hard error would leave the player
+   * stuck in the session they are trying to leave.
+   */
+  async function endActiveSession() {
+    const session = renderer.xr.getSession();
+    if (!session) return;
+    try {
+      await session.end();
+    } catch (err) {
+      console.warn('[xr] could not end the running session cleanly:', err);
+    }
+  }
+
+  // SEQUENCE, and it matters:
+  //   1. await endActiveSession()   — the old session is gone, not just asked
+  //   2. requestSession             — now permitted
+  //   3. applyReferenceSpace        — SA4's floor-relative space, chosen from
+  //                                   the NEW session's enabledFeatures
+  //   4. setSession                 — hand it to three.js
+  // Step 3 must sit between 2 and 4: it reads the granted features of the new
+  // session, and the renderer needs the space type set before it takes over.
+  //
+  // Co-op note: ending the old session fires 'sessionend', so activeMode blips
+  // to 'screen' for the frame or two before the new session starts. The pose
+  // publisher has a branch for every mode and keeps publishing throughout — at
+  // 15 Hz the blip costs at most one sample, published from the flat camera
+  // instead of the XR camera, which peer interpolation absorbs. Publishing does
+  // not stop and no listener is torn down.
   async function enterVR() {
     if (state.vr.status !== 'supported') return;
     try {
+      await endActiveSession();
       const session = await navigator.xr.requestSession('immersive-vr', VR_INIT);
       applyReferenceSpace(session);        // set floor-relative space before setSession
       await renderer.xr.setSession(session);
@@ -92,6 +132,7 @@ export function createModeController(renderer) {
   async function enterAR() {
     if (state.ar.status !== 'supported') return;
     try {
+      await endActiveSession();
       const session = await navigator.xr.requestSession('immersive-ar', AR_INIT);
       applyReferenceSpace(session);        // set floor-relative space before setSession
       await renderer.xr.setSession(session);
