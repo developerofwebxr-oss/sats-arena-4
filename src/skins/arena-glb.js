@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { buildGoldDoors } from './gold-doors.js';
 import { setupDoorTargets } from './door-targets.js';
-import { playDoorTargetEmergePlaceholder, playSatoshiHitSound } from '../audio.js';
+import { playSample, preloadSample } from '../audio.js';
+import satoshiLaughUrl from '../assets/sfx/satoshi-laugh.m4a?url';
+import satoshiHitUrl   from '../assets/sfx/satoshi-hit.m4a?url';
 import satoshiFaceUrl from '../assets/satoshi-face.png?url';
 // GLTFLoader/DRACOLoader are imported DYNAMICALLY inside _load(). They are ~52 KB
 // of three/addons that nothing on the first-frame path touches, and pulling them
@@ -179,18 +181,23 @@ export function setupSatoshiTarget(hooks) {
       emergeStyle: 'pop',
       offset: 0.55,
       bob: { amplitude: 0.05, hz: 0.5 },
+      // P45 landed, so the placeholder is gone: these are the real cartoon SFX,
+      // procedurally synthesized (see src/assets/sfx/LICENSES.md). The slots take
+      // FUNCTIONS, which is why swapping them was one line each — nothing in
+      // door-targets.js knows or cares that these are now samples.
       sounds: {
-        // P45 HAS NOT RUN IN THIS REPO — there is no src/assets/sfx/ and no
-        // satoshi-laugh file. This is a clearly-marked placeholder, not a laugh.
-        // Swapping it is one line: replace this with P45's player.
-        emerge: playDoorTargetEmergePlaceholder,
-        hit: playSatoshiHitSound,   // already in audio.js — the jackpot arpeggio
+        emerge: () => playSample(satoshiLaughUrl, { gain: 0.85 }),
+        hit:    () => playSample(satoshiHitUrl,   { gain: 0.9  }),
       },
     },
   });
+  // Warm the bytes now so the first laugh is not late. This needs no user
+  // gesture — only DECODING does, and that happens on the first play.
+  preloadSample(satoshiLaughUrl); preloadSample(satoshiHitUrl);
+
   if (_satoshi) console.log('[door-target] satoshi armed — +42, ' +
     `every ${_satoshi.config.spawnCadence.join('-')}s, holds ${_satoshi.config.holdTime}s ` +
-    '(emerge sound = PLACEHOLDER, real laugh owed from P45)');
+    '(cartoon SFX from P45)');
   return _satoshi;
 }
 
