@@ -1,6 +1,6 @@
 import { listSkins } from './registry.js';
 import { isSkinUnlocked, skinPriceSats } from './payment-provider.js';
-import { loadArena } from './arena-glb.js';
+
 
 /**
  * skin-hud.js — the DOM control for skins (flat/mobile).
@@ -37,9 +37,11 @@ export function setupSkinHud({ skins, net }) {
     panel.style.display = open ? 'none' : 'flex';
     if (!open) {
       // Opening the picker is the strongest signal the player may pick a skin,
-      // so start the environment download now rather than waiting for idle.
-      // loadArena() is idempotent — a load already in flight is reused.
-      loadArena();
+      // so start every skin's environment download now rather than waiting for
+      // idle — skin-net REFUSES a switch to a skin that is not ready yet, so an
+      // un-preloaded skin would simply be unpickable. Each preload is
+      // idempotent; a load already in flight is reused.
+      listSkins().forEach((s) => { try { s.preload?.(); } catch (e) { console.warn('[skins] preload', e); } });
       renderList();
     }
   });

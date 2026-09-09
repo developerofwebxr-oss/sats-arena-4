@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { buildArena } from '../arena.js';
-import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState, getGoldDoors } from './arena-glb.js';
+import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState, getGoldDoors,
+         loadArena } from './arena-glb.js';
 import { buildClassicDecor } from './classic-decor.js';
+import { attachCarnivorousInto, whenCarnivorousReady, isCarnivorousReady, loadCarnivorous,
+         getCarnivorousState, getCarnivorousMood, onCarnivorousTeardown,
+         updateCarnivorous } from './carnivorous-glb.js';
+import { setAtmosphere, clearAtmosphere } from '../atmosphere.js';
 
 /**
  * registry.js — skin definitions.
@@ -27,10 +32,13 @@ import { buildClassicDecor } from './classic-decor.js';
  * the placeholder skin exists to prove switching and scoping, not to look good.
  * Real art arrives later by filling `environment` with a GLB loader.
  *
- * NOTE ON BACKGROUND/FOG: skins deliberately do NOT touch scene.background or
- * scene.fog. armode.js captures those at startup and restores them on XR
- * sessionend, so a skin-owned background would be silently reverted by an
- * AR round-trip. Themed sky/fog needs that ownership question settled first.
+ * NOTE ON BACKGROUND/FOG: a skin MAY now own scene.background, scene.fog and the
+ * base light level — through atmosphere.js, never by writing them itself. That
+ * module ranks skin over boot and SUPPRESSES for AR instead of capturing and
+ * restoring, which is what made a skin-owned atmosphere unsafe before. A skin
+ * that says nothing keeps the boot look exactly; a skin that declares one must
+ * clear it in onTeardown. Carnivorous is the first to use it, and it needs to:
+ * a horror arena lit by a full-strength white sun from above-left is not one.
  */
 
 // ── classic ───────────────────────────────────────────────────────────────────
@@ -163,15 +171,64 @@ const goldArena = {
   entry: { sats: 0 },
 
   // Optional per-skin readiness, honoured by the P30 both-ready handshake.
+  preload:   () => loadArena(),
   whenReady: () => whenArenaReady(),
   isReady:   () => isArenaReady(),
   // Shown in the picker while the 7 MB GLB streams in.
   readyLabel: () => (isArenaReady() ? (getArenaState().source === 'panorama' ? '360°' : 'FREE') : 'LOADING…'),
 };
 
+
+// ── carnivorous ───────────────────────────────────────────────────────────────
+// The Carnivorous Conservatory. Same GLB-first policy as the Gold Arena, plus
+// the first skin-owned atmosphere: blood-black fog, and the boot sun nearly off
+// so the room is lit by its own emissive maws and a canopy shaft. Twelve maws
+// are registered with the door system for P47's Snapper — nothing lives in them
+// yet, which is deliberate: this prompt is the environment only.
+const carnivorous = {
+  id: 'carnivorous',
+  name: 'CARNIVOROUS',
+  environment: {
+    build(group) {
+      const dress = () => {
+        if (!attachCarnivorousInto(group)) return false;
+        // The mood rig is built by the attach, and it is what says how the room
+        // should be lit — so the atmosphere is read FROM it rather than being a
+        // second, drifting copy of the same numbers.
+        const mood = getCarnivorousMood();
+        if (mood) setAtmosphere('carnivorous', mood.atmosphere);
+        return true;
+      };
+      if (!dress()) whenCarnivorousReady().then(dress);
+    },
+  },
+  // Maw dilation + the flickering embers. Only ticked while this skin is active.
+  update(dt) { updateCarnivorous(dt); },
+  onTeardown() {
+    clearAtmosphere('carnivorous');   // hand background/fog/lights back to boot
+    onCarnivorousTeardown();
+  },
+  gun: null,
+  coinType: null,
+  // This environment brings its own root-work floor; the cyan radar floor would
+  // z-fight through it and drain every bit of the dark.
+  hidesBaseFloor: true,
+  targetTypes: ['coin', 'satoshi'],
+  hands: null,
+  animations: null,
+  entry: { sats: 0 },
+
+  preload:   () => loadCarnivorous(),
+  whenReady: () => whenCarnivorousReady(),
+  isReady:   () => isCarnivorousReady(),
+  readyLabel: () => (isCarnivorousReady()
+    ? (getCarnivorousState().source === 'panorama' ? '360°' : 'FREE')
+    : 'LOADING…'),
+};
+
 // Order here is the order the picker shows them in. classic is index 0 and is
 // the boot default — the game must look untouched until someone switches.
-const SKINS = [classic, goldArena, placeholder];
+const SKINS = [classic, goldArena, carnivorous, placeholder];
 
 export const DEFAULT_SKIN_ID = classic.id;
 

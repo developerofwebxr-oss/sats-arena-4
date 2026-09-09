@@ -9,6 +9,7 @@ import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
 import { setupWeapon } from './weapon.js';
 import { setupARMode } from './armode.js';
+import { setupAtmosphere } from './atmosphere.js';
 import { isARSession } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
@@ -34,7 +35,12 @@ import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-const { renderer, scene, camera, environment, syncSize } = createScene();
+const { renderer, scene, camera, environment, syncSize, baseLights } = createScene();
+
+// Name an owner for scene.background / scene.fog / the base light level BEFORE
+// anything can change them, so the boot look is what a skin falls back to and
+// an AR round-trip cannot silently revert a skin's atmosphere. See atmosphere.js.
+setupAtmosphere(scene, baseLights);
 
 // DEV: expose renderer/scene/camera so javascript_tool can render on demand
 // even when the tab is backgrounded and Three.js's rAF loop is suspended.

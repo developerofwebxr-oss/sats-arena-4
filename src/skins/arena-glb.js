@@ -256,6 +256,9 @@ function yieldFrame() {
   return new Promise((r) => setTimeout(r, 0));
 }
 
+/** Shared with other GLB skins: same compileAsync + one-texture-per-frame warm. */
+export function warmGpu(root, label) { return warmShaders(root, label); }
+
 async function warmShaders(root, label) {
   if (!_gl?.renderer) return null;
   const t = performance.now();
@@ -539,41 +542,47 @@ function prepareForRuntime(root) {
  * mapped to the inside of a sphere (BackSide). Only used if the GLB fails a
  * hard check — a backdrop cannot supply parallax, so it is strictly second best.
  */
+/**
+ * The interior of an equirectangular sphere, done the three ways it goes wrong.
+ * Shared by every skin with a 360 fallback (P38's fixes, in one place).
+ *
+ *  1. DEFAULT UVMapping, not EquirectangularReflectionMapping. That mapping is
+ *     for envMaps; this is a plain `map` on UV-mapped sphere geometry and would
+ *     sample wrongly.
+ *  2. INVERTED GEOMETRY, not side:BackSide. Viewing a sphere's interior through
+ *     BackSide shows the texture from behind, which MIRRORS it — that is why
+ *     the arena read "flipped" and the signage was backwards. geometry.scale
+ *     (-1,1,1) turns the sphere inside out instead and keeps FrontSide.
+ *  3. fog:false. The shell sits at radius = fog.far, so with fog on the whole
+ *     panorama faded to the background colour. THAT is why it rendered dark.
+ *     Opting the material out is local; scene.fog belongs to atmosphere.js.
+ *
+ * @param {string} url  equirectangular texture, centre longitude along -Z
+ */
+export function buildEquirectShell(url, { radius = 40, name = 'PanoramaShell' } = {}) {
+  const tex = new THREE.TextureLoader().load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const geo = new THREE.SphereGeometry(radius, 48, 32);
+  geo.scale(-1, 1, 1);
+
+  const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    map: tex, depthWrite: false, fog: false,   // unlit: full brightness, no lights
+  }));
+  sphere.name = name;
+  sphere.renderOrder = -1;
+  sphere.frustumCulled = false;
+  return sphere;
+}
+
 function buildPanorama(info) {
   const root = new THREE.Group();
   root.name = 'SatsArena_Panorama';
 
-  const tex = new THREE.TextureLoader().load(panoramaUrl);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  // NOT EquirectangularReflectionMapping: that mapping is for envMaps/reflections.
-  // This texture is a plain `map` on UV-mapped sphere geometry, so it must stay
-  // on the default UVMapping or it samples wrongly.
-
-  // INVERTED GEOMETRY, not BackSide. Viewing a sphere's interior through
-  // side:BackSide shows the texture from behind, which MIRRORS it — that is why
-  // the arena read "flipped" and the signage was backwards. Scaling the geometry
-  // by -1 on X turns the sphere inside out instead, so we see the interior with
-  // the texture the right way round. This is the canonical three.js equirect
-  // recipe and it keeps the default FrontSide material.
-  const geo = new THREE.SphereGeometry(40, 48, 32);
-  geo.scale(-1, 1, 1);
-
-  const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-    map: tex,
-    depthWrite: false,
-    // UNLIT (MeshBasicMaterial) so it is at full brightness with no lights, AND
-    // fog:false. scene.fog is Fog(10, 40) and this shell sits at radius 40 —
-    // exactly fog.far — so with fog enabled the entire panorama was faded to the
-    // near-black background. THAT is why it rendered dark. Opting this material
-    // out of fog fixes it without touching scene.fog (still owned by armode.js).
-    fog: false,
-  }));
-  sphere.name = 'PanoramaShell';
-  sphere.renderOrder = -1;
-  sphere.frustumCulled = false;
-  // Centre longitude points along -Z in the source render, matching the GLB's
-  // front vault, so no yaw correction is needed.
-  root.add(sphere);
+  // The P38 fixes live in buildEquirectShell — one copy, because every one of
+  // them is a mistake that renders "fine but wrong" and a second skin deriving
+  // them again would get one of them wrong.
+  root.add(buildEquirectShell(panoramaUrl));
 
   // NADIR COVER. The source panorama's nadir row is uniform (verified 0
   // variation by the exporter), so there is no swirl artifact — but a flat
