@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { buildArena } from '../arena.js';
 import { attachArenaInto, whenArenaReady, isArenaReady, getArenaState, getGoldDoors,
-         loadArena } from './arena-glb.js';
+         loadArena, getSatoshiTarget } from './arena-glb.js';
 import { buildClassicDecor } from './classic-decor.js';
 import { attachCarnivorousInto, whenCarnivorousReady, isCarnivorousReady, loadCarnivorous,
          getCarnivorousState, getCarnivorousMood, onCarnivorousTeardown,
-         updateCarnivorous } from './carnivorous-glb.js';
+         updateCarnivorous, getSnapperTarget } from './carnivorous-glb.js';
 import { setAtmosphere, clearAtmosphere } from '../atmosphere.js';
 
 /**
@@ -160,6 +160,8 @@ const goldArena = {
   // P41 doors. Ticked ONLY while gold-arena is the active skin — skin-manager
   // calls update() on the active skin alone, so Classic never pays for this.
   update(dt) { getGoldDoors()?.update(dt); },
+  // First refusal on a shot, asked only while this skin is on screen (main.js).
+  hitTest: (o, d) => getSatoshiTarget()?.tryHit(o, d) ?? null,
   gun: null,        // keep the shipped gun against the gold architecture
   coinType: null,   // and the shipped coins
   // This environment brings its own floor, so the base radar floor must be
@@ -203,7 +205,9 @@ const carnivorous = {
     },
   },
   // Maw dilation + the flickering embers. Only ticked while this skin is active.
+  // The Snapper's own cadence is ticked from main.js inside the gameplay guard.
   update(dt) { updateCarnivorous(dt); },
+  hitTest: (o, d) => getSnapperTarget()?.tryHit(o, d) ?? null,
   onTeardown() {
     clearAtmosphere('carnivorous');   // hand background/fog/lights back to boot
     onCarnivorousTeardown();

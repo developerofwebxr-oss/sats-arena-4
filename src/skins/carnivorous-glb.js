@@ -2,6 +2,11 @@ import * as THREE from 'three';
 import { preferGlbArena, validateFromInside, warmGpu, buildEquirectShell } from './arena-glb.js';
 import { buildCarnivorousDoors } from './carnivorous-doors.js';
 import { buildCarnivorousMood } from './carnivorous-mood.js';
+import { setupDoorTargets } from './door-targets.js';
+import { loadSnapper } from './snapper.js';
+import { playSample, preloadSample } from '../audio.js';
+import snapperEmergeUrl from '../assets/sfx/snapper-emerge.m4a?url';
+import snapperHitUrl from '../assets/sfx/snapper-hit.m4a?url';
 import carnGlbUrl from '../assets/sats-arena-carnivorous-v2.glb?url';
 import carnPanoUrl from '../assets/carnivorous-360-equirectangular.jpg?url';
 
@@ -86,10 +91,14 @@ const _readyCbs = [];
 
 let _doors = null;
 let _mood = null;
+let _snapper = null;        // the creature: model, clips, hitbox
+let _snapperTarget = null;  // the P42b door-target driving it
 
 export function getCarnivorousState()  { return _state; }
 export function isCarnivorousReady()   { return _state.status === 'ready'; }
 export function getCarnivorousDoors()  { return _doors; }
+export function getSnapperTarget()     { return _snapperTarget; }
+export function getSnapper()           { return _snapper; }
 export function onCarnivorousReady(cb) { _readyCbs.push(cb); if (isCarnivorousReady()) cb(_state); }
 
 /** Idempotent. Starts (or returns) the load. */
@@ -270,6 +279,79 @@ function buildPanorama(info) {
   };
 }
 
+/**
+ * P47: arm the Satoshi Snapper. CONFIG #2 of the P42b door-target system — the
+ * generic system is not modified for it beyond two options any modelled creature
+ * needs (see `retreat` / `scaleWithTravel` in door-targets.js). Everything about
+ * cadence, one-at-a-time, host authority, first-claim-wins, the reliable channel
+ * and scoring is inherited, not re-implemented.
+ *
+ * Called from main.js once the arena (and therefore its maws) exists. Idempotent.
+ * @param {object} hooks { isSuppressed, onLocalScore, getCamera, scene, renderer }
+ */
+export async function setupSnapperTarget(hooks) {
+  if (_snapperTarget || !_doors || !_state.root) return _snapperTarget;
+
+  _snapper = await loadSnapper();
+  if (!_snapper) return null;          // the maws still work; nothing comes out
+
+  _snapperTarget = setupDoorTargets({
+    doors: _doors,
+    // Parented to the ARENA ROOT: Carnivorous-only, travels with the cached
+    // arena across skin switches, and hidden with `environment` in AR.
+    parent: _state.root,
+    ...hooks,
+    config: {
+      id: 'snapper',
+      // A real skinned character rather than a sprite plane — the same `model`
+      // slot the plane uses, which is the whole point of the object3d kind.
+      model: { kind: 'object3d', object: _snapper.object },
+      // Bigger prize than Satoshi's +42? No: BIGGER TARGET, so a smaller one.
+      // Its hitbox presents 0.90 x 1.66 m to a shooter against the Satoshi
+      // plane's 0.78 x 0.78 — about two and a half times the area — and it
+      // holds for longer, so +33 keeps it worth chasing without making the
+      // rarer, harder Satoshi pointless.
+      points: 33,
+      // MORE FREQUENT than Satoshi (20-40s): this is the Carnivorous arena's
+      // signature event, not a rare surprise, and the room is built around
+      // twelve maws that should feel alive.
+      spawnCadence: [10, 20],
+      // ...and it stays out longer than Satoshi's 7s. It is bigger and easier
+      // to hit, so the extra time is about letting a player who is facing the
+      // wrong way turn around, not about making it easy.
+      holdTime: 9,
+      emergeSeconds: 0.8,
+      // SLIDE, not pop: it comes THROUGH the mouth. Starting 1.6 m back inside
+      // the throat means the passage hides it until the iris is open, and it
+      // keeps its own size the whole way — a creature does not inflate.
+      emergeStyle: 'slide',
+      retreat: 1.6,
+      // Far enough OUT to clear the lip and be silhouetted against the trunk.
+      // At 0.85 m it was still inside a 3.8 m aperture and read as something
+      // standing in a doorway rather than something lunging at the room.
+      offset: 2.0,
+      scaleWithTravel: false,
+      bob: { amplitude: 0.07, hz: 0.42 },
+      sounds: {
+        emerge: () => playSample(snapperEmergeUrl, { gain: 0.9 }),
+        hit:    () => playSample(snapperHitUrl,    { gain: 0.95 }),
+      },
+    },
+  });
+
+  // Warm the bytes now so the first growl is not late.
+  preloadSample(snapperEmergeUrl); preloadSample(snapperHitUrl);
+
+  if (isDev()) window.__snapper = { target: _snapperTarget, creature: _snapper };
+
+  if (_snapperTarget) {
+    const c = _snapperTarget.config;
+    console.log(`[snapper] armed — +${c.points}, every ${c.spawnCadence.join('-')}s, ` +
+      `holds ${c.holdTime}s, ${_snapper.stats.variant} model (${_snapper.stats.triangles} tris)`);
+  }
+  return _snapperTarget;
+}
+
 // ── Skin group attachment ────────────────────────────────────────────────────
 
 /** Attach the loaded arena into a skin group. Synchronous once ready. */
@@ -284,10 +366,28 @@ export function attachCarnivorousInto(group) {
 export function getCarnivorousMood() { return _mood; }
 export function onCarnivorousTeardown() { _mood = null; }
 
-/** Ticked by the skin while it is the active one. */
+/**
+ * Cosmetic per-frame work, ticked by the skin whenever it is the active one:
+ * maws finishing their dilation and the embers flickering. Runs even while a
+ * skin switch is paused, because a door frozen half-open is worse than one that
+ * finishes closing.
+ */
 export function updateCarnivorous(dt) {
   _doors?.update(dt);
   _mood?.update(dt);
+}
+
+/**
+ * GAMEPLAY per-frame work: the Snapper's spawn cadence and the creature's
+ * clips. Ticked from main.js inside the gameplay guard, exactly as the Gold
+ * Arena's target is — a paused skin switch must not advance the cadence or
+ * strand a creature half-way out of a maw.
+ */
+export function updateSnapper(dt) {
+  _snapperTarget?.update(dt);
+  // The creature reads the target's own state rather than keeping a second copy
+  // of the lifecycle — see snapper.js.
+  _snapper?.update(dt, _snapperTarget?.getState() || null);
 }
 
 // ── ?dev tools ───────────────────────────────────────────────────────────────
@@ -307,9 +407,11 @@ if (isDev()) {
     load: () => loadCarnivorous(),
     isReady: () => isCarnivorousReady(),
     state: () => getCarnivorousState(),
-    update: (dt) => updateCarnivorous(dt),
+    update: (dt) => updateCarnivorous(dt),        // maws + embers (cosmetic)
+    updateSnapper: (dt) => updateSnapper(dt),     // cadence + clips (gameplay)
     doors: () => _doors,
     mood: () => _mood,
+    snapper: () => _snapperTarget,
   };
 }
 

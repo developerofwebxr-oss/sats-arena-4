@@ -25,6 +25,14 @@ import { getOwnCode } from '../net/coop-hud.js';
  *     emergeStyle   'pop' | 'slide'
  *     bob           { amplitude, hz }  vertical drift while held out
  *     offset        number   metres proud of the door face when fully out
+ *     retreat       number   metres BEHIND the door face when fully in. 0 (the
+ *                            default) starts flush, which is right for a sprite;
+ *                            a modelled creature starts inside the passage so
+ *                            the doorway itself hides it on the way in and out.
+ *     scaleWithTravel boolean  default true: the mount scales 0->1 as it comes
+ *                            out, which is the sprite "pop". A creature does not
+ *                            GROW out of a hole, it comes through it, so a model
+ *                            sets this false and keeps its own size throughout.
  *   }
  *
  * ── Host authority (mirrors the shared-coin rule from P19) ─────────────────
@@ -89,6 +97,8 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     emergeSeconds: 0.45,
     emergeStyle: 'pop',
     offset: 0.55,
+    retreat: 0,
+    scaleWithTravel: true,
     bob: { amplitude: 0.05, hz: 0.5 },
     sounds: {},
     ...config,
@@ -328,9 +338,10 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     }
   }
 
-  /** @param {number} k 0 = flush in the doorway, 1 = fully out. */
+  /** @param {number} k 0 = fully in (flush, or `retreat` deep), 1 = fully out. */
   function placeMount(k) {
-    const out = Math.max(0, k) * cfg.offset;
+    const kk = Math.max(0, k);   // easeOutBack overshoots past 1 on purpose
+    const out = -cfg.retreat + kk * (cfg.offset + cfg.retreat);
     _v.copy(active.base).addScaledVector(active.normal, out);
     if (active.phase === 'out' && cfg.bob) {
       _v.y += Math.sin(elapsed * Math.PI * 2 * cfg.bob.hz) * cfg.bob.amplitude;
@@ -348,7 +359,9 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     } else if (visual.material) {
       visual.material.color?.setScalar(1);
     }
-    mount.scale.setScalar(s * Math.max(0.001, Math.min(1, k)));
+    mount.scale.setScalar(cfg.scaleWithTravel
+      ? s * Math.max(0.001, Math.min(1, k))
+      : s);
   }
 
   // ── Public ────────────────────────────────────────────────────────────────
@@ -380,6 +393,12 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
       id: cfg.id,
       triangles: cfg.model?.kind === 'object3d' ? null : 2,   // one quad
       drawCalls: 1,
+      points: cfg.points,
+      spawnCadence: cfg.spawnCadence,
+      holdTime: cfg.holdTime,
+      mechanism: `${cfg.emergeStyle} over ${cfg.emergeSeconds}s, ` +
+        `${cfg.retreat}m in -> ${cfg.offset}m out` +
+        (cfg.scaleWithTravel ? ', scaling with travel' : ', at constant size'),
     },
   };
 }

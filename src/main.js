@@ -32,6 +32,8 @@ import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
 import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
          setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
+import { onCarnivorousReady, setupSnapperTarget, updateSnapper } from './skins/carnivorous-glb.js';
+import { getSkin } from './skins/registry.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -214,8 +216,28 @@ onArenaReady((st) => {
     onLocalScore: (points) => recordHit(points),   // score.js — competition reads this
     getCamera: () => camera,
   });
-  // Give the door target first refusal on every shot, ahead of the coins.
-  if (satoshi) setDoorTargetHitTest(satoshi.tryHit);
+  void satoshi;   // the hit test below finds it through the active skin
+});
+
+// ONE hit test, routed by whichever skin is on screen. Registering a skin's
+// tryHit directly (as this did when Gold was the only one) leaves it installed
+// while a different skin is active — harmless while there was one, wrong the
+// moment there are two, since both arenas keep their targets alive across a
+// switch. The skin owns the answer; shoot.js still sees a single hook.
+setDoorTargetHitTest((origin, direction) =>
+  getSkin(skins.getActiveSkinId())?.hitTest?.(origin, direction) ?? null);
+
+// P47: the Snapper arms when the Carnivorous arena (and therefore its maws)
+// exists. Carnivorous-only and always-on, like Satoshi is in Gold.
+onCarnivorousReady((st) => {
+  console.log(`[carn] ready via ${st.source}`, st.diagnostics);
+  refreshSkinHud();
+  setupSnapperTarget({
+    scene, renderer,
+    isSuppressed: () => isARSession(),
+    onLocalScore: (points) => recordHit(points),
+    getCamera: () => camera,
+  });
 });
 _afterInteractive(() => loadArena());
 
@@ -332,9 +354,14 @@ renderer.setAnimationLoop(function animate() {
   // skin — otherwise its doors are not in the scene and a spawn would be
   // invisible. Inside the gameplay guard is deliberate: a paused skin switch
   // must not advance the cadence or strand a target mid-emerge.
-  if (!skins.isPaused() && skins.getActiveSkinId() === 'gold-arena') {
-    getSatoshiTarget()?.update(delta);
-    getDoorArrow()?.update(delta);
+  if (!skins.isPaused()) {
+    const activeSkin = skins.getActiveSkinId();
+    if (activeSkin === 'gold-arena') {
+      getSatoshiTarget()?.update(delta);
+      getDoorArrow()?.update(delta);
+    } else if (activeSkin === 'carnivorous') {
+      updateSnapper(delta);
+    }
   }
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
   vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
