@@ -1,43 +1,33 @@
 # SFX licensing
 
-Every file here was generated **locally on this Mac**. Nothing was uploaded: the
-only network traffic was the one-time model download from Hugging Face.
+Every file here is **procedurally synthesized** by `scripts/sfx_synth.py` —
+oscillators, envelopes and filters, computed with numpy on this Mac.
 
-## Generator used: Bark (`suno/bark-small`)
+## No model, no licence, no attribution
 
-- **Model licence: MIT** — https://huggingface.co/suno/bark-small
-- MIT permits commercial use, so output is safe to ship in a game that takes
-  Lightning payments.
-- Suno's model card asks that generated audio not be used to impersonate a real
-  person or to mislead. These are non-verbal cartoon vocalisations (a laugh, an
-  "oof", a growl) attached to an illustrated character, not an imitation of any
-  identifiable individual.
+There is **no third-party model, dataset or sample** in any of these files. They
+are arithmetic, so they are original work belonging to this project. Nothing to
+attribute, no token to obtain, no commercial-use question to answer.
 
-| file | prompt | voice preset |
-|---|---|---|
-| `satoshi-laugh.m4a`  | `[laughs] hehehe [laughs]`      | `v2/en_speaker_6` (male) |
-| `satoshi-hit.m4a`    | `[gasps] oof!`                  | `v2/en_speaker_6` (male) |
-| `snapper-emerge.m4a` | `[growls] grrraaahh [hisses]`   | `v2/en_speaker_9` |
+That is not just convenient — it is the right tool. Cartoon SFX have always been
+synthesis and Foley trickery rather than recordings of real events, so a
+"boing", a jaw snap and a villain's "nyeh heh heh" are *more* faithful from
+oscillators than from any model trained to sound real.
 
-## Backends considered and NOT used
+## What was considered and dropped
 
-**Stable Audio Open — blocked, needs one manual step.** The HF repo is
-`gated: auto` and its weights return HTTP 401 without a token. It is the right
-tool for the missing Foley (door creak, jaw snap, squelch). To unblock, once:
-accept the Stability AI Community Licence at
-https://huggingface.co/stabilityai/stable-audio-open-1.0, create a read token,
-and `export HF_TOKEN=…`. Note the Community Licence is free for commercial use
-only **below** an annual-revenue threshold; above it Stability requires an
-enterprise licence. Worth reading before shipping its output commercially.
+**Bark (`suno/bark-small`, MIT)** produced the first version of the vocal sounds.
+It works and it is MIT, but it is a *speech* model: its whole purpose is to sound
+like a real human, which is the opposite of the arcade-cartoon brief. Rejected on
+character, not licence. The backend is still in `scripts/gen-sfx.py` if a
+realistic voice is ever wanted.
 
-**AudioCraft / AudioGen — ruled out on LICENCE, not capability.**
-`facebook/audiogen-medium` is ungated and would have run, but its weights are
-**CC-BY-NC-4.0: non-commercial**. This game takes payments, so its output cannot
-ship here. Free is not the same as usable.
+**Stable Audio Open** — gated; needs a one-time HF licence acceptance and token.
+Never used, and no longer needed: the Foley it was wanted for (jaw snap, door
+creak) is synthesized here.
 
-**Freesound — not used, needs a free API key** (none on this machine). If it is
-ever used, CC0 clips need no attribution but **CC-BY clips must be credited**,
-and the credit belongs in this file.
+**AudioCraft / AudioGen** — ungated, but **CC-BY-NC-4.0: non-commercial**. This
+game takes Lightning payments, so its output could not have shipped.
 
-**ElevenLabs — not used.** No API key is present on this machine, and the brief
-ruled out requiring one.
+**Freesound / ElevenLabs** — not used. No key present for either, and neither is
+needed now.

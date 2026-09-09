@@ -1,46 +1,52 @@
 # src/assets/sfx
 
-Game sound effects, generated locally. See `LICENSES.md` for terms.
-
-## Present
+Cartoon game SFX, **procedurally synthesized** on this machine. No model, no
+licence, no attribution — see `LICENSES.md`.
 
 | file | length | size | for |
 |---|---|---|---|
-| `satoshi-laugh.m4a`  | 2.82 s | 20 KB | Gold Arena — Satoshi pops out of a door (P42b `sounds.emerge`) |
-| `satoshi-hit.m4a`    | 0.58 s |  7 KB | Satoshi shot (P42b `sounds.hit`) |
-| `snapper-emerge.m4a` | 2.22 s | 16 KB | Carnivorous Snapper lunge (P47 `sounds.emerge`) |
+| `satoshi-laugh.m4a`  | 1.56 s | 12 KB | Satoshi pops out of a door (P42b `sounds.emerge`) |
+| `satoshi-hit.m4a`    | 0.38 s |  7 KB | Satoshi shot (P42b `sounds.hit`) |
+| `snapper-emerge.m4a` | 1.63 s | 13 KB | Carnivorous Snapper lunge (P47) |
+| `snapper-snap.m4a`   | 0.08 s |  5 KB | Snapper idle jaw snap |
+| `snapper-hit.m4a`    | 0.49 s |  7 KB | Snapper shot |
+| `door-open.m4a`      | 0.77 s | 11 KB | Gold Arena door creak |
+| `door-close.m4a`     | 0.21 s |  5 KB | Gold Arena door thud |
 
-Total **43 KB** — small enough for mobile, and each is lazy-loadable.
+**84 KB for the whole set**, each lazy-loadable.
 
-## Still owed
+## The cartoon vocabulary, in DSP
 
-`snapper-snap`, `snapper-hit`, `door-open`, `door-close`. These are Foley, and
-Bark is a *speech* model — it does human non-verbal sound well and a door creak
-not at all. They need Stable Audio Open, which is gated behind a one-time licence
-acceptance (see `LICENSES.md`), or a free Freesound key. The script already has
-both backends wired and prints the exact unblocking steps.
+What makes these read as arcade rather than real:
 
-## Why `.m4a` and not `.ogg` / `.mp3`
-
-There is no `ffmpeg` and no `sox` on this machine, and macOS's built-in
-`afconvert` can decode MP3 but cannot encode MP3 or Vorbis. Installing ffmpeg via
-brew would be a large system-wide change to the owner's machine. AAC in an `.m4a`
-is the same trade — compressed and small — and every browser this game targets
-(Safari, Chrome, Firefox, Quest Browser) decodes it in WebAudio.
+| effect | how |
+|---|---|
+| boing / bounce | pitch that swoops and *overshoots*, not one that decays |
+| laugh | discrete syllables with real gaps — the gap is what makes it a laugh |
+| voice | buzzy saw through two resonant peaks (formants) = a vowel |
+| wet / organic | noise through a moving band-pass plus a sliding pitch |
+| creak | heavy amplitude modulation — a creak is stick-slip rattle, so a smooth tone never sounds like one |
+| arcade | light bitcrush, applied **envelope-relative** so a decaying tone stays a tone instead of turning to fizz |
 
 ## Regenerating
 
-    python3 scripts/gen-sfx.py                       # everything
-    python3 scripts/gen-sfx.py satoshi-laugh         # one sound
-    python3 scripts/gen-sfx.py satoshi-laugh --variants 5 --keep-variants
-    python3 scripts/gen-sfx.py my-new-sfx --prompt "[laughs] ho ho" --voice v2/en_speaker_3
+    python3 scripts/gen-sfx.py                    # all seven
+    python3 scripts/gen-sfx.py satoshi-laugh      # one
+    python3 scripts/gen-sfx.py satoshi-laugh --variants 8 --keep-variants
 
-Each run makes N variants, trims silence, peak-normalises to 0.89, fades the
-ends, scores them against the sound's target duration and keeps the best. Add a
-new sound by adding one entry to `SOUNDS` in the script.
+Each run makes N variants, trims silence, peak-normalises to 0.89 (headroom so
+layered SFX don't clip the master), fades the ends, scores against the sound's
+target duration, and keeps the best. Tune a sound by editing its recipe in
+`scripts/sfx_synth.py`; add one with a new function plus a `RECIPES` entry.
+
+## Why `.m4a`
+
+No ffmpeg or sox on this machine, and macOS `afconvert` encodes neither MP3 nor
+Vorbis. AAC in `.m4a` is the same trade — small and compressed — and decodes in
+WebAudio on every browser this game targets.
 
 ## Wiring
 
-**Not wired into gameplay here, by design.** P42b and P47 consume these through
-their swappable `sounds.emerge` / `sounds.hit` slots, which take a *function*, so
-the consumer decides how to load and play.
+**Not wired into gameplay here.** P42b and P47 consume these through swappable
+`sounds.emerge` / `sounds.hit` slots that take a *function*, so the consumer owns
+loading and playback.

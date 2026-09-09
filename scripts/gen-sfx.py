@@ -61,21 +61,20 @@ BACKEND_NOTES = {
 # ── The game's sound set ─────────────────────────────────────────────────────
 # `voice` is a Bark speaker preset. en_speaker_6 is a male voice, which is what
 # "a comedic MAN'S laugh" asks for.
+# Everything is CARTOON and everything is SYNTHESIZED. The first pass used Bark,
+# a speech model, and the result was a real man laughing — the opposite of what an
+# arcade game wants. Cartoon SFX have always been synthesis rather than
+# recordings, so the recipes now live in scripts/sfx_synth.py: no model, no
+# licence, no token, and the four Foley sounds Bark could not make at all come
+# for free.
 SOUNDS = {
-    "satoshi-laugh":  dict(prompt="[laughs] hehehe [laughs]", voice="v2/en_speaker_6",
-                           target=(1.5, 3.0), backend="bark"),
-    "satoshi-hit":    dict(prompt="[gasps] oof!", voice="v2/en_speaker_6",
-                           target=(0.2, 1.0), max_seconds=1.0, backend="bark"),
-    "snapper-emerge": dict(prompt="[growls] grrraaahh [hisses]", voice="v2/en_speaker_9",
-                           target=(1.5, 2.5), backend="bark"),
-    "snapper-snap":   dict(prompt="a sharp wet jaw snap, a bite, teeth clacking shut",
-                           target=(0.1, 0.8), max_seconds=0.8, backend="stable-audio"),
-    "snapper-hit":    dict(prompt="a wet squelchy splat, a plant creature deflating",
-                           target=(0.4, 1.2), backend="stable-audio"),
-    "door-open":      dict(prompt="a heavy stone door creaking open, low mechanical groan",
-                           target=(0.6, 1.6), backend="stable-audio"),
-    "door-close":     dict(prompt="a heavy stone door thudding shut, mechanical clunk",
-                           target=(0.4, 1.2), backend="stable-audio"),
+    "satoshi-laugh":  dict(target=(1.0, 3.0), backend="synth"),
+    "satoshi-hit":    dict(target=(0.2, 1.0), backend="synth"),
+    "snapper-emerge": dict(target=(1.4, 2.5), backend="synth"),
+    "snapper-snap":   dict(target=(0.05, 0.5), backend="synth"),
+    "snapper-hit":    dict(target=(0.3, 1.0), backend="synth"),
+    "door-open":      dict(target=(0.5, 1.2), backend="synth"),
+    "door-close":     dict(target=(0.15, 0.6), backend="synth"),
 }
 
 
@@ -179,9 +178,13 @@ def encode_m4a(wav: Path, out: Path, bitrate="64000"):
                     "-q", "127", "-s", "3", str(wav), str(out)], check=True)
 
 
+SYNTH_SCRIPT = f"import sys; sys.path.insert(0, {str(ROOT / 'scripts')!r}); "\
+               "exec(open(%r).read())" % str(ROOT / "scripts" / "sfx_synth.py")
+
+
 def generate(name: str, spec: dict, variants: int, keep: bool) -> dict:
-    backend = spec.get("backend", "bark")
-    if backend != "bark":
+    backend = spec.get("backend", "synth")
+    if backend not in ("bark", "synth"):
         note = BACKEND_NOTES.get(backend, "no backend available")
         print(f"  ! {name}: backend '{backend}' unavailable.\n"
               + "\n".join("    " + l for l in note.splitlines()))
@@ -189,11 +192,13 @@ def generate(name: str, spec: dict, variants: int, keep: bool) -> dict:
 
     tmp = OUTDIR / "_work"
     tmp.mkdir(parents=True, exist_ok=True)
-    print(f"  · {name}: generating {variants} variant(s) with Bark…", flush=True)
+    print(f"  · {name}: generating {variants} variant(s) with {backend}…", flush=True)
     t0 = time.time()
-    res = run_in_venv(BARK_SCRIPT, dict(name=name, prompt=spec["prompt"],
-                                        voice=spec.get("voice"), tmp=str(tmp),
-                                        seeds=[1000 + i for i in range(variants)]))
+    payload = dict(name=name, tmp=str(tmp), seeds=[1000 + i for i in range(variants)])
+    if backend == "bark":
+        res = run_in_venv(BARK_SCRIPT, dict(payload, prompt=spec["prompt"], voice=spec.get("voice")))
+    else:
+        res = run_in_venv(SYNTH_SCRIPT, payload)
 
     lo, hi = spec.get("target", (0.2, 3.0))
     scored = []
@@ -217,7 +222,7 @@ def generate(name: str, spec: dict, variants: int, keep: bool) -> dict:
     print(f"    -> chose v{vn} ({secs:.2f}s) -> {out.name} "
           f"({out.stat().st_size / 1024:.0f} KB, {time.time() - t0:.0f}s)")
     return {"name": name, "status": "ok", "backend": "bark", "seconds": secs,
-            "bytes": out.stat().st_size, "chosen": f"v{vn}", "prompt": spec["prompt"]}
+            "bytes": out.stat().st_size, "chosen": f"v{vn}", "prompt": spec.get("prompt")}
 
 
 def main():
@@ -240,7 +245,7 @@ def main():
         if args.prompt:  spec["prompt"] = args.prompt
         if args.voice:   spec["voice"] = args.voice
         if args.backend: spec["backend"] = args.backend
-        if not spec.get("prompt"):
+        if spec.get("backend", "synth") == "bark" and not spec.get("prompt"):
             print(f"  ! {n}: no prompt (pass --prompt)"); continue
         results.append(generate(n, spec, args.variants, args.keep_variants))
 
