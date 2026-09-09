@@ -30,7 +30,7 @@ import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
 import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
-         setupSatoshiTarget, getSatoshiTarget } from './skins/arena-glb.js';
+         setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -200,6 +200,7 @@ onArenaReady((st) => {
   // P42b: arm the Satoshi door-target once the GLB arena (and therefore its
   // doors) exists. The panorama fallback has no doors, so nothing arms there.
   const satoshi = setupSatoshiTarget({
+    scene, renderer,
     // AR is explicitly OFF, not merely invisible: armode hides the whole arena
     // in passthrough, so a target there would be an unseeable thing making a
     // noise and awarding points nobody could earn.
@@ -327,6 +328,7 @@ renderer.setAnimationLoop(function animate() {
   // must not advance the cadence or strand a target mid-emerge.
   if (!skins.isPaused() && skins.getActiveSkinId() === 'gold-arena') {
     getSatoshiTarget()?.update(delta);
+    getDoorArrow()?.update(delta);
   }
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
   vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts

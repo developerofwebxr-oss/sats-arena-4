@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { buildGoldDoors } from './gold-doors.js';
 import { setupDoorTargets } from './door-targets.js';
+import { setupDoorArrow } from './door-arrow.js';
 import { playSample, preloadSample } from '../audio.js';
 import satoshiLaughUrl from '../assets/sfx/satoshi-laugh.m4a?url';
 import satoshiHitUrl   from '../assets/sfx/satoshi-hit.m4a?url';
@@ -77,7 +78,13 @@ const EYE = new THREE.Vector3(0, 1.65, 0); // the notes' reference camera point
  */
 const ARENA_VALIDATE = (() => {
   try {
-    return import.meta.env.DEV || new URLSearchParams(location.search).has('validate');
+    const q = new URLSearchParams(location.search);
+    // ?validate=0 opts OUT in dev. The sweep is time-sliced, so it no longer
+    // freezes anything, but it still takes ~20 s of wall clock before the arena
+    // reports ready — which a headless check waiting on that flag has to sit
+    // through on every run. The asset it re-derives is fixed and already vetted.
+    if (q.get('validate') === '0') return false;
+    return import.meta.env.DEV || q.has('validate');
   } catch { return false; }
 })();
 
@@ -150,6 +157,11 @@ export function getGoldDoors() { return _doors; }
 let _satoshi = null;
 export function getSatoshiTarget() { return _satoshi; }
 
+// P44: the on-screen / in-world pointer to whichever door is open. Driven purely
+// by the target's lifecycle events below — it holds no spawn logic of its own.
+let _arrow = null;
+export function getDoorArrow() { return _arrow; }
+
 /**
  * @param {object} hooks  { isSuppressed, onLocalScore, getCamera }
  * Called from main.js once the scene exists. Idempotent.
@@ -160,12 +172,19 @@ export function setupSatoshiTarget(hooks) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
 
+  _arrow = setupDoorArrow({
+    scene: hooks.scene, camera: hooks.getCamera(), renderer: hooks.renderer,
+    isSuppressed: hooks.isSuppressed,
+  });
+
   _satoshi = setupDoorTargets({
     doors: _doors,
     // Parented to the ARENA ROOT, so it is Gold-only, travels with the cached
     // arena across skin switches, and is hidden with `environment` in AR.
     parent: _state.root,
     ...hooks,
+    // EVENT-DRIVEN: the arrow is told what is out; it never inspects doors.
+    onTargetChange: (pose) => (pose ? _arrow?.setTarget(pose.position) : _arrow?.clearTarget()),
     config: {
       id: 'satoshi',
       // The swappable face mount. `kind:'plane'` is the sprite-plane path;
@@ -194,6 +213,12 @@ export function setupSatoshiTarget(hooks) {
   // Warm the bytes now so the first laugh is not late. This needs no user
   // gesture — only DECODING does, and that happens on the first play.
   preloadSample(satoshiLaughUrl); preloadSample(satoshiHitUrl);
+
+  // ?dev handles, next to window.__doors. A headless check reaching for these
+  // through a dynamic import() gets a SECOND module instance under Vite dev —
+  // with its own `_satoshi` that is still null — so the live objects are exposed
+  // here instead of being re-derived from an import.
+  if (isDev()) { window.__doorTarget = _satoshi; window.__doorArrow = _arrow; }
 
   if (_satoshi) console.log('[door-target] satoshi armed — +42, ' +
     `every ${_satoshi.config.spawnCadence.join('-')}s, holds ${_satoshi.config.holdTime}s ` +
@@ -373,6 +398,11 @@ async function _load() {
   }
 }
 
+function isDev() {
+  try { return import.meta.env.DEV || new URLSearchParams(location.search).has('dev'); }
+  catch { return false; }
+}
+
 /**
  * ?dev door tools. P42 will drive these doors from the host; until then this is
  * how a human (or a headless check) opens one. Behind ?dev, like the placeholder
@@ -381,14 +411,12 @@ async function _load() {
  *   window.__doors            the full API (see gold-doors.js)
  *   window.__doors.openRandom()  open a random shut door
  *   press O / C               open / close a random door
+ *   window.__doorTarget       the live Satoshi target (P42b)
+ *   window.__doorArrow        the pointer, incl. .debug() (P44)
  */
 function exposeDoorDevTools(doors) {
   if (!doors) return;
-  const DEV = (() => {
-    try { return import.meta.env.DEV || new URLSearchParams(location.search).has('dev'); }
-    catch { return false; }
-  })();
-  if (!DEV) return;
+  if (!isDev()) return;
 
   const pick = (wantOpen) => {
     const ids = doors.listDoors().filter((id) => (doors.openness(id) === 1) === wantOpen);

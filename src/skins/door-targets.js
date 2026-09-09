@@ -73,9 +73,13 @@ const easeInCubic = (t) => t * t * t;
  * @param {object} opts.config     see the config shape above
  * @param {() => boolean} opts.isSuppressed  true when targets must not spawn (AR)
  * @param {(points:number) => void} opts.onLocalScore  credit the local player
+ * @param {(pose:{position:THREE.Vector3}|null) => void} [opts.onTargetChange]
+ *   P44: fired with the door's world pose when a target becomes visible, and
+ *   with null when it goes. The arrow subscribes to this instead of watching
+ *   door state, so there is exactly one source of truth about what is out.
  * @param {() => THREE.Camera} opts.getCamera  for raycast-based hit tests
  */
-export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalScore, getCamera }) {
+export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalScore, getCamera, onTargetChange }) {
   if (!doors || !config) return null;
 
   const cfg = {
@@ -162,11 +166,17 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     active.phase = 'emerging';
     active.t = 0;
     mount.visible = true;
+    // Announce as soon as it STARTS coming out, not when it finishes: the point
+    // of the arrow is to turn the player's head while there is still time.
+    onTargetChange?.({ position: active.base.clone().addScaledVector(active.normal, cfg.offset) });
     try { cfg.sounds.emerge?.(); } catch (e) { console.warn('[door-target] emerge sound', e); }
   });
 
   function retract(reason) {
     if (!active || active.phase === 'retracting' || active.phase === 'done') return;
+    // Stop pointing the moment it starts going away — an arrow that lingers over
+    // a closing door sends the player somewhere there is nothing to shoot.
+    onTargetChange?.(null);
     active.phase = 'retracting';
     active.t = 0;
     active.reason = reason;
@@ -176,6 +186,7 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     if (active) doors.closeDoor(active.doorId);
     active = null;
     mount.visible = false;
+    onTargetChange?.(null);
     scheduleNext();
   }
 
@@ -189,6 +200,12 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
   function tryHit(origin, direction) {
     if (!active || !mount.visible) return null;
     if (active.phase === 'retracting' || active.hitBy) return null;
+    // Raycast against where the face IS, not where it was drawn. The mount is
+    // animated every update() and its world matrix is otherwise only refreshed
+    // by the renderer, so without this a shot tests the PREVIOUS frame's
+    // transform — a whole frame stale during the pop, when the plane is still
+    // scaling up from nothing. It is a two-node subtree; the update is free.
+    mount.updateWorldMatrix(true, true);
     raycaster.set(origin, direction);
     const hits = raycaster.intersectObject(mount, true);
     if (!hits.length) return null;
