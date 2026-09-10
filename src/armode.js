@@ -21,6 +21,7 @@
  */
 
 import { suppressAtmosphere, restoreAtmosphere } from './atmosphere.js';
+import { setScoreHidden } from './hud.js';
 
 let _handheldAR = false;
 export function isHandheldAR() { return _handheldAR; }
@@ -30,6 +31,20 @@ export function isHandheldAR() { return _handheldAR; }
 // which is true for Quest AR as well.
 let _arSession = false;
 export function isARSession() { return _arSession; }
+
+/**
+ * A2: keep the DOM score in step with handheld AR.
+ *
+ * In phone AR the score is already drawn in-world by vrui.js (it shows the
+ * sprite whenever a session is presenting), so the top-left DOM score is a
+ * duplicate. This declares the reason; hud.js's arbiter owns the property and
+ * ORs it with competition.js's match reason, so a match ending mid-AR-session
+ * cannot un-hide it. Called on EVERY transition, including the ones that set
+ * _handheldAR back to false, so the reason is never left stale.
+ */
+function syncScoreVisibility() {
+  setScoreHidden('handheldAR', _handheldAR);
+}
 
 export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode }) {
   // Background/fog/base-light ownership lives in atmosphere.js. AR SUPPRESSES
@@ -50,6 +65,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
       // ── Immersive VR (arena) ── keep the fake world, weapon on hand.
       _handheldAR = false;
       _arSession  = false;
+      syncScoreVisibility();
       restoreAtmosphere();
       environment.visible = true;
       weapon.setHidden(false);
@@ -71,6 +87,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     const enabled = session.enabledFeatures || [];
     _handheldAR =
       session.interactionMode === 'screen-space' || enabled.includes('dom-overlay');
+    syncScoreVisibility();
 
     if (_handheldAR) {
       // Phone: no hand to hold the gun; rely on the dom-overlay crosshair.
@@ -87,6 +104,7 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     // Restore the flat / VR world for the fallback experiences.
     _handheldAR = false;
     _arSession  = false;
+    syncScoreVisibility();
     restoreAtmosphere();
     environment.visible = true;
     weapon.setHidden(false);

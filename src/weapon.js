@@ -533,11 +533,38 @@ export function setupWeapon(camera, renderer) {
     controllerGuns.forEach((g) => g.setSponsor(on));
   }
 
-  // ── VR session: show/hide camera gun ─────────────────────────────────────
-  // Camera gun stays parented to camera the whole time; hidden during VR so
-  // the controller guns (permanently on their controllers) take over visually.
-  renderer.xr.addEventListener('sessionstart', () => { cameraGun.group.visible = false; });
-  renderer.xr.addEventListener('sessionend',   () => { cameraGun.group.visible = true;  });
+  // ── Camera-gun visibility: ONE writer, two reasons ───────────────────────
+  // A1 (confirmed on a real Quest): a third, badly-oriented gun floated in front
+  // of the player in VR, beside the two controller guns.
+  //
+  // The cause was two writers to the same property, stomping each other. This
+  // file used to set cameraGun.group.visible=false directly on 'sessionstart',
+  // while armode.js's own 'sessionstart' listener called weapon.setHidden(false)
+  // for VR and Quest AR — which wrote the SAME property back to true. Whoever
+  // ran last won, and armode always ran last: setupWeapon() is called before
+  // setupARMode() in main.js, so weapon's listener registered first. The flat
+  // camera gun sits at ~(0.22,-0.20,-0.55) on the camera with the flat-mode
+  // euler, so in a headset it hung in the player's face looking flipped. Only
+  // handheld phone AR looked right, and only because armode happens to want it
+  // hidden there too.
+  //
+  // The fix is not to reorder the listeners — that would leave the same bug one
+  // refactor away. There is now exactly ONE assignment to this property in the
+  // whole file, and it composes both reasons. armode keeps saying what IT wants
+  // (setHidden) and cannot clobber the session state, because it no longer
+  // writes the property at all.
+  //
+  // Not related to setLeftGunActive: that governs the CONTROLLER guns for the
+  // fairness gate, which are different objects with their own visibility.
+  let inImmersive  = false;  // any immersive session — VR or AR, headset or phone
+  let cameraHidden = false;  // what armode.js has asked for
+
+  function refreshCameraGun() {
+    cameraGun.group.visible = !inImmersive && !cameraHidden;
+  }
+
+  renderer.xr.addEventListener('sessionstart', () => { inImmersive = true;  refreshCameraGun(); });
+  renderer.xr.addEventListener('sessionend',   () => { inImmersive = false; refreshCameraGun(); });
 
   // ── Fairness gate: left gun active/inactive ───────────────────────────────
   // setLeftGunActive(false) drops to right-hand-only when a flat peer is in the
@@ -607,12 +634,17 @@ export function setupWeapon(camera, renderer) {
   }
 
   /**
-   * setHidden(bool) — hide/show the camera gun.
-   * Called by armode.js to hide the gun on handheld phone AR.
+   * setHidden(bool) — armode.js's REQUEST about the camera gun.
+   *
+   * It records the request and re-derives visibility; it does not assign to
+   * cameraGun.group.visible itself. So armode asking for the gun back in VR (as
+   * it does, correctly, for its own reasons) can no longer override the fact
+   * that we are in an immersive session where the controller guns are the guns.
    * Controller guns manage their own visibility via connected/disconnected.
    */
   function setHidden(hidden) {
-    cameraGun.group.visible = !hidden;
+    cameraHidden = !!hidden;
+    refreshCameraGun();
   }
 
   /**

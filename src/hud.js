@@ -101,6 +101,61 @@ function injectStyles() {
   document.head.appendChild(style);
 }
 
+
+// ── Score visibility arbiter (A2) ────────────────────────────────────────────
+// TWO independent features want the top-left SCORE hidden, and they must not
+// fight over one DOM property:
+//
+//   'match'      competition.js hides it during a match, because the dual-score
+//                HUD already shows YOU vs THEM and two "your score" readouts is
+//                confusing.
+//   'handheldAR' phone AR draws the score as an in-world sprite (vrui.js shows
+//                it whenever a session is presenting), so the DOM one is a
+//                duplicate. armode.js exported isHandheldAR() for exactly this
+//                and nothing ever called it.
+//
+// A per-frame writer (the SA2 approach) would have stomped competition.js's
+// hide every frame. Instead each feature declares its own reason and this is the
+// ONLY place #score's display is assigned: hidden if ANY reason wants it hidden,
+// shown only when none do. Neither feature can clear the other's hide, and the
+// order they arrive in does not matter.
+const _scoreHideReasons = { match: false, handheldAR: false };
+
+/**
+ * @param {'match'|'handheldAR'} reason
+ * @param {boolean} hidden
+ */
+export function setScoreHidden(reason, hidden) {
+  if (!(reason in _scoreHideReasons)) {
+    console.warn(`[hud] unknown score-hide reason "${reason}"`);
+    return;
+  }
+  _scoreHideReasons[reason] = !!hidden;
+  applyScoreVisibility();
+}
+
+/** True when any feature currently wants the DOM score hidden. */
+export function isScoreHidden() {
+  return Object.values(_scoreHideReasons).some(Boolean);
+}
+
+function applyScoreVisibility() {
+  // Resolve from the DOM if createHUD has not run yet, rather than dropping the
+  // request on the floor. armode and competition both happen to be wired after
+  // createHUD today, but a silent no-op that depends on module init order is
+  // exactly the kind of thing that comes back as "it works on my machine".
+  const el = scoreEl || document.getElementById('score');
+  if (!el) return;
+  el.style.display = isScoreHidden() ? 'none' : '';
+}
+
+// DEV: the arbiter, so a headless check drives the SAME module instance the app
+// uses. (A dynamic import() of this file from a test would otherwise get its own
+// copy under the Vite dev server, with its own reason flags.)
+if (import.meta.env.DEV) {
+  window.__hud = { setScoreHidden: (r, h) => setScoreHidden(r, h), isScoreHidden: () => isScoreHidden() };
+}
+
 // ── createHUD ─────────────────────────────────────────────────────────────────
 
 export function createHUD(onShoot) {
@@ -127,6 +182,7 @@ export function createHUD(onShoot) {
   `;
   scoreEl.textContent = 'SCORE 0';
   document.body.appendChild(scoreEl);
+  applyScoreVisibility();   // honour any reason registered before the HUD existed
 
   // ── RAPID FIRE purchase button (top-right) ──────────────────────────────────
   // Tap = buy 60s of rapid-fire for the whole session. Hidden when not in a session
