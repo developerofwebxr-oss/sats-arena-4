@@ -184,18 +184,11 @@ async function _load() {
   hitProxy.position.copy(centre);
   visual.add(hitProxy);
 
-  // ── The light it brings with it ───────────────────────────────────────────
-  // The Conservatory is deliberately dark and its key light is a shaft down the
-  // MIDDLE of the room, so a creature at the wall was a silhouette in a hole:
-  // present, but unreadable, and unfair to shoot at. This is a small warm light
-  // travelling with the creature, sat in front of its chest and aimed at
-  // nothing — it reads as the maw's own glow spilling onto whatever came out,
-  // and it is only ever in the scene while something is out, because the mount
-  // is hidden the rest of the time.
-  const spill = new THREE.PointLight(0xff8a46, 34, 8.5, 1.9);
-  spill.name = 'SnapperSpill';
-  spill.position.set(0, TARGET_HEIGHT * 0.15, 1.1);
-  visual.add(spill);
+  // NOTE: the creature carries no light of its own. It used to — a small spill
+  // lamp built into this file — and that was the wrong home for it: the Gold
+  // Arena's Satoshi had exactly the same problem and no such lamp. Lighting
+  // whatever is out is now the door-target system's job (`targetLight` in the
+  // config), so both arenas get it from one implementation.
 
   // ── Animation ─────────────────────────────────────────────────────────────
   const mixer = new THREE.AnimationMixer(model);

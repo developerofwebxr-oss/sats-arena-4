@@ -33,6 +33,17 @@ import { getOwnCode } from '../net/coop-hud.js';
  *                            out, which is the sprite "pop". A creature does not
  *                            GROW out of a hole, it comes through it, so a model
  *                            sets this false and keeps its own size throughout.
+ *     targetLight   { colour, intensity, distance, decay, offset:[x,y,z] } | null
+ *                            A light that travels with whatever is out. Both
+ *                            arenas are dark by design and both put their doors
+ *                            on the WALL, away from the key light, so a target
+ *                            that has just appeared is the one thing on screen
+ *                            with no light on it. This is one PointLight, built
+ *                            once with the mount, switched on when the target
+ *                            emerges and off the moment it is gone — so a skin
+ *                            with nothing out pays nothing, and there is never
+ *                            more than one extra light in the scene.
+ *                            null (the default) keeps the old unlit behaviour.
  *   }
  *
  * ── Host authority (mirrors the shared-coin rule from P19) ─────────────────
@@ -101,6 +112,7 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     scaleWithTravel: true,
     bob: { amplitude: 0.05, hz: 0.5 },
     sounds: {},
+    targetLight: null,
     ...config,
   };
 
@@ -132,6 +144,30 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
   if (!visual) { console.warn(`[door-target] "${cfg.id}" has no model`); return null; }
   visual.name = `${mount.name}:visual`;
   mount.add(visual);
+
+  // ── The target light ──────────────────────────────────────────────────────
+  // Parented to the MOUNT, so it travels with the target for free: no per-frame
+  // position write, no allocation, and it is hidden with the mount between
+  // appearances. Built once, like everything else here.
+  //
+  // It sits slightly in FRONT of the target (mount +Z is the direction it
+  // travels into the room) rather than behind it — a light between the target
+  // and the wall would rim it and leave the face the player is aiming at dark,
+  // which is the problem this exists to solve.
+  let targetLight = null;
+  if (cfg.targetLight) {
+    const L = cfg.targetLight;
+    targetLight = new THREE.PointLight(
+      L.colour ?? L.color ?? 0xffffff,
+      L.intensity ?? 20,
+      L.distance ?? 6,
+      L.decay ?? 1.9,
+    );
+    targetLight.name = `${mount.name}:light`;
+    targetLight.position.fromArray(L.offset || [0, 0.15, 0.9]);
+    targetLight.visible = false;      // only ever on while something is out
+    mount.add(targetLight);
+  }
 
   // ── State ─────────────────────────────────────────────────────────────────
   // ONE ACTIVE AT A TIME, by construction: `active` is a single slot, and the
@@ -176,6 +212,7 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     active.phase = 'emerging';
     active.t = 0;
     mount.visible = true;
+    if (targetLight) targetLight.visible = true;
     // Announce as soon as it STARTS coming out, not when it finishes: the point
     // of the arrow is to turn the player's head while there is still time.
     onTargetChange?.({ position: active.base.clone().addScaledVector(active.normal, cfg.offset) });
@@ -196,6 +233,7 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     if (active) doors.closeDoor(active.doorId);
     active = null;
     mount.visible = false;
+    if (targetLight) targetLight.visible = false;
     onTargetChange?.(null);
     scheduleNext();
   }
@@ -385,6 +423,7 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
     mount,
     dispose: () => {
       offOpened?.();
+      targetLight?.parent?.remove(targetLight);
       mount.parent?.remove(mount);
       if (visual?.geometry) visual.geometry.dispose();
       if (visual?.material) visual.material.dispose();
@@ -396,6 +435,10 @@ export function setupDoorTargets({ doors, parent, config, isSuppressed, onLocalS
       points: cfg.points,
       spawnCadence: cfg.spawnCadence,
       holdTime: cfg.holdTime,
+      light: cfg.targetLight
+        ? `#${new THREE.Color(cfg.targetLight.colour ?? cfg.targetLight.color).getHexString()} ` +
+          `@${cfg.targetLight.intensity ?? 20}, ${cfg.targetLight.distance ?? 6}m`
+        : 'none',
       mechanism: `${cfg.emergeStyle} over ${cfg.emergeSeconds}s, ` +
         `${cfg.retreat}m in -> ${cfg.offset}m out` +
         (cfg.scaleWithTravel ? ', scaling with travel' : ', at constant size'),

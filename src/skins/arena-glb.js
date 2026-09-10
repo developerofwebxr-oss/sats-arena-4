@@ -208,6 +208,15 @@ export function setupSatoshiTarget(hooks) {
         emerge: () => playSample(satoshiLaughUrl, { gain: 0.85 }),
         hit:    () => playSample(satoshiHitUrl,   { gain: 0.9  }),
       },
+      // The bays are shadowed and the face pops out of one, so until now the
+      // one thing on screen that mattered was the one thing with no light on
+      // it. Warm gold, keyed to the arena's own bronze and gilding, sat just in
+      // front of the face so it lights the side the player is aiming at.
+      // Short range on purpose: it must not wash the bay it came out of.
+      targetLight: {
+        colour: 0xffc169, intensity: 16, distance: 4.2, decay: 1.9,
+        offset: [0, 0.12, 0.5],
+      },
     },
   });
   // Warm the bytes now so the first laugh is not late. This needs no user

@@ -336,6 +336,19 @@ export async function setupSnapperTarget(hooks) {
         emerge: () => playSample(snapperEmergeUrl, { gain: 0.9 }),
         hit:    () => playSample(snapperHitUrl,    { gain: 0.95 }),
       },
+      // The reveal light. This used to be a small lamp built into the creature
+      // itself; it belongs to the SYSTEM, so Gold gets the same treatment from
+      // the same code. Fleshy red-warm, brighter and longer-reaching than
+      // Gold's because this room is far darker and the thing being revealed is
+      // 2.5 m of teeth rather than a face on a plate.
+      targetLight: {
+        // Range is the tuning knob, not intensity: at 10 m this reached the
+        // floor in the middle of the room and the canopy above it, and repainted
+        // the arena every time something came out. At 7 m it lights the creature
+        // and the mouth it came from, and the room stays the room.
+        colour: 0xff7b3c, intensity: 48, distance: 7, decay: 1.7,
+        offset: [0, 0.45, 1.25],
+      },
     },
   });
 

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildCarnivorousCeiling } from './carnivorous-ceiling.js';
 
 /**
  * carnivorous-mood.js — the lighting that makes the Conservatory frightening.
@@ -111,13 +112,20 @@ export function buildCarnivorousMood(group, arenaRoot) {
   lantern.position.set(0, 2.1, 0);
   lights.add(lantern);
 
-  // ── 5. Make the asset light itself ────────────────────────────────────────
+  // ── 5. The things overhead ────────────────────────────────────────────────
+  // Blooms in the canopy that open and clench above the player. Atmosphere
+  // only — nothing spawns from them and nothing is shootable. Parented into the
+  // same skin group, so they leave with the skin and go dark in passthrough.
+  const ceiling = buildCarnivorousCeiling(group);
+
+  // ── 6. Make the asset light itself ────────────────────────────────────────
   const boosted = boostEmissive(arenaRoot);
   const disabled = disablePreviewLights(arenaRoot);
 
   let elapsed = 0;
   function update(dt) {
     elapsed += dt;
+    ceiling.update(dt);
     for (const e of embers) {
       // Two detuned sines plus a slow sag. Not random(): a per-frame random is
       // a strobe, and the eye reads strobing as a bug rather than as fire.
@@ -141,7 +149,9 @@ export function buildCarnivorousMood(group, arenaRoot) {
       sunScale: 0.12,
       ambientScale: 0.35,
     },
+    ceiling,
     stats: {
+      ceiling: ceiling.stats,
       lights: lights.children.filter((o) => o.isLight).length,
       flickering: embers.length,
       emissiveBoosted: boosted,
@@ -182,11 +192,31 @@ function boostEmissive(root) {
  * ours (they live under the arena root, not the skin group), they are far
  * brighter than anything here, and left on they flood the room. Disabled rather
  * than deleted so a re-export still round-trips and the node names stay.
+ *
+ * SCOPED TO THE PREVIEW RIG, and it has to be. This used to sweep every light
+ * under the arena root, and the door-target's own light is mounted there too —
+ * so every time the skin was re-attached, this walked over and zeroed the light
+ * that exists to make the Snapper visible. It disables the exporter's node and
+ * nothing else; if a future export drops that node, the fallback still refuses
+ * to touch anything a target brought with it.
  */
 function disablePreviewLights(root) {
+  const rig = root.getObjectByName('PreviewLights');
   let n = 0;
-  root.traverse((o) => {
-    if (o.isLight) { o.intensity = 0; o.visible = false; n++; }
+  (rig || root).traverse((o) => {
+    if (!o.isLight) return;
+    if (!rig && ownedByATarget(o)) return;
+    o.intensity = 0;
+    o.visible = false;
+    n++;
   });
   return n;
+}
+
+/** Is this light part of a door-target's mount rather than the arena itself? */
+function ownedByATarget(light) {
+  for (let p = light; p; p = p.parent) {
+    if (typeof p.name === 'string' && p.name.startsWith('DoorTarget:')) return true;
+  }
+  return false;
 }
