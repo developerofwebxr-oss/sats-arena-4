@@ -158,6 +158,15 @@ const GATE = { radius: 58, height: 15.0, width: 10.0, rim: 0.34, glow: 0.09 };
 // Bottom edge 16.6 clears the 15.0 gate crown; top edge 22.2 clears the frame.
 const MARQUEE = { radius: 58, y: 19.4, width: 30, height: 5.6 };
 
+// ── P50: the ₿ marks are OFF ────────────────────────────────────────────────
+// Owner's verdict after seeing the arches on a Quest: the arches and the
+// wordmark stay, the Bitcoin glyphs go. Two of them: small emblems above the two
+// side gates, and the large faint hologram behind the wordmark. Both are kept as
+// code behind a flag rather than deleted, so bringing either back is one line —
+// the owner may still want a single subtle one later.
+const SHOW_GATE_KEYSTONES = false;  // small ₿ above the two side gates
+const SHOW_HORIZON_MARK   = false;  // large faint ₿ behind the SATS ARENA sign
+
 // One large, faint, slowly turning holographic mark, behind and above it all.
 // THE HORIZON MARK IS FRUSTUM-BOUND, AND ITS ROTATION IS PART OF THE SUM.
 // It is a rotating quad, so the distance that matters is its far TOP CORNER
@@ -396,45 +405,52 @@ export function buildClassicDecor(group) {
   // enormous and faint, and an outline at that scale and opacity simply vanished
   // — a hairline stroke spread over 38 world units at 128 metres is sub-pixel.
   // It needs to be a soft MASS: filled, heavily bloomed, low alpha.
-  const glyphTex   = makeGlyphTexture('₿', '#f7931a');
-  const horizonTex = makeHorizonGlyphTexture('₿', '#f7931a');
-  const horizonMark = new THREE.Mesh(
-    new THREE.PlaneGeometry(HORIZON_MARK.size, HORIZON_MARK.size),
-    new THREE.MeshBasicMaterial({
-      map: horizonTex, transparent: true, side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending, depthWrite: false, fog: false,
-      opacity: HORIZON_MARK.opacity,
-    }),
-  );
-  horizonMark.name = 'HorizonMark';
-  horizonMark.position.set(0, HORIZON_MARK.y, -HORIZON_MARK.radius);
-  horizonMark.frustumCulled = false;
-  horizonMark.renderOrder = -3;   // behind the arch glow and everything else
-  decor.add(horizonMark);
-  stats.triangles += 2; stats.drawCalls++;
+  // Textures are built only if something will use them — no canvas work, and no
+  // GPU upload, for a mark that is switched off.
+  const glyphTex = SHOW_GATE_KEYSTONES ? makeGlyphTexture('₿', '#f7931a') : null;
+
+  let horizonMark = null;
+  if (SHOW_HORIZON_MARK) {
+    horizonMark = new THREE.Mesh(
+      new THREE.PlaneGeometry(HORIZON_MARK.size, HORIZON_MARK.size),
+      new THREE.MeshBasicMaterial({
+        map: makeHorizonGlyphTexture('₿', '#f7931a'), transparent: true,
+        side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+        depthWrite: false, fog: false, opacity: HORIZON_MARK.opacity,
+      }),
+    );
+    horizonMark.name = 'HorizonMark';
+    horizonMark.position.set(0, HORIZON_MARK.y, -HORIZON_MARK.radius);
+    horizonMark.frustumCulled = false;
+    horizonMark.renderOrder = -3;   // behind the arch glow and everything else
+    decor.add(horizonMark);
+    stats.triangles += 2; stats.drawCalls++;
+  }
 
   // ₿ keystones — three only, one at the crown of each gate. The glyph says
   // "gate", so it appears exactly where a gate is. Sprites, so they stay legible
   // from any angle without per-frame lookAt work.
-  const keystoneMat = new THREE.SpriteMaterial({
-    map: glyphTex, transparent: true, blending: THREE.AdditiveBlending,
-    depthWrite: false, fog: false, opacity: 0.62,
-  });
   // The CENTRAL gate is crowned by the marquee, so it does not also get a
   // keystone — two ornaments stacked on one arch is exactly the clutter this
-  // redesign is removing. Two keystones, on the two side gates.
-  for (const angle of GATE_ANGLES.filter((a) => a !== MARQUEE_ANGLE)) {
-    const s = new THREE.Sprite(keystoneMat);
-    s.name = 'GateKeystone';
-    s.position.set(
-      Math.sin(angle) * (GATE.radius - 0.4),
-      GATE.height + 2.2,
-      Math.cos(angle) * (GATE.radius - 0.4),
-    );
-    s.scale.setScalar(3.6);
-    s.frustumCulled = false;
-    decor.add(s);
-    stats.triangles += 2; stats.drawCalls++;
+  // redesign was removing. Two keystones, on the two side gates.
+  if (SHOW_GATE_KEYSTONES) {
+    const keystoneMat = new THREE.SpriteMaterial({
+      map: glyphTex, transparent: true, blending: THREE.AdditiveBlending,
+      depthWrite: false, fog: false, opacity: 0.62,
+    });
+    for (const angle of GATE_ANGLES.filter((a) => a !== MARQUEE_ANGLE)) {
+      const s = new THREE.Sprite(keystoneMat);
+      s.name = 'GateKeystone';
+      s.position.set(
+        Math.sin(angle) * (GATE.radius - 0.4),
+        GATE.height + 2.2,
+        Math.cos(angle) * (GATE.radius - 0.4),
+      );
+      s.scale.setScalar(3.6);
+      s.frustumCulled = false;
+      decor.add(s);
+      stats.triangles += 2; stats.drawCalls++;
+    }
   }
 
   // ── Animation ───────────────────────────────────────────────────────────────
@@ -465,10 +481,12 @@ export function buildClassicDecor(group) {
     // The horizon mark turns through +/-20deg and flickers faintly. The arc is
     // limited by BOTH readability (a full spin goes edge-on and vanishes) and
     // the far plane (see HORIZON_MARK above) — do not widen it without redoing
-    // that distance sum.
-    horizonMark.rotation.y = Math.sin(elapsed * 0.11) * HORIZON_MARK.swing;
-    horizonMark.material.opacity = HORIZON_MARK.opacity
-      * (0.82 + Math.sin(elapsed * 1.7) * 0.10 + Math.sin(elapsed * 4.3) * 0.06);
+    // that distance sum. Null while SHOW_HORIZON_MARK is off.
+    if (horizonMark) {
+      horizonMark.rotation.y = Math.sin(elapsed * 0.11) * HORIZON_MARK.swing;
+      horizonMark.material.opacity = HORIZON_MARK.opacity
+        * (0.82 + Math.sin(elapsed * 1.7) * 0.10 + Math.sin(elapsed * 4.3) * 0.06);
+    }
   }
 
   return { update, stats };
