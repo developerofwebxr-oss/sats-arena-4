@@ -20,13 +20,23 @@
  *   isHandheldAR()  — true while in a handheld AR session (read by xr.js for aim)
  */
 
+import { suppressAtmosphere, restoreAtmosphere } from './atmosphere.js';
+
 let _handheldAR = false;
 export function isHandheldAR() { return _handheldAR; }
 
+// True during ANY passthrough session — phone OR headset. isHandheldAR() only
+// covers the phone, but P42b needs "is the arena hidden behind passthrough",
+// which is true for Quest AR as well.
+let _arSession = false;
+export function isARSession() { return _arSession; }
+
 export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode }) {
-  // Remember the original VR-world look so we can restore it after AR.
-  const originalBackground = scene.background;
-  const originalFog        = scene.fog;
+  // Background/fog/base-light ownership lives in atmosphere.js. AR SUPPRESSES
+  // rather than captures-and-restores: it stops the fake world painting for the
+  // duration and re-applies whatever is CURRENT on the way out. That is why a
+  // skin can now own an atmosphere — a startup capture would have reverted it.
+  void scene;
 
   renderer.xr.addEventListener('sessionstart', () => {
     const session = renderer.xr.getSession();
@@ -39,8 +49,8 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     if (!isAR) {
       // ── Immersive VR (arena) ── keep the fake world, weapon on hand.
       _handheldAR = false;
-      scene.background = originalBackground;
-      scene.fog        = originalFog;
+      _arSession  = false;
+      restoreAtmosphere();
       environment.visible = true;
       weapon.setHidden(false);
       setSpawnMode('vr');
@@ -50,8 +60,8 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
     // ── AR (passthrough) ── strip the fake world so the room shows through.
     // background = null and fog = null are essential: anything else paints
     // over the camera feed and you'd see black instead of your room.
-    scene.background = null;
-    scene.fog        = null;
+    _arSession = true;
+    suppressAtmosphere();        // background/fog -> null for the camera feed
     environment.visible = false; // hides walls, radar floor, ceiling ring as one
 
     // Handheld (phone) vs headset (Quest). interactionMode is the cleanest
@@ -76,8 +86,8 @@ export function setupARMode({ renderer, scene, environment, weapon, setSpawnMode
   renderer.xr.addEventListener('sessionend', () => {
     // Restore the flat / VR world for the fallback experiences.
     _handheldAR = false;
-    scene.background = originalBackground;
-    scene.fog        = originalFog;
+    _arSession  = false;
+    restoreAtmosphere();
     environment.visible = true;
     weapon.setHidden(false);
     setSpawnMode('vr');

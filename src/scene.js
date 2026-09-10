@@ -184,7 +184,11 @@ export function createScene() {
     if (_frames <= 180 || _frames % 15 === 0) applySize();
   }
 
-  return { renderer, scene, camera, environment, syncSize, applySize };
+  // ambient/sun are handed out so atmosphere.js can dim them for a skin that
+  // owns the look (and restore them exactly). Nothing else writes their
+  // intensity — see atmosphere.js for why this is not the skin's business.
+  return { renderer, scene, camera, environment, syncSize, applySize,
+           baseLights: { ambient, sun } };
 }
 
 // ─── Radar floor texture ─────────────────────────────────────────────────────

@@ -5,13 +5,16 @@ import { setupXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD } from './hud.js';
 import { setupInput } from './input.js';
-import { setupShooter } from './shoot.js';
+import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
 import { setupWeapon } from './weapon.js';
 import { setupARMode } from './armode.js';
+import { setupAtmosphere } from './atmosphere.js';
+import { isARSession } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
 import { updateUpgrade } from './upgrade.js';
+import { recordHit } from './score.js';
 import { setupVrUI } from './vrui.js';
 import { setupVrMenu } from './vr-menu.js';
 import {
@@ -27,11 +30,19 @@ import { setupCompetition, updateCompetition, canCompete, proposeCompetition } f
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
-import { loadArena, onArenaReady, getArenaState, setArenaRenderContext } from './skins/arena-glb.js';
+import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
+         setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
+import { onCarnivorousReady, setupSnapperTarget, updateSnapper } from './skins/carnivorous-glb.js';
+import { getSkin } from './skins/registry.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-const { renderer, scene, camera, environment, syncSize } = createScene();
+const { renderer, scene, camera, environment, syncSize, baseLights } = createScene();
+
+// Name an owner for scene.background / scene.fog / the base light level BEFORE
+// anything can change them, so the boot look is what a skin falls back to and
+// an AR round-trip cannot silently revert a skin's atmosphere. See atmosphere.js.
+setupAtmosphere(scene, baseLights);
 
 // DEV: expose renderer/scene/camera so javascript_tool can render on demand
 // even when the tab is backgrounded and Three.js's rAF loop is suspended.
@@ -193,6 +204,40 @@ setArenaRenderContext({ renderer, scene, camera });
 onArenaReady((st) => {
   console.log(`[arena] ready via ${st.source}`, st.diagnostics);
   refreshSkinHud();
+
+  // P42b: arm the Satoshi door-target once the GLB arena (and therefore its
+  // doors) exists. The panorama fallback has no doors, so nothing arms there.
+  const satoshi = setupSatoshiTarget({
+    scene, renderer,
+    // AR is explicitly OFF, not merely invisible: armode hides the whole arena
+    // in passthrough, so a target there would be an unseeable thing making a
+    // noise and awarding points nobody could earn.
+    isSuppressed: () => isARSession(),
+    onLocalScore: (points) => recordHit(points),   // score.js — competition reads this
+    getCamera: () => camera,
+  });
+  void satoshi;   // the hit test below finds it through the active skin
+});
+
+// ONE hit test, routed by whichever skin is on screen. Registering a skin's
+// tryHit directly (as this did when Gold was the only one) leaves it installed
+// while a different skin is active — harmless while there was one, wrong the
+// moment there are two, since both arenas keep their targets alive across a
+// switch. The skin owns the answer; shoot.js still sees a single hook.
+setDoorTargetHitTest((origin, direction) =>
+  getSkin(skins.getActiveSkinId())?.hitTest?.(origin, direction) ?? null);
+
+// P47: the Snapper arms when the Carnivorous arena (and therefore its maws)
+// exists. Carnivorous-only and always-on, like Satoshi is in Gold.
+onCarnivorousReady((st) => {
+  console.log(`[carn] ready via ${st.source}`, st.diagnostics);
+  refreshSkinHud();
+  setupSnapperTarget({
+    scene, renderer,
+    isSuppressed: () => isARSession(),
+    onLocalScore: (points) => recordHit(points),
+    getCamera: () => camera,
+  });
 });
 _afterInteractive(() => loadArena());
 
@@ -305,6 +350,19 @@ renderer.setAnimationLoop(function animate() {
   updateControllers();    // refresh controller ray lines each frame
   updateRapidFireHUD();   // refresh countdown + upgrade button state (shows the frozen value)
   skins.updateSkin(delta, elapsed); // cosmetic skin animation (Classic's neon void)
+  // P42b: the door-target scheduler. Only ticks while Gold Arena is the active
+  // skin — otherwise its doors are not in the scene and a spawn would be
+  // invisible. Inside the gameplay guard is deliberate: a paused skin switch
+  // must not advance the cadence or strand a target mid-emerge.
+  if (!skins.isPaused()) {
+    const activeSkin = skins.getActiveSkinId();
+    if (activeSkin === 'gold-arena') {
+      getSatoshiTarget()?.update(delta);
+      getDoorArrow()?.update(delta);
+    } else if (activeSkin === 'carnivorous') {
+      updateSnapper(delta);
+    }
+  }
   vrui.updateVrUI();      // head-lock + show/hide the in-world ACTIVATE panel
   vrMenu.updateVrMenu();  // in-world menu: laser hover, knock notice/badge, toasts
   tickTransport();        // flush mock/bc impairment queues

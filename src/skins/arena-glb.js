@@ -1,4 +1,11 @@
 import * as THREE from 'three';
+import { buildGoldDoors } from './gold-doors.js';
+import { setupDoorTargets } from './door-targets.js';
+import { setupDoorArrow } from './door-arrow.js';
+import { playSample, preloadSample } from '../audio.js';
+import satoshiLaughUrl from '../assets/sfx/satoshi-laugh.m4a?url';
+import satoshiHitUrl   from '../assets/sfx/satoshi-hit.m4a?url';
+import satoshiFaceUrl from '../assets/satoshi-face.png?url';
 // GLTFLoader/DRACOLoader are imported DYNAMICALLY inside _load(). They are ~52 KB
 // of three/addons that nothing on the first-frame path touches, and pulling them
 // in statically put that parse cost in front of the player's first frame.
@@ -71,7 +78,13 @@ const EYE = new THREE.Vector3(0, 1.65, 0); // the notes' reference camera point
  */
 const ARENA_VALIDATE = (() => {
   try {
-    return import.meta.env.DEV || new URLSearchParams(location.search).has('validate');
+    const q = new URLSearchParams(location.search);
+    // ?validate=0 opts OUT in dev. The sweep is time-sliced, so it no longer
+    // freezes anything, but it still takes ~20 s of wall clock before the arena
+    // reports ready — which a headless check waiting on that flag has to sit
+    // through on every run. The asset it re-derives is fixed and already vetted.
+    if (q.get('validate') === '0') return false;
+    return import.meta.env.DEV || q.has('validate');
   } catch { return false; }
 })();
 
@@ -131,6 +144,97 @@ let _state = {
 let _promise = null;
 const _readyCbs = [];
 
+// The door rig for the loaded arena. Null until the GLB is accepted, and null
+// forever on the panorama fallback — that asset has no panels to open.
+let _doors = null;
+/** P42b drives the doors through this. Null unless the GLB arena is live. */
+export function getGoldDoors() { return _doors; }
+
+// ── The Satoshi door-target (config #1) ──────────────────────────────────────
+// The SYSTEM is generic (door-targets.js); this is the only Satoshi-specific
+// code, and it is a config object. P47's Snapper is meant to be a second one of
+// these with no changes to the system.
+let _satoshi = null;
+export function getSatoshiTarget() { return _satoshi; }
+
+// P44: the on-screen / in-world pointer to whichever door is open. Driven purely
+// by the target's lifecycle events below — it holds no spawn logic of its own.
+let _arrow = null;
+export function getDoorArrow() { return _arrow; }
+
+/**
+ * @param {object} hooks  { isSuppressed, onLocalScore, getCamera }
+ * Called from main.js once the scene exists. Idempotent.
+ */
+export function setupSatoshiTarget(hooks) {
+  if (_satoshi || !_doors || !_state.root) return _satoshi;
+  const tex = new THREE.TextureLoader().load(satoshiFaceUrl);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+
+  _arrow = setupDoorArrow({
+    scene: hooks.scene, camera: hooks.getCamera(), renderer: hooks.renderer,
+    isSuppressed: hooks.isSuppressed,
+  });
+
+  _satoshi = setupDoorTargets({
+    doors: _doors,
+    // Parented to the ARENA ROOT, so it is Gold-only, travels with the cached
+    // arena across skin switches, and is hidden with `environment` in AR.
+    parent: _state.root,
+    ...hooks,
+    // EVENT-DRIVEN: the arrow is told what is out; it never inspects doors.
+    onTargetChange: (pose) => (pose ? _arrow?.setTarget(pose.position) : _arrow?.clearTarget()),
+    config: {
+      id: 'satoshi',
+      // The swappable face mount. `kind:'plane'` is the sprite-plane path;
+      // swapping in a modelled head later means `{ kind:'object3d', object }`
+      // and nothing else changes.
+      model: { kind: 'plane', texture: tex, size: [0.78, 0.78] },
+      points: 42,
+      // RARE on purpose: at 20-40 s a player sees maybe two in a 4:20 match, so
+      // it stays an event rather than becoming the main scoring loop.
+      spawnCadence: [20, 40],
+      holdTime: 7,
+      emergeSeconds: 0.45,
+      emergeStyle: 'pop',
+      offset: 0.55,
+      bob: { amplitude: 0.05, hz: 0.5 },
+      // P45 landed, so the placeholder is gone: these are the real cartoon SFX,
+      // procedurally synthesized (see src/assets/sfx/LICENSES.md). The slots take
+      // FUNCTIONS, which is why swapping them was one line each — nothing in
+      // door-targets.js knows or cares that these are now samples.
+      sounds: {
+        emerge: () => playSample(satoshiLaughUrl, { gain: 0.85 }),
+        hit:    () => playSample(satoshiHitUrl,   { gain: 0.9  }),
+      },
+      // The bays are shadowed and the face pops out of one, so until now the
+      // one thing on screen that mattered was the one thing with no light on
+      // it. Warm gold, keyed to the arena's own bronze and gilding, sat just in
+      // front of the face so it lights the side the player is aiming at.
+      // Short range on purpose: it must not wash the bay it came out of.
+      targetLight: {
+        colour: 0xffc169, intensity: 16, distance: 4.2, decay: 1.9,
+        offset: [0, 0.12, 0.5],
+      },
+    },
+  });
+  // Warm the bytes now so the first laugh is not late. This needs no user
+  // gesture — only DECODING does, and that happens on the first play.
+  preloadSample(satoshiLaughUrl); preloadSample(satoshiHitUrl);
+
+  // ?dev handles, next to window.__doors. A headless check reaching for these
+  // through a dynamic import() gets a SECOND module instance under Vite dev —
+  // with its own `_satoshi` that is still null — so the live objects are exposed
+  // here instead of being re-derived from an import.
+  if (isDev()) { window.__doorTarget = _satoshi; window.__doorArrow = _arrow; }
+
+  if (_satoshi) console.log('[door-target] satoshi armed — +42, ' +
+    `every ${_satoshi.config.spawnCadence.join('-')}s, holds ${_satoshi.config.holdTime}s ` +
+    '(cartoon SFX from P45)');
+  return _satoshi;
+}
+
 /**
  * SHADER PRE-COMPILATION CONTEXT.
  *
@@ -160,6 +264,9 @@ function yieldFrame() {
   }
   return new Promise((r) => setTimeout(r, 0));
 }
+
+/** Shared with other GLB skins: same compileAsync + one-texture-per-frame warm. */
+export function warmGpu(root, label) { return warmShaders(root, label); }
 
 async function warmShaders(root, label) {
   if (!_gl?.renderer) return null;
@@ -285,6 +392,14 @@ async function _load() {
 
     prepareForRuntime(root);
     root.userData.keepAlive = true; // the seam detaches rather than disposes this
+
+    // P41: turn the 42 target panels into openable doors. Built onto the ARENA
+    // ROOT (not the skin group) so they travel with the cached arena, are hidden
+    // with it in AR, and are detached rather than disposed on a skin switch.
+    // Gold-only by construction — this root only ever exists inside gold-arena.
+    _doors = buildGoldDoors(root);
+    diag.doors = _doors?.stats || null;
+    exposeDoorDevTools(_doors);
     diag.warmMs = await warmShaders(root, 'GLB arena');
 
     console.log(`[arena] GLB accepted — ${diag.triangles} tris, ${diag.sizeMetres.x}×${diag.sizeMetres.z} m, seal ${seal.misses}/${seal.rays} misses${seal.skipped ? ' (QA-recorded; ?validate to re-run in-engine)' : ' (re-run in-engine)'}`);
@@ -293,6 +408,41 @@ async function _load() {
     console.warn('[arena] GLB load failed → panorama fallback', err);
     return buildPanorama({ reason: `GLB load error: ${err?.message || err}` });
   }
+}
+
+function isDev() {
+  try { return import.meta.env.DEV || new URLSearchParams(location.search).has('dev'); }
+  catch { return false; }
+}
+
+/**
+ * ?dev door tools. P42 will drive these doors from the host; until then this is
+ * how a human (or a headless check) opens one. Behind ?dev, like the placeholder
+ * skin and the mock transport panel, so nothing here is reachable in normal play.
+ *
+ *   window.__doors            the full API (see gold-doors.js)
+ *   window.__doors.openRandom()  open a random shut door
+ *   press O / C               open / close a random door
+ *   window.__doorTarget       the live Satoshi target (P42b)
+ *   window.__doorArrow        the pointer, incl. .debug() (P44)
+ */
+function exposeDoorDevTools(doors) {
+  if (!doors) return;
+  if (!isDev()) return;
+
+  const pick = (wantOpen) => {
+    const ids = doors.listDoors().filter((id) => (doors.openness(id) === 1) === wantOpen);
+    return ids.length ? ids[Math.floor(Math.random() * ids.length)] : null;
+  };
+  doors.openRandom  = () => { const id = pick(false); if (id) doors.openDoor(id);  return id; };
+  doors.closeRandom = () => { const id = pick(true);  if (id) doors.closeDoor(id); return id; };
+
+  window.__doors = doors;
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'o' || e.key === 'O') console.log('[doors] open',  doors.openRandom());
+    if (e.key === 'c' || e.key === 'C') console.log('[doors] close', doors.closeRandom());
+  });
+  console.log(`[doors] ?dev tools ready — window.__doors, or press O to open / C to close a random door (${doors.count} doors)`);
 }
 
 // ── In-engine validation ──────────────────────────────────────────────────────
@@ -401,41 +551,47 @@ function prepareForRuntime(root) {
  * mapped to the inside of a sphere (BackSide). Only used if the GLB fails a
  * hard check — a backdrop cannot supply parallax, so it is strictly second best.
  */
+/**
+ * The interior of an equirectangular sphere, done the three ways it goes wrong.
+ * Shared by every skin with a 360 fallback (P38's fixes, in one place).
+ *
+ *  1. DEFAULT UVMapping, not EquirectangularReflectionMapping. That mapping is
+ *     for envMaps; this is a plain `map` on UV-mapped sphere geometry and would
+ *     sample wrongly.
+ *  2. INVERTED GEOMETRY, not side:BackSide. Viewing a sphere's interior through
+ *     BackSide shows the texture from behind, which MIRRORS it — that is why
+ *     the arena read "flipped" and the signage was backwards. geometry.scale
+ *     (-1,1,1) turns the sphere inside out instead and keeps FrontSide.
+ *  3. fog:false. The shell sits at radius = fog.far, so with fog on the whole
+ *     panorama faded to the background colour. THAT is why it rendered dark.
+ *     Opting the material out is local; scene.fog belongs to atmosphere.js.
+ *
+ * @param {string} url  equirectangular texture, centre longitude along -Z
+ */
+export function buildEquirectShell(url, { radius = 40, name = 'PanoramaShell' } = {}) {
+  const tex = new THREE.TextureLoader().load(url);
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const geo = new THREE.SphereGeometry(radius, 48, 32);
+  geo.scale(-1, 1, 1);
+
+  const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+    map: tex, depthWrite: false, fog: false,   // unlit: full brightness, no lights
+  }));
+  sphere.name = name;
+  sphere.renderOrder = -1;
+  sphere.frustumCulled = false;
+  return sphere;
+}
+
 function buildPanorama(info) {
   const root = new THREE.Group();
   root.name = 'SatsArena_Panorama';
 
-  const tex = new THREE.TextureLoader().load(panoramaUrl);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  // NOT EquirectangularReflectionMapping: that mapping is for envMaps/reflections.
-  // This texture is a plain `map` on UV-mapped sphere geometry, so it must stay
-  // on the default UVMapping or it samples wrongly.
-
-  // INVERTED GEOMETRY, not BackSide. Viewing a sphere's interior through
-  // side:BackSide shows the texture from behind, which MIRRORS it — that is why
-  // the arena read "flipped" and the signage was backwards. Scaling the geometry
-  // by -1 on X turns the sphere inside out instead, so we see the interior with
-  // the texture the right way round. This is the canonical three.js equirect
-  // recipe and it keeps the default FrontSide material.
-  const geo = new THREE.SphereGeometry(40, 48, 32);
-  geo.scale(-1, 1, 1);
-
-  const sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-    map: tex,
-    depthWrite: false,
-    // UNLIT (MeshBasicMaterial) so it is at full brightness with no lights, AND
-    // fog:false. scene.fog is Fog(10, 40) and this shell sits at radius 40 —
-    // exactly fog.far — so with fog enabled the entire panorama was faded to the
-    // near-black background. THAT is why it rendered dark. Opting this material
-    // out of fog fixes it without touching scene.fog (still owned by armode.js).
-    fog: false,
-  }));
-  sphere.name = 'PanoramaShell';
-  sphere.renderOrder = -1;
-  sphere.frustumCulled = false;
-  // Centre longitude points along -Z in the source render, matching the GLB's
-  // front vault, so no yaw correction is needed.
-  root.add(sphere);
+  // The P38 fixes live in buildEquirectShell — one copy, because every one of
+  // them is a mistake that renders "fine but wrong" and a second skin deriving
+  // them again would get one of them wrong.
+  root.add(buildEquirectShell(panoramaUrl));
 
   // NADIR COVER. The source panorama's nadir row is uniform (verified 0
   // variation by the exporter), so there is no swirl artifact — but a flat

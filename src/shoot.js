@@ -61,6 +61,13 @@ const MUZZLE_OFFSET = new THREE.Vector3(0.18, -0.16, -0.5);
 
 // onFire — optional callback invoked on every shot fired (hit or miss),
 // e.g. to trigger the weapon muzzle flash.
+// P42b hook: a skin can claim a shot before the coins are tested. Set by
+// main.js when the Gold Arena's door target arms; null the rest of the time, so
+// the shooting path is byte-identical when no door target exists.
+let _doorTargetHitTest = null;
+/** @param {((o:THREE.Vector3,d:THREE.Vector3)=>({point:THREE.Vector3,points:number}|null))|null} fn */
+export function setDoorTargetHitTest(fn) { _doorTargetHitTest = fn; }
+
 export function setupShooter(camera, scene, onFire) {
   const raycaster = new THREE.Raycaster();
   const _ndc    = new THREE.Vector2();  // reused for camera-space aiming
@@ -157,6 +164,24 @@ export function setupShooter(camera, scene, onFire) {
     // Broadcast to peers: origin + direction + rapidFire flag, lossy (a dropped bolt is harmless).
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
     sendEvent({ t: 'shot', origin: [o.x, o.y, o.z], dir: [d.x, d.y, d.z], rapidFire: isRapidFire() });
+
+    // P42b: the door target gets FIRST REFUSAL on the ray, before the coins.
+    // It is a rare, high-value target that emerges in front of the wall, so a
+    // coin drifting behind it must not steal the shot. Returning a point means
+    // it consumed the shot; null falls straight through to the coin test with
+    // nothing about that path changed.
+    if (_doorTargetHitTest) {
+      const dt = _doorTargetHitTest(raycaster.ray.origin, raycaster.ray.direction);
+      if (dt) {
+        // Scoring and the hit sound belong to door-targets.js (it is the thing
+        // that knows about host authority and first-claim-wins). All that is
+        // owed here is the juice.
+        spawnBurst(dt.point, SATOSHI_BURST_COUNT, SATOSHI_BURST_SPEED, satoshiStarMat);
+        spawnFloater(`+${dt.points}`, dt.point);
+        if (isRapidFire()) spawnLightning(boltStart, dt.point);
+        return;   // NOT a miss
+      }
+    }
 
     // Three's raycaster doesn't skip invisible objects, so a just-hit coin
     // (hidden during its respawn delay) could otherwise intercept the ray in

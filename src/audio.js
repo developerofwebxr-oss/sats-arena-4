@@ -226,3 +226,99 @@ export function playSatoshiHitSound() {
     playTone(c, freq * 2, 'sine', 0.10, 0.005, duration * 0.7, t); // shimmer
   });
 }
+
+/**
+ * playDoorTargetEmergePlaceholder() — STAND-IN for the Satoshi laugh.
+ *
+ * ── THE REAL LAUGH IS OWED FROM P45 ─────────────────────────────────────────
+ * P45 has NOT been run in this repo: there is no src/assets/sfx/ directory and
+ * no satoshi-laugh file. Rather than invent or generate a laugh, this plays a
+ * deliberately synthetic three-note taunt so the beat is audible and the
+ * emerge/hold/retract timing can actually be felt while testing. It is not
+ * pretending to be the laugh and should not ship as one.
+ *
+ * ── Swapping it is one line ─────────────────────────────────────────────────
+ * The door-target config takes a FUNCTION in `sounds.emerge`, not a URL, so P45
+ * can drop in whatever it produces — a decoded sample, a different synth, a
+ * positional source — without this module or door-targets.js changing shape:
+ *
+ *     sounds: { emerge: playSatoshiLaugh, hit: playSatoshiHitSound }
+ *
+ * It routes through the SAME shared AudioContext as every other sound here, so
+ * it inherits the existing lazy-create-on-gesture behaviour that satisfies iOS
+ * and Chrome autoplay policy. There is no second audio path.
+ */
+export function playDoorTargetEmergePlaceholder() {
+  const c   = getCtx();
+  const now = c.currentTime;
+
+  // Descending and slightly detuned — reads as "something just appeared and it
+  // is not on your side", without impersonating a laugh.
+  const notes = [
+    { freq: 392, startOffset: 0.00, duration: 0.16 },
+    { freq: 330, startOffset: 0.11, duration: 0.16 },
+    { freq: 262, startOffset: 0.22, duration: 0.30 },
+  ];
+  notes.forEach(({ freq, startOffset, duration }) => {
+    const t = now + startOffset;
+    playTone(c, freq,        'sawtooth', 0.13, 0.01, duration, t);
+    playTone(c, freq * 1.01, 'sawtooth', 0.10, 0.01, duration, t); // detune beat
+  });
+}
+
+// ── Sample playback ──────────────────────────────────────────────────────────
+// Everything above is synthesized. These two functions are the ONLY file path,
+// and they deliberately go through the SAME getCtx() as the synth sounds so
+// there is one AudioContext and one lazy-create-on-gesture story. A second
+// context (or an <audio> element) would need its own iOS unlock and would be a
+// second thing to get wrong.
+
+const _sampleBytes  = new Map();   // url -> Promise<ArrayBuffer>
+const _sampleBuffers = new Map();  // url -> AudioBuffer
+
+/**
+ * Fetch a sample's bytes WITHOUT touching the AudioContext.
+ *
+ * Split from decoding on purpose: fetching needs no user gesture, decoding does
+ * (it needs the context). So a caller can warm the network early and still have
+ * the first actual play be instant.
+ */
+export function preloadSample(url) {
+  if (!_sampleBytes.has(url)) {
+    _sampleBytes.set(url, fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`${r.status} ${url}`);
+      return r.arrayBuffer();
+    }));
+  }
+  return _sampleBytes.get(url);
+}
+
+/**
+ * Play a sample. Safe to call before it has loaded — the first call decodes and
+ * plays when ready, later calls are instant. A failure is warned and swallowed:
+ * a missing sound effect must never take gameplay down with it.
+ * @param {string} url
+ * @param {{gain?: number, rate?: number}} [opts]
+ */
+export function playSample(url, { gain = 0.9, rate = 1 } = {}) {
+  const c = getCtx();
+  const start = (buf) => {
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = rate;
+    const g = c.createGain();
+    g.gain.value = gain;
+    src.connect(g).connect(c.destination);
+    src.start();
+  };
+
+  const cached = _sampleBuffers.get(url);
+  if (cached) { start(cached); return; }
+
+  preloadSample(url)
+    // decodeAudioData wants its own copy — it detaches the ArrayBuffer it is
+    // given, which would break every later play from the same cached bytes.
+    .then((bytes) => c.decodeAudioData(bytes.slice(0)))
+    .then((buf) => { _sampleBuffers.set(url, buf); start(buf); })
+    .catch((e) => console.warn(`[audio] sample failed: ${url}`, e));
+}
