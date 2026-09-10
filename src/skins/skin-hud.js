@@ -164,30 +164,30 @@ function injectStyles() {
     #skin-toggle {
       position: fixed; left: 16px; bottom: 55px; z-index: 8000;
       padding: 8px 12px; border-radius: 8px;
-      border: 1px solid #7df6; background: rgba(0,0,0,.55);
-      color: #adf; font: 700 12px/1 monospace; letter-spacing: .12em; cursor: pointer;
+      border: 1px solid var(--ui-primary-line); background: var(--ui-panel-chip);
+      color: var(--ui-text); font: 700 12px/1 monospace; letter-spacing: .12em; cursor: pointer;
     }
     #skin-panel {
       position: fixed; left: 16px; bottom: 93px; z-index: 8001;
       display: flex; flex-direction: column; gap: 8px;
       width: 210px; padding: 14px;
-      background: rgba(6,6,14,.95); border: 1px solid #7df6; border-radius: 10px;
-      color: #cfe6ff; font: 12px monospace;
+      background: var(--ui-panel-solid); border: 1px solid var(--ui-primary-line); border-radius: 10px;
+      color: var(--ui-text); font: 12px monospace;
     }
     #skin-close {
       position: absolute; top: 6px; right: 8px;
-      background: none; border: none; color: #7df; cursor: pointer; font-size: 13px;
+      background: none; border: none; color: var(--ui-primary); cursor: pointer; font-size: 13px;
     }
-    #skin-title { font-weight: 700; letter-spacing: .18em; color: #7df; }
+    #skin-title { font-weight: 700; letter-spacing: .18em; color: var(--ui-primary); }
     #skin-list { display: flex; flex-direction: column; gap: 6px; }
     .skin-row {
       display: flex; justify-content: space-between; align-items: center; gap: 8px;
       padding: 8px 10px; border-radius: 6px; cursor: pointer;
-      border: 1px solid #7df4; background: rgba(0,0,0,.4);
-      color: #cfe6ff; font: 12px monospace; text-align: left;
+      border: 1px solid var(--ui-primary-line); background: var(--ui-panel-chip);
+      color: var(--ui-text); font: 12px monospace; text-align: left;
     }
-    .skin-row:hover { background: rgba(0,229,255,.10); }
-    .skin-row.active { border-color: #00e5ff; color: #00e5ff; }
+    .skin-row:hover { background: var(--ui-primary-faint); }
+    .skin-row.active { border-color: var(--ui-primary); color: var(--ui-primary); }
     .skin-row.dim { opacity: .45; }
     .skin-meta { font-size: 10px; opacity: .75; letter-spacing: .08em; }
     #skin-note { font-size: 10px; opacity: .7; line-height: 1.35; }
@@ -196,12 +196,12 @@ function injectStyles() {
     #skin-overlay {
       position: fixed; inset: 0; z-index: 9800;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(4,4,10,.82); backdrop-filter: blur(2px);
+      background: var(--ui-scrim); backdrop-filter: blur(2px);
     }
-    .skin-ov-inner { text-align: center; color: #00e5ff; font: 700 16px monospace; letter-spacing: .14em; }
+    .skin-ov-inner { text-align: center; color: var(--ui-primary); font: 700 16px monospace; letter-spacing: .14em; }
     .skin-ov-spin {
       width: 34px; height: 34px; margin: 0 auto 14px;
-      border: 3px solid rgba(0,229,255,.25); border-top-color: #00e5ff;
+      border: 3px solid var(--ui-primary-dim); border-top-color: var(--ui-primary);
       border-radius: 50%; animation: skin-spin .8s linear infinite;
     }
     @keyframes skin-spin { to { transform: rotate(360deg); } }
@@ -210,7 +210,7 @@ function injectStyles() {
     #skin-toast {
       position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%);
       z-index: 9900; padding: 9px 16px; border-radius: 8px;
-      background: rgba(0,0,0,.85); border: 1px solid #7df6; color: #cef;
+      background: var(--ui-panel); border: 1px solid var(--ui-primary-line); color: var(--ui-text);
       font: 12px monospace; letter-spacing: .04em; pointer-events: none;
     }
 

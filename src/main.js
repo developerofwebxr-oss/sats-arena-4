@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { createScene } from './scene.js';
 import { watchForNewBuild } from './build-freshness.js';
-import { setupXR } from './xr.js';
+import { setupXR, recenterXRView, canRecenterXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
-import { createHUD, updateRapidFireHUD } from './hud.js';
+import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge } from './hud.js';
 import { setupInput } from './input.js';
 import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
@@ -13,27 +13,27 @@ import { setupAtmosphere } from './atmosphere.js';
 import { isARSession } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
-import { updateUpgrade } from './upgrade.js';
+import { updateUpgrade, isRapidFire, getRemainingSeconds } from './upgrade.js';
 import { recordHit } from './score.js';
 import { setupVrUI } from './vrui.js';
 import { setupVrMenu } from './vr-menu.js';
 import {
   setupCoopHud, setCoopMode,
   coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
-  onPendingRequests, approveJoinRequest, denyJoinRequest,
+  onPendingRequests, approveJoinRequest, denyJoinRequest, getOwnCode,
 } from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
-import { tickTransport } from './net/room.js';
+import { tickTransport, getParticipantCount } from './net/room.js';
 import { setupMockDevPanel } from './net/mock-dev-panel.js';
-import { setupCompetition, updateCompetition, canCompete, proposeCompetition } from './net/competition.js';
+import { setupCompetition, updateCompetition, canCompete, proposeCompetition, isMatchActive } from './net/competition.js';
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
 import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
 import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
          setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
 import { onCarnivorousReady, setupSnapperTarget, updateSnapper } from './skins/carnivorous-glb.js';
-import { getSkin } from './skins/registry.js';
+import { getSkin, listSkins } from './skins/registry.js';
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
@@ -71,6 +71,10 @@ const weapon = setupWeapon(camera, renderer);
 // (which rides updateWeapon) untestable headlessly.
 if (import.meta.env.DEV) window.__weapon = weapon;
 
+// DEV: the in-world menu, so a headless check can open it and screenshot the
+// themed panel (it is normally only reachable from an XR controller's X button).
+if (import.meta.env.DEV) setTimeout(() => { window.__vrMenu = vrMenu; }, 0);
+
 // In-world VR ACTIVATE panel. Set up before setupXR so its select handler can be
 // given to the controllers (it takes precedence over shooting when pointed at).
 const vrui = setupVrUI(scene, camera, renderer);
@@ -84,6 +88,11 @@ const { onShoot, shootFromRay, updateBursts, spawnPeerShot, spawnLightning } = s
 // Gating happens HERE, at the wiring seam — shoot.js / input.js / xr.js are
 // untouched, so the shooting path itself is exactly as confirmed.
 let skins    = null; // assigned below; the wrappers are only ever called later
+// P49: the VR menu reads skinNet at construction (its first paint builds the
+// model), so this follows the same late-bind pattern as xrApi/modeCtrl below —
+// declared here as null and assigned further down. As a `const` declared at its
+// assignment it sat in the temporal dead zone and the menu's first repaint threw.
+let skinNet  = null; // setupSkinNet's return, read late by the menu's skin rows
 let xrApi    = null; // setupXR's return, read late by the menu's getControllers
 let modeCtrl = null; // setupModeSwitcher's return, read late by exitToScreen
 const gamePaused      = () => !!skins && skins.isPaused();
@@ -94,18 +103,44 @@ const gatedShootFromRay = (...a) => { if (gamePaused()) return; shootFromRay(...
 // existing handler. It needs the controllers that setupXR creates, and the mode
 // controller built further down, so both are bound late through getters — the
 // menu only ever reads them at runtime, never during construction.
+// P49: the menu is now a co-op HUB, so it needs to READ more state as well as
+// drive actions. Everything below is an existing accessor or an existing
+// handler — the menu still adds no mechanics of its own.
 const vrMenu = setupVrMenu(scene, renderer, {
-  recenterView,                                  // movement.js  — DOM RECENTER action
-  coopLeave,                                     // coop-hud.js  — DOM LEAVE button
-  coopToggleMute,                                // coop-hud.js  — DOM MUTE button
-  isCoopMuted,
+  // ── header: hosting takes zero typing, so the code is the headline ────────
+  getOwnCode,                                    // coop-hud.js  — this player's room code
+  getParticipantCount,                           // room.js      — for the status line
+  isMatchActive,                                 // competition.js
   isCoopJoined,
+
+  // ── play ──────────────────────────────────────────────────────────────────
+  listSkins,                                     // registry.js  — the real skin list
+  getActiveSkinId: () => (skins ? skins.getActiveSkinId() : null),
+  canSwitchSkin:   () => (skinNet ? skinNet.canSwitch() : { ok: false, reason: 'not ready' }),
+  requestSkin:     (id) => (skinNet ? skinNet.requestSwitch(id)
+                                    : { ok: false, reason: 'not ready' }),
+  isRapidFire, getRemainingSeconds,              // upgrade.js
+  getAvailableCharges, activateCharge,           // hud.js — the ACTIVATE half of the pay flow
+
+  // ── co-op ─────────────────────────────────────────────────────────────────
+  coopToggleMute,                                // coop-hud.js  — DOM MUTE button
+  isCoopMuted,                                   // reads LiveKit's real publish state
   canCompete,                                    // competition.js — #cmp-compete enablement
   proposeCompetition,                            // competition.js — propose() handshake
-  exitToScreen: () => modeCtrl && modeCtrl.exitToScreen(), // modeswitcher.js
   onPendingRequests,                             // coop-hud.js  — knock polling mirror
   approveJoinRequest,                            // coop-hud.js  — DOM ✓ on a knock card
   denyJoinRequest,                               // coop-hud.js  — DOM ✗ on a knock card
+
+  // ── exit ──────────────────────────────────────────────────────────────────
+  coopLeave,                                     // coop-hud.js  — DOM LEAVE button
+  exitToScreen: () => modeCtrl && modeCtrl.exitToScreen(), // modeswitcher.js
+
+  // ── recenter: a REAL one (xr.js re-origins the XR reference space). The menu
+  // HIDES the row when the runtime cannot offer it, rather than showing the
+  // inert gyro-only row it used to.
+  canRecenter: () => canRecenterXR(renderer),
+  recenterXR:  () => recenterXRView(renderer),
+
   getControllers: () => (xrApi ? xrApi.getControllers() : []),
 });
 
@@ -167,7 +202,7 @@ setupCompetition();
 
 // Host-authoritative shared switching + the both-ready synced pause. Must come
 // after setupCoopHud (host identity) and setupCompetition (the match lock).
-const skinNet = setupSkinNet({
+skinNet = setupSkinNet({
   skins,
   onPauseChange: (on, name) => setSwitchOverlay(on, name),
 });

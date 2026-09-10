@@ -51,6 +51,19 @@ let _classicDecor = null; // per-build handle; cleared on teardown
 const classic = {
   id: 'classic',
   name: 'CLASSIC',
+  // Today's neon, unchanged — cyan structure, magenta accent, bitcoin-orange
+  // glow. This palette is also theme.js's DEFAULT_UI, so a skin that declares no
+  // `ui` renders as Classic rather than unthemed.
+  ui: {
+    primary:   '#00e5ff',   // cyan
+    accent:    '#b14bff',   // magenta
+    danger:    '#ff5d6c',
+    ok:        '#4dff9e',
+    text:      '#cfe6ff',
+    textMuted: '#8fa8bd',
+    panelBg:   '#06060e',
+    glow:      '#f7931a',   // bitcoin orange
+  },
   environment: {
     build(group) {
       buildArena(group); // identical geometry to the original main.js call
@@ -79,6 +92,19 @@ const classic = {
 const placeholder = {
   id: 'placeholder',
   name: 'PLACEHOLDER',
+  // The crude green/pink leak-test skin gets a matching UI so nothing renders
+  // unthemed while it is up — it exists to make "did the switch happen?"
+  // obvious, and the HUD changing colour with it serves that directly.
+  ui: {
+    primary:   '#39ff88',   // the same green its walls use
+    accent:    '#ff3ea5',   // and the same pink
+    danger:    '#ff5d6c',
+    ok:        '#39ff88',
+    text:      '#dcffe9',
+    textMuted: '#7fae94',
+    panelBg:   '#04120b',
+    glow:      '#39ff88',
+  },
   devOnly: true,   // hidden from the public menu; see DEV_MODE below
   environment: {
     build(group) {
@@ -147,6 +173,20 @@ const placeholder = {
 const goldArena = {
   id: 'gold-arena',
   name: 'GOLD ARENA',
+  // Warm imperial palette to match the arena's stone, gold and amber. Text goes
+  // cream rather than the cool blue-white Classic uses, because blue-white on a
+  // warm panel reads as a mismatch rather than as contrast. Danger stays red:
+  // it is TINTED warmer here, not replaced.
+  ui: {
+    primary:   '#e8b658',   // gold
+    accent:    '#c2763a',   // bronze
+    danger:    '#ff6b52',   // warm red — still unmistakably danger
+    ok:        '#8fd47a',
+    text:      '#f6e7c8',   // cream
+    textMuted: '#b39a72',
+    panelBg:   '#140f08',
+    glow:      '#ffb347',   // warm amber glow
+  },
   environment: {
     build(group) {
       // Attaches immediately when preloaded. If a switch somehow beats the
@@ -180,6 +220,23 @@ const goldArena = {
   readyLabel: () => (isArenaReady() ? (getArenaState().source === 'panorama' ? '360°' : 'FREE') : 'LOADING…'),
 };
 
+
+// ── The Carnivorous palette ───────────────────────────────────────────────────
+// Blood-red primary, toxic-green accent, dark panel, as specified. Note that
+// primary and danger are BOTH red here, which is the one case the danger rule
+// has to be watched: danger is pushed brighter and pinker than primary so LEAVE
+// still separates from ordinary structure. If this ever stops reading clearly
+// on a device, move primary darker rather than moving danger.
+export const CARNIVOROUS_UI = Object.freeze({
+  primary:   '#c1121f',   // blood red
+  accent:    '#7fff2a',   // toxic green
+  danger:    '#ff4d5e',   // brighter + pinker than primary, so it still separates
+  ok:        '#7fff2a',
+  text:      '#f2dede',
+  textMuted: '#9c7a7a',
+  panelBg:   '#0d0505',
+  glow:      '#ff2d2d',
+});
 
 // ── carnivorous ───────────────────────────────────────────────────────────────
 // The Carnivorous Conservatory. Same GLB-first policy as the Gold Arena, plus
@@ -228,7 +285,14 @@ const carnivorous = {
   readyLabel: () => (isCarnivorousReady()
     ? (getCarnivorousState().source === 'panorama' ? '360°' : 'FREE')
     : 'LOADING…'),
+
+  // P51's palette, which was staged BEFORE this skin existed and parked with a
+  // note saying exactly this: "add `ui: CARNIVOROUS_UI` to the skin's registry
+  // entry. Nothing else is needed; the theme bridge does the rest." The skin
+  // landed in P46, so this is that instruction being carried out.
+  ui: CARNIVOROUS_UI,
 };
+
 
 // Order here is the order the picker shows them in. classic is index 0 and is
 // the boot default — the game must look untouched until someone switches.

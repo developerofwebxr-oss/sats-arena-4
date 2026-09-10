@@ -60,25 +60,25 @@ function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
     @keyframes lightning-pulse {
-      0%   { box-shadow: 0 0 12px rgba(247,147,26,0.4), 0 0 24px rgba(247,147,26,0.2); }
-      50%  { box-shadow: 0 0 28px rgba(247,147,26,0.9), 0 0 56px rgba(247,147,26,0.5); }
-      100% { box-shadow: 0 0 12px rgba(247,147,26,0.4), 0 0 24px rgba(247,147,26,0.2); }
+      0%   { box-shadow: 0 0 12px var(--ui-glow-soft), 0 0 24px var(--ui-glow-soft); }
+      50%  { box-shadow: 0 0 28px var(--ui-glow-strong), 0 0 56px var(--ui-glow-mid); }
+      100% { box-shadow: 0 0 12px var(--ui-glow-soft), 0 0 24px var(--ui-glow-soft); }
     }
     #upgrade-btn { animation: lightning-pulse 1.4s ease-in-out infinite; }
     #upgrade-btn.active {
       /* While rapid-fire is running, the button glows magenta to show it's live. */
       animation: none;
-      border-color: #b14bff;
-      color: #b14bff;
-      text-shadow: 0 0 10px #b14bff;
-      box-shadow: 0 0 24px rgba(177,75,255,0.6);
+      border-color: var(--ui-accent);
+      color: var(--ui-accent);
+      text-shadow: 0 0 10px var(--ui-accent);
+      box-shadow: 0 0 24px var(--ui-accent-line);
     }
 
     /* Loading spinner for the "creating invoice…" button state. */
     @keyframes mini-spin { to { transform: rotate(360deg); } }
     .mini-spinner {
       display: inline-block; width: 12px; height: 12px; vertical-align: middle;
-      border: 2px solid rgba(247,147,26,0.3); border-top-color: #f7931a;
+      border: 2px solid var(--ui-glow-soft); border-top-color: var(--ui-glow);
       border-radius: 50%; animation: mini-spin 0.7s linear infinite;
     }
 
@@ -120,8 +120,8 @@ export function createHUD(onShoot) {
     font-family: monospace;
     font-size: 16px;
     letter-spacing: 0.12em;
-    color: #f7931a;
-    text-shadow: 0 0 10px #f7931a;
+    color: var(--ui-glow);
+    text-shadow: 0 0 10px var(--ui-glow);
     pointer-events: none;
     user-select: none;
   `;
@@ -143,13 +143,13 @@ export function createHUD(onShoot) {
     top: 16px;
     right: 16px;
     padding: 14px 22px;
-    background: rgba(0,0,0,0.8);
-    color: #f7931a;
-    border: 1px solid #f7931a;
+    background: var(--ui-panel);
+    color: var(--ui-glow);
+    border: 1px solid var(--ui-glow);
     font-family: monospace;
     text-align: center;
     cursor: pointer;
-    text-shadow: 0 0 10px #f7931a;
+    text-shadow: 0 0 10px var(--ui-glow);
     z-index: 200;
   `;
 
@@ -174,11 +174,11 @@ export function createHUD(onShoot) {
     <div style="
       width: 92px; height: 92px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      background: rgba(0,229,255,0.18); border: 2px solid #00e5ff;
-      box-shadow: 0 0 22px rgba(0,229,255,0.55);
+      background: var(--ui-primary-dim); border: 2px solid var(--ui-primary);
+      box-shadow: 0 0 22px var(--ui-primary-line);
     ">
-      <svg width="66" height="66" viewBox="0 0 100 100" fill="none" stroke="#00e5ff"
-           stroke-width="5" stroke-linecap="round" style="filter: drop-shadow(0 0 4px #00e5ff);">
+      <svg width="66" height="66" viewBox="0 0 100 100" fill="none" stroke="var(--ui-primary)"
+           stroke-width="5" stroke-linecap="round" style="filter: drop-shadow(0 0 4px var(--ui-primary));">
         <circle cx="50" cy="50" r="15" />
         <line x1="50" y1="4"  x2="50" y2="30" />
         <line x1="50" y1="70" x2="50" y2="96" />
@@ -186,7 +186,7 @@ export function createHUD(onShoot) {
         <line x1="70" y1="50" x2="96" y2="50" />
       </svg>
     </div>
-    <div style="margin-top: 6px; font-size: 13px; letter-spacing: 0.18em; color: #00e5ff; text-shadow: 0 0 8px #00e5ff;">SHOOT</div>`;
+    <div style="margin-top: 6px; font-size: 13px; letter-spacing: 0.18em; color: var(--ui-primary); text-shadow: 0 0 8px var(--ui-primary);">SHOOT</div>`;
   // Bottom-right, above the mode switcher. Width = circle so it sits cleanly in
   // the corner in both portrait and landscape.
   shootBtn.style.cssText = `
@@ -223,27 +223,29 @@ function buildPaymentModal() {
     display: none;
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.88);
+    background: var(--ui-panel);
     z-index: 300;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 14px;
     font-family: monospace;
-    color: #f7931a;
+    color: var(--ui-glow);
     text-align: center;
     padding: 24px;
   `;
 
   const title = document.createElement('div');
   title.textContent = '⚡ PAY 21 SATS';
-  title.style.cssText = 'font-size: 20px; letter-spacing: 0.12em; text-shadow: 0 0 8px #f7931a;';
+  title.style.cssText = 'font-size: 20px; letter-spacing: 0.12em; text-shadow: 0 0 8px var(--ui-glow);';
 
   payModalCode = document.createElement('div');
   payModalCode.style.cssText = 'font-size: 12px; letter-spacing: 0.18em; opacity: 0.7;';
 
   // White card behind the QR so it scans reliably.
   const qrCard = document.createElement('div');
+  // NOT THEMED, on purpose: a Lightning QR needs a white quiet zone to scan
+  // reliably. Tinting it to match a skin would trade money for decoration.
   qrCard.style.cssText = 'background:#fff; padding:12px; border-radius:6px; line-height:0;';
   payModalQr = document.createElement('img');
   payModalQr.width = 240;
@@ -256,7 +258,7 @@ function buildPaymentModal() {
   payModalOpenLink = document.createElement('a');
   payModalOpenLink.textContent = '⚡ OPEN IN WALLET';
   payModalOpenLink.style.cssText = `
-    display: inline-block; padding: 14px 26px; background: #f7931a; color: #000;
+    display: inline-block; padding: 14px 26px; background: var(--ui-glow); color: var(--ui-on-glow);
     font-family: monospace; font-size: 16px; font-weight: bold; letter-spacing: 0.08em;
     text-decoration: none; border-radius: 4px; cursor: pointer;
   `;
@@ -266,8 +268,8 @@ function buildPaymentModal() {
   payModalCopyBtn = document.createElement('button');
   payModalCopyBtn.textContent = 'COPY INVOICE';
   payModalCopyBtn.style.cssText = `
-    padding: 10px 20px; background: transparent; color: #f7931a;
-    border: 1px solid #f7931a; font-family: monospace; letter-spacing: 0.1em; cursor: pointer;
+    padding: 10px 20px; background: transparent; color: var(--ui-glow);
+    border: 1px solid var(--ui-glow); font-family: monospace; letter-spacing: 0.1em; cursor: pointer;
   `;
   payModalCopyBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -289,7 +291,7 @@ function buildPaymentModal() {
   cancelBtn.textContent = 'CANCEL';
   cancelBtn.style.cssText = `
     margin-top: 6px; padding: 10px 20px; background: transparent;
-    color: #888; border: 1px solid #555; font-family: monospace;
+    color: var(--ui-text-muted); border: 1px solid var(--ui-text-muted); font-family: monospace;
     letter-spacing: 0.1em; cursor: pointer;
   `;
   cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closePaymentModal(); cancelBtn.blur(); });
@@ -302,7 +304,7 @@ async function showPaymentModal(invoice, code = getSessionCode()) {
   currentInvoice = invoice;
   payModalCode.textContent = code ? `session ${code}` : '';
   payModalStatus.textContent = '⏳ waiting for payment…';
-  payModalStatus.style.color = '#f7931a';
+  payModalStatus.style.color = 'var(--ui-glow)';
   // lightning: URI uses the canonical lowercase invoice; tapping opens the wallet.
   payModalOpenLink.href = `lightning:${invoice}`;
   payModalCopyBtn.textContent = 'COPY INVOICE';
@@ -338,7 +340,7 @@ async function purchaseRapidFire() {
     setUpgradeLoading(false);
     payModal.style.display = 'flex';
     payModalStatus.textContent = 'could not reach payment server — try again';
-    payModalStatus.style.color = '#ff4444';
+    payModalStatus.style.color = 'var(--ui-danger)';
   }
 }
 

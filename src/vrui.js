@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { isRapidFire, getRemainingSeconds } from './upgrade.js';
 import { getAvailableCharges, activateCharge } from './hud.js';
 import { getScore } from './score.js';
+import { getTheme, onThemeChange } from './theme.js';
 
 /**
  * vrui.js — in-world HUD for immersive VR/AR (where DOM isn't visible):
@@ -28,22 +29,39 @@ const NOTICE_SECS   = 5.0;  // how long the fairness notice stays visible
 
 export function setupVrUI(scene, camera, renderer) {
   // ── ACTIVATE panel ──────────────────────────────────────────────────────
+  const panelTex = makePanelTexture();
   const panel = new THREE.Mesh(
     new THREE.PlaneGeometry(0.9, 0.45),
-    new THREE.MeshBasicMaterial({ map: makePanelTexture(), transparent: true, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ map: panelTex.texture, transparent: true, side: THREE.DoubleSide }),
   );
   panel.visible = false;
   scene.add(panel);
 
   // ── SCORE + COUNTDOWN text sprites (repaint-on-change) ──────────────────────
-  const scoreSprite  = createTextSprite(SCORE_WIDTH, '#f7931a'); // orange
-  const timerSprite  = createTextSprite(TIMER_WIDTH, '#b14bff'); // magenta
-  const noticeSprite = createTextSprite(1.4, '#ff6060');           // red — fairness warning
+  // P51: seeded from the live theme and re-coloured on every skin change below.
+  const _t0 = getTheme();
+  const scoreSprite  = createTextSprite(SCORE_WIDTH, _t0.glow);   // the skin's signature glow
+  const timerSprite  = createTextSprite(TIMER_WIDTH, _t0.accent); // accent
+  const noticeSprite = createTextSprite(1.4, _t0.danger);         // DANGER — fairness warning
   noticeSprite.setText('Left gun disabled for fair play.\nBoth in headsets → two-handed.');
+  panel.name        = 'VrActivatePanel';
+  scoreSprite.mesh.name  = 'VrScore';
+  timerSprite.mesh.name  = 'VrTimer';
+  noticeSprite.mesh.name = 'VrNotice';
   scoreSprite.mesh.visible  = false;
   timerSprite.mesh.visible  = false;
   noticeSprite.mesh.visible = false;
   scene.add(scoreSprite.mesh, timerSprite.mesh, noticeSprite.mesh);
+
+  // Skin changed: recolour every in-world surface. Canvas textures cannot read
+  // CSS variables, so this is the WebGL half of the theme bridge — the DOM half
+  // needs nothing because :root already carries the new values.
+  onThemeChange((t) => {
+    scoreSprite.setColor(t.glow);
+    timerSprite.setColor(t.accent);
+    noticeSprite.setColor(t.danger);
+    panelTex.repaint();
+  });
 
   let _noticeUntil = 0; // performance.now() target; 0 = not shown
 
@@ -65,7 +83,11 @@ export function setupVrUI(scene, camera, renderer) {
     // Flat/handheld → DOM HUD handles it; hide all in-world UI.
     if (!presenting) {
       panel.visible = false;
-      scoreSprite.mesh.visible  = false;
+      panel.name        = 'VrActivatePanel';
+  scoreSprite.mesh.name  = 'VrScore';
+  timerSprite.mesh.name  = 'VrTimer';
+  noticeSprite.mesh.name = 'VrNotice';
+  scoreSprite.mesh.visible  = false;
       timerSprite.mesh.visible  = false;
       noticeSprite.mesh.visible = false;
       return;
@@ -146,6 +168,7 @@ export function createTextSprite(worldWidth, color) {
   );
 
   let last = null;
+  let colour = color;
   function setText(str) {
     if (str === last) return; // redraw-on-change only
     last = str;
@@ -162,10 +185,10 @@ export function createTextSprite(worldWidth, color) {
       ctx.font = `bold ${fontPx}px monospace`;
     }
 
-    ctx.fillStyle = color;
+    ctx.fillStyle = colour;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = color;
+    ctx.shadowColor = colour;
     ctx.shadowBlur = 18;
 
     if (lines.length === 1) {
@@ -180,36 +203,58 @@ export function createTextSprite(worldWidth, color) {
     tex.needsUpdate = true; // upload only on change
   }
 
-  return { mesh, setText };
+  /**
+   * P51: recolour and force a redraw. The text is baked into a canvas texture, so
+   * changing the colour means repainting the same string — hence clearing `last`
+   * before re-issuing it, otherwise the redraw-on-change guard would skip it and
+   * the sprite would keep the old skin's colour.
+   */
+  function setColor(next) {
+    if (next === colour) return;
+    colour = next;
+    const str = last;
+    last = null;
+    if (str !== null) setText(str);
+  }
+
+  return { mesh, setText, setColor };
 }
 
-// Canvas-texture label for the ACTIVATE panel. Magenta on dark, on-brand.
+// Canvas-texture label for the ACTIVATE panel. Accent on the panel base, themed.
+// Returns { texture, repaint } so a skin change can redraw the SAME canvas and
+// texture in place — replacing the texture object would mean touching the
+// material and leaking the old one on every switch.
 function makePanelTexture() {
   const W = 512, H = 256;
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
+  const draw = () => {
+  const t = getTheme();
+  ctx.clearRect(0, 0, W, H);
 
-  ctx.fillStyle = 'rgba(8,8,14,0.92)';
+  ctx.fillStyle = t.alpha(t.panelBg, 0.92);
   ctx.fillRect(0, 0, W, H);
 
-  ctx.strokeStyle = '#b14bff';
+  ctx.strokeStyle = t.accent;
   ctx.lineWidth = 8;
-  ctx.shadowColor = '#b14bff';
+  ctx.shadowColor = t.accent;
   ctx.shadowBlur = 24;
   ctx.strokeRect(10, 10, W - 20, H - 20);
   ctx.shadowBlur = 0;
 
-  ctx.fillStyle = '#b14bff';
+  ctx.fillStyle = t.accent;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 56px monospace';
   ctx.fillText('✓ PAID', W / 2, H * 0.36);
   ctx.font = 'bold 40px monospace';
   ctx.fillText('ACTIVATE RAPID FIRE', W / 2, H * 0.68);
+  };
 
+  draw();
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
-  return tex;
+  return { texture: tex, repaint: () => { draw(); tex.needsUpdate = true; } };
 }
