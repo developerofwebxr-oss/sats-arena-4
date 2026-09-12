@@ -17,15 +17,29 @@ import { setAtmosphere, clearAtmosphere } from '../atmosphere.js';
  * Shape:
  *   {
  *     id, name,
- *     environment : { build(group) }   // scenery; everything it adds is scoped
- *                                      // to `group` and torn down with the skin
+ *     environment : { build(group, ctx) } // scenery; everything it adds is scoped
+ *                                      // to `group` and torn down with the skin.
+ *                                      // ctx.applyHides() re-runs `hides` once
+ *                                      // an async asset has actually landed.
  *     gun         : { tint }           // null = leave the gun exactly as shipped
  *     coinType    : { tint }           // null = leave coins exactly as shipped
  *     targetTypes : [...]              // which target kinds this skin spawns
  *     hands       : null,              // reserved — future hand models
  *     animations  : null,              // reserved — future skin animations
- *     entry       : { sats }           // paywall; 0 = free (all of them, today)
+ *     entry       : { sats },          // paywall; 0 = free (all of them, today)
+ *     hides       : { ... }            // what this skin turns off; see below
  *   }
+ *
+ * `hides` IS A DECLARATION, NOT AN ACTION. A skin says what must not draw while
+ * it is up; skin-manager's applyHides() is the only code that writes .visible
+ * for it, and teardown() puts every one of them back. Two keys today:
+ *
+ *   baseFloor  the shared cyan radar floor, for a skin that brings its own.
+ *   materials  material NAMES inside this skin's own scenery whose meshes must
+ *              not draw. This is for imported art: a GLB can ship geometry that
+ *              is wrong at runtime for reasons the artist never sees in a DCC
+ *              viewport, and the alternative — editing the asset by hand on
+ *              every re-export — does not survive the next one.
  *
  * `tint` is a hex colour multiplied into the existing materials and fully
  * reverted on teardown (see appearance.js). It is a CRUDE recolour on purpose —
@@ -212,7 +226,7 @@ const goldArena = {
   coinType: null,   // and the shipped coins
   // This environment brings its own floor, so the base radar floor must be
   // hidden or it z-fights and bleeds cyan through the stone.
-  hidesBaseFloor: true,
+  hides: { baseFloor: true },
   targetTypes: ['coin', 'satoshi'],
   hands: null,
   animations: null,
@@ -254,7 +268,7 @@ const carnivorous = {
   id: 'carnivorous',
   name: 'CARNIVOROUS',
   environment: {
-    build(group) {
+    build(group, ctx) {
       const dress = () => {
         if (!attachCarnivorousInto(group)) return false;
         // The mood rig is built by the attach, and it is what says how the room
@@ -262,6 +276,10 @@ const carnivorous = {
         // second, drifting copy of the same numbers.
         const mood = getCarnivorousMood();
         if (mood) setAtmosphere('carnivorous', mood.atmosphere);
+        // The GLB is only in the group as of this line, so `hides.materials`
+        // below had nothing to act on when build() first returned. Ask the ONE
+        // writer to run again rather than reaching into the asset from here.
+        ctx?.applyHides?.();
         return true;
       };
       if (!dress()) whenCarnivorousReady().then(dress);
@@ -277,9 +295,35 @@ const carnivorous = {
   },
   gun: null,
   coinType: null,
-  // This environment brings its own root-work floor; the cyan radar floor would
-  // z-fight through it and drain every bit of the dark.
-  hidesBaseFloor: true,
+  // ── What this skin does not draw (P53) ─────────────────────────────────────
+  // baseFloor: this environment brings its own root-work floor; the cyan radar
+  // floor would z-fight through it and drain every bit of the dark.
+  //
+  // materials ['Sap']: the yellow "stitch" lines. THREE meshes in the GLB carry
+  // the `Sap` material — Veins (the sap runs up the trunks, y 2.0-6.6 m),
+  // FloorRoots_2 (the run across the floor) and HangingGrowth_2 — and every one
+  // of them is a thin ribbon modelled FLUSH with the surface it decorates:
+  // FloorRoots_2 occupies y 0.000-0.020 against a Floor at y=0, and a ray
+  // through a vein returns the vein and the Bark behind it at the SAME distance
+  // (11.88 m, measured). At arena range the depth buffer cannot separate them,
+  // so the ribbon renders in fragments — and because Sap is self-lit (emissive
+  // #e19516 at 1.95) in a room that is otherwise near-black, each surviving
+  // fragment is a saturated amber hairline. Measured: with a polygon offset
+  // pulling Sap toward the camera, 2.5x more of it draws — that ratio IS the
+  // z-fighting. The result reads as broken yellow stitch marks, vertical
+  // mid-wall and a curve at floor level. Nothing in the game draws them: not
+  // arena.js's boundary wireframe (Carnivorous never calls buildArena), not the
+  // radar floor (already hidden), not a debug outline.
+  //
+  // Not repaired, dropped: a polygon offset only makes the hairlines SOLID and
+  // brighter, which is more of the artefact rather than less, and the scene is
+  // visually identical without them (they contribute ~1,500 of 2M pixels, all
+  // of it the artefact). If a later re-export insets the sap properly, delete
+  // this line and it comes back.
+  hides: {
+    baseFloor: true,
+    materials: ['Sap'],
+  },
   targetTypes: ['coin', 'satoshi'],
   hands: null,
   animations: null,
