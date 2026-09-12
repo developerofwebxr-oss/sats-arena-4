@@ -313,7 +313,7 @@ function buildDom() {
   // Compete button — inside the co-op panel's active section (2-connected only).
   competeBtn = document.createElement('button');
   competeBtn.id = 'cmp-compete';
-  competeBtn.textContent = '⚔ COMPETE';
+  competeBtn.textContent = 'COMPETE';
   competeBtn.style.display = 'none';
   competeBtn.addEventListener('click', (e) => { e.stopPropagation(); propose(); });
   (document.querySelector('#coop-active') || document.body).appendChild(competeBtn);

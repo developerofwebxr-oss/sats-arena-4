@@ -70,11 +70,14 @@ export function setupCoopHud() {
 
   const toggle = document.createElement('button');
   toggle.id = 'coop-toggle';
-  toggle.textContent = '👥 CO-OP';
+  toggle.type = 'button';
+  toggle.textContent = 'CO-OP';
   toggle.addEventListener('click', (e) => {
     e.stopPropagation();
     panel.style.display = panel.style.display === 'none' ? 'flex' : 'none';
   });
+  // Appended so it exists in the document; hud-grid.js then re-parents it into
+  // the 2x3 cluster and owns its size and look from there.
   document.body.appendChild(toggle);
 
   panel = document.createElement('div');
@@ -82,7 +85,7 @@ export function setupCoopHud() {
   panel.style.display = 'none';
 
   panel.innerHTML = `
-    <button id="coop-close" aria-label="Close">✕</button>
+    <button id="coop-close" aria-label="Close">CLOSE</button>
     <div id="coop-title">CO-OP SESSION</div>
     <div class="coop-row">
       <label class="coop-label">FRIEND'S CODE</label>
@@ -97,7 +100,7 @@ export function setupCoopHud() {
     <div class="coop-btn-row">
       <button id="coop-join">JOIN</button>
       <button id="coop-leave" style="display:none">LEAVE</button>
-      <button id="coop-mute" style="display:none">🎙 MUTE</button>
+      <button id="coop-mute" style="display:none">MUTE</button>
     </div>
     <div id="coop-status"></div>
     <div id="coop-active" style="display:none">
@@ -414,8 +417,8 @@ function _renderPendingRequests(list) {
         wants to join
       </span>
       <span class="req-btns">
-        <button class="req-approve" title="Approve">✓</button>
-        <button class="req-deny"    title="Deny">✗</button>
+        <button class="req-approve" title="Approve">YES</button>
+        <button class="req-deny"    title="Deny">NO</button>
       </span>
     `;
     card.querySelector('.req-approve').addEventListener('click', async (e) => {
@@ -519,7 +522,7 @@ async function handleMute() {
 function _refreshMuteBtn() {
   if (!muteBtn) return;
   const live = isMicEnabled();
-  muteBtn.textContent = live ? '🔴 MUTE' : '🎙 TALK';
+  muteBtn.textContent = live ? 'MUTE' : 'TALK';
   muteBtn.title = live
     ? 'Your mic is live — click to mute'
     : 'Your mic is off — click to talk';
@@ -568,21 +571,9 @@ function setStatus(msg, level) {
 function injectStyles() {
   const s = document.createElement('style');
   s.textContent = `
-    #coop-toggle {
-      position: fixed;
-      bottom: 16px;
-      left: 16px;
-      z-index: 9000;
-      background: var(--ui-panel-chip);
-      color: var(--ui-primary);
-      border: 1px solid var(--ui-primary);
-      border-radius: 6px;
-      padding: 8px 14px;
-      font: 700 13px/1 monospace;
-      cursor: pointer;
-      letter-spacing: .08em;
-    }
-    #coop-toggle:hover { background: var(--ui-primary-faint); }
+    /* The CO-OP button's SIZE AND LOOK live in hud-grid.js, with every other
+       button in the 2x3 cluster. Only the knock badge stays here, because it is
+       about co-op state rather than about being a HUD button. */
     /* Red dot alert when someone is knocking and the panel is closed */
     .coop-badge {
       position: absolute; top: -5px; right: -5px;
@@ -594,29 +585,17 @@ function injectStyles() {
       0%,100% { transform: scale(1); opacity: 1; }
       50%      { transform: scale(1.35); opacity: .7; }
     }
-    /* Mobile only: place CO-OP in the gap between RECENTER and SCREEN/VR/AR row,
-       centered horizontally over the SCREEN button (left third of mode switcher).
-       RECENTER has an inline bottom:90px so we need !important to push it up. */
-    @media (max-width: 480px) {
-      #recenter-btn { bottom: 110px !important; }
-      #coop-toggle  {
-        bottom: 73px;
-        left: calc((100vw - min(calc(100vw - 28px), 360px)) / 2);
-        width: calc((min(calc(100vw - 28px), 360px) - 12px) / 3);
-        box-sizing: border-box;
-        text-align: center;
-      }
-      #coop-panel { bottom: 112px; }
-    }
 
     #coop-panel {
       position: fixed;
-      bottom: 54px;
+      /* Above the 2x3 grid (16 + 44 + 6 + 44 = 110) with P43's own 10px gap.
+         panel-layout.js re-places it from measured boxes on every open; this is
+         the value it reads as "home" before it does. */
+      bottom: 120px;
       left: 16px;
       z-index: 9000;
       background: var(--ui-panel);
-      border: 1px solid var(--ui-primary);
-      border-radius: 10px;
+      border: 1.5px solid var(--ui-primary);
       padding: 14px 16px 12px;
       width: 240px;
       flex-direction: column;
@@ -631,17 +610,20 @@ function injectStyles() {
       margin-bottom: 2px;
       padding-right: 20px;
     }
+    /* Same close affordance as the WORLD panel — two panels that open into the
+       same corner should not dismiss in two different type sizes. */
     #coop-close {
       position: absolute;
-      top: 10px;
+      top: 8px;
       right: 10px;
       background: none;
       border: none;
       color: var(--ui-primary);
-      font: 700 15px/1 monospace;
+      font: 700 9px/1 monospace;
+      letter-spacing: .1em;
       cursor: pointer;
-      padding: 2px 5px;
-      opacity: 0.6;
+      padding: 2px 0;
+      opacity: 0.75;
       z-index: 1;
     }
     #coop-close:hover { opacity: 1; }

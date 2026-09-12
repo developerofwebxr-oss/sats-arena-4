@@ -210,7 +210,7 @@ export function setupVrMenu(scene, renderer, deps) {
       const name = (deps.listSkins().find((s) => s.id === active) || {}).name || '—';
       const gate = deps.canSwitchSkin ? deps.canSwitchSkin() : { ok: true };
       out.push({
-        kind: 'submenu', id: 'skins', label: 'SKIN', meta: name, tone: 'primary',
+        kind: 'submenu', id: 'skins', label: 'WORLD', meta: name, tone: 'primary',
         reason: gate.ok ? null : gate.reason,
       });
     }
@@ -274,7 +274,7 @@ export function setupVrMenu(scene, renderer, deps) {
       { kind: 'header', code: deps.getOwnCode ? deps.getOwnCode() : null,
         status: statusLine(deps.isCoopJoined(), deps.getParticipantCount?.() || 0,
                            deps.isMatchActive?.() || false) },
-      { kind: 'section', label: 'SKIN' },
+      { kind: 'section', label: 'WORLD' },
     ];
     for (const skin of (deps.listSkins ? deps.listSkins() : [])) {
       const isActive = skin.id === active;
@@ -426,7 +426,7 @@ export function setupVrMenu(scene, renderer, deps) {
       const skinId = id.slice(5);
       const res = deps.requestSkin ? deps.requestSkin(skinId) : { ok: false, reason: 'unavailable' };
       if (!res.ok) toast(res.reason || 'Cannot switch right now');
-      else { view = 'root'; toast('Switching skin…'); }
+      else { view = 'root'; toast('Switching world…'); }
       lastSig = null;
       return;
     }

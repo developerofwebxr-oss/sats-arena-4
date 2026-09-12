@@ -69,6 +69,25 @@ const Z_BUTTON   = 9100; // buttons ride above every panel as a safety net
 
 /** @type {Array<{id:string, panel:HTMLElement, button:HTMLElement, seq:number}>} */
 const panels = [];
+
+/**
+ * Extra elements that belong to the BUTTON CLUSTER without being panels —
+ * P55's RECENTER popup is the first. It is attached to the GYRO button, one
+ * button wide, and shows and hides with it; a panel coming home has to clear it
+ * exactly as it clears the buttons themselves.
+ *
+ * It is deliberately not registered as a panel. The rule above resolves TWO open
+ * panels; a third would fall out of the `[first, second]` destructuring and be
+ * left wherever it was, which in practice pushed the CO-OP panel off the right
+ * edge of a 390px phone. Saying what a thing IS — cluster furniture, not a
+ * panel — fixes that without weakening a rule that is correct for panels.
+ */
+const clusterExtras = [];
+
+/** Count an element as part of the bottom-left cluster while it is visible. */
+export function registerClusterMember(el) {
+  if (el && !clusterExtras.includes(el)) { clusterExtras.push(el); schedule(); }
+}
 let seqCounter = 0;
 let applying = false;    // guards the observer against our own style writes
 let scheduled = false;
@@ -127,6 +146,10 @@ export function layout() {
   let clusterTop = 0;
   for (const p of panels) {
     const r = p.button.getBoundingClientRect();
+    if (r.height) clusterTop = Math.max(clusterTop, vh - r.top);
+  }
+  for (const el of clusterExtras) {
+    const r = el.getBoundingClientRect();   // 0-height while hidden, so it only counts when shown
     if (r.height) clusterTop = Math.max(clusterTop, vh - r.top);
   }
   const homeBottom = clusterTop + GAP;

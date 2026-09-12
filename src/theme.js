@@ -186,6 +186,12 @@ function cssVars(t) {
     '--ui-primary-dim':    alpha(t.primary, 0.25),   // rules, inactive tracks
     '--ui-primary-faint':  alpha(t.primary, 0.10),   // hover wash
     '--ui-primary-bright': shade(t.primary, 0.35),   // hover text
+    // P55's two exact strengths. The HUD's brand rule names them as numbers —
+    // an active button is primary at 18%, a glow is primary at 50% — so they are
+    // derived here with the rest rather than written as literals at the point of
+    // use, where a skin change could not reach them.
+    '--ui-primary-18':     alpha(t.primary, 0.18),   // active button fill
+    '--ui-primary-50':     alpha(t.primary, 0.50),   // active/hover glow
 
     '--ui-accent':         t.accent,
     '--ui-accent-line':    alpha(t.accent, 0.40),

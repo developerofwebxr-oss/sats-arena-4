@@ -95,7 +95,7 @@ function injectStyles() {
        level) instead of floating mid-screen. Portrait position is unchanged.
        !important overrides the inline bottom set in JS. */
     @media (orientation: landscape) {
-      #shoot-btn, #recenter-btn { bottom: 24px !important; }
+      #shoot-btn { bottom: 24px !important; }
     }
   `;
   document.head.appendChild(style);
@@ -190,7 +190,7 @@ export function createHUD(onShoot) {
   upgradeBtn = document.createElement('button');
   upgradeBtn.id = 'upgrade-btn';
   upgradeBtn.innerHTML = `
-    <div style="font-size:18px; letter-spacing:0.12em;">⚡ RAPID FIRE</div>
+    <div style="font-size:18px; letter-spacing:0.12em;">RAPID FIRE</div>
     <div style="font-size:12px; letter-spacing:0.16em; margin-top:5px; opacity:0.8;">${RAPID_FIRE_PRICE} sats &nbsp;·&nbsp; 60s</div>
   `;
   upgradeDefaultHTML = upgradeBtn.innerHTML;
@@ -292,7 +292,7 @@ function buildPaymentModal() {
   `;
 
   const title = document.createElement('div');
-  title.textContent = '⚡ PAY 21 SATS';
+  title.textContent = 'PAY 21 SATS';
   title.style.cssText = 'font-size: 20px; letter-spacing: 0.12em; text-shadow: 0 0 8px var(--ui-glow);';
 
   payModalCode = document.createElement('div');
@@ -312,7 +312,7 @@ function buildPaymentModal() {
   // Open in Wallet — a lightning: link so a phone opens its wallet directly
   // (attendees on a single phone can't scan their own screen).
   payModalOpenLink = document.createElement('a');
-  payModalOpenLink.textContent = '⚡ OPEN IN WALLET';
+  payModalOpenLink.textContent = 'OPEN IN WALLET';
   payModalOpenLink.style.cssText = `
     display: inline-block; padding: 14px 26px; background: var(--ui-glow); color: var(--ui-on-glow);
     font-family: monospace; font-size: 16px; font-weight: bold; letter-spacing: 0.08em;
@@ -331,7 +331,7 @@ function buildPaymentModal() {
     e.stopPropagation();
     try {
       await navigator.clipboard.writeText(currentInvoice);
-      payModalCopyBtn.textContent = '✓ COPIED';
+      payModalCopyBtn.textContent = 'COPIED';
       setTimeout(() => { payModalCopyBtn.textContent = 'COPY INVOICE'; }, 1500);
     } catch {
       payModalCopyBtn.textContent = 'COPY FAILED';
