@@ -10,7 +10,9 @@ import * as THREE from 'three';
  * Mobile:
  *   - Touch-drag to look — always available, so the phone is playable even
  *     before / without motion permission.
- *   - DeviceOrientation (gyroscope) → yaw + pitch, layered on top once granted.
+ *   - DeviceOrientation (gyroscope) → the camera's full orientation, layered on
+ *     top once granted. Pitch and roll come straight from gravity; only the
+ *     HEADING is corrected, by a yaw about world up (P54).
  *   - iOS requires a permission button on first gesture; if denied or
  *     unavailable, touch-drag remains the look control.
  *
@@ -44,6 +46,10 @@ export function isDragging() { return _dragging; }
 // createRecenterButton below). Exported so the in-world VR/AR menu can invoke
 // the identical logic instead of duplicating it. No-op until the gyro path has
 // installed gyroRecenter (desktop/VR never do).
+//
+// P54 semantics: this makes the heading you are ALREADY looking at the neutral
+// one. It does not move the view, and in particular it no longer swings you
+// back to the load-time forward — see reanchor() for why that is exact.
 export function recenterView() {
   if (gyroRecenter) gyroRecenter();
 }
@@ -108,8 +114,9 @@ export function setupMovement(camera, renderer) {
 }
 
 // ── Recenter button (mobile, gyro only) ─────────────────────────────────────────
-// Tap (held straight) to re-level the view — fixes any mis-angled gyro calibration
-// without a reload. Placed bottom-left, above the mode switcher.
+// Tap to make your current heading the neutral one. It does not turn the view —
+// there is nothing to hold straight for, because pitch and roll are read from
+// gravity every frame (P54). Placed bottom-left, above the mode switcher.
 function createRecenterButton() {
   const btn = document.createElement('button');
   btn.id = 'recenter-btn';
@@ -123,7 +130,7 @@ function createRecenterButton() {
       background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.55);
       text-shadow: 0 0 8px rgba(0,229,255,0.7); box-shadow: 0 0 10px rgba(0,229,255,0.25);
     ">⟲</div>
-    <div style="margin-top: 5px; font-size: 10px; letter-spacing: 0.06em; line-height: 1.3; color: #00e5ff; opacity: 0.75;">RECENTER<br>tilted? hold straight</div>`;
+    <div style="margin-top: 5px; font-size: 10px; letter-spacing: 0.06em; line-height: 1.3; color: #00e5ff; opacity: 0.75;">RECENTER<br>keeps your heading</div>`;
   btn.style.cssText = `
     display: none;
     position: fixed;
@@ -328,28 +335,64 @@ function showMotionButton(updaters, camera) {
 }
 
 // ── Gyroscope (quaternion-based, robust) ───────────────────────────────────────
-// Converts DeviceOrientationEvent alpha/beta/gamma into the device's RAW world
-// quaternion (standard DeviceOrientationControls math, minus the screen term),
-// anchors it to the hold at enable time, then applies the screen-orientation roll
-// as a POST-rotation each frame:
+// Converts DeviceOrientationEvent alpha/beta/gamma into the device's full world
+// quaternion (standard DeviceOrientationControls math, screen-orientation term
+// included), then corrects ONLY its heading:
 //
-//     camera = anchorInverse · deviceRaw_now · q0(screenOrient)
+//     camera = Ry(yawOffset) · deviceQuaternion_now
 //
-// Keeping the screen term OUTSIDE the anchor is the key fix: when it was baked
-// into the anchor, rotating to landscape conjugated the result and swapped the
-// pitch/yaw control axes (the landscape inversion). Composing quaternions also
-// avoids gimbal lock, and a frame-rate-independent slerp smooths iOS jitter.
+// ── WHY THE CORRECTION IS A YAW AND NOT AN INVERSE (P54) ───────────────────────
+// It used to be `anchorInverse · device_now`, where anchorInverse was the FULL
+// inverse of whatever pose the phone happened to be in when the gyro started.
+// A phone is never held upright, so that inverse carried the holding PITCH (and
+// roll) as well as the heading — and a full-3DOF pre-rotation about an arbitrary
+// axis is not a heading correction. It is exact at the anchor heading and wrong
+// everywhere else, because the baked-in pitch no longer lines up with the pitch
+// axis once you turn. Measured, holding the phone 15 deg back from upright and
+// anchoring while facing forward:
+//
+//     heading      0      90      180      270
+//     elevation    0    -14.48   -30.00   -14.48   deg   (spread 30.00)
+//     roll         0    -15.50     0.00    15.50   deg   (spread 31.00)
+//     horizon    406     256       71      256     px    (spread 335 on a 812px screen)
+//
+// Turn around and the horizon moves a third of a screen. Hold it 30 deg back and
+// the errors double again (60 deg elevation spread). Pre-rotating about WORLD-UP
+// instead leaves pitch and roll exactly as the device reports them — gravity
+// referenced at every heading — and the same sweep measures 0.00 deg / 0.00 deg /
+// 0 px of spread.
+//
+// The same numbers explain why this read as a per-skin bug: the math is shared,
+// so the error is identical in every world. Classic simply has no horizon to
+// measure it against — its floor/wall seam only exists at 2 of 4 headings (the
+// skyline sits beyond the 30x30 radar floor, with void below the seam elsewhere),
+// while Gold and Carnivorous are sealed rooms whose seam is continuous and sits
+// within 0.3 deg of level at every heading. Same error, only two of the three
+// worlds can show it. The arenas themselves are innocent: all three roots are at
+// position 0,0,0 / rotation 0,0,0 / scale 1,1,1 with their floor at the rig's
+// y=0 (Gold at -0.045, i.e. the 1.65 m eye its own notes specify).
+//
+// Keeping the screen term inside `deviceQuaternion` and OUTSIDE the yaw fix is
+// what it always was: a post-multiplied roll about the view axis, which is why
+// rotating to landscape no longer conjugates the result and swaps the control
+// axes. Composing quaternions also avoids gimbal lock, and a frame-rate-
+// independent slerp smooths iOS jitter.
 function setupGyro(camera) {
-  const ZEE = new THREE.Vector3(0, 0, 1);
+  const ZEE      = new THREE.Vector3(0, 0, 1);
+  const WORLD_UP = new THREE.Vector3(0, 1, 0);
   const euler = new THREE.Euler();
   const q0 = new THREE.Quaternion();
   // -90° about X: the camera should look out the BACK of the phone, not the top.
   const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
 
-  const deviceRaw     = new THREE.Quaternion();
-  const anchorInverse = new THREE.Quaternion();
-  const target        = new THREE.Quaternion();
-  let haveAnchor = false;
+  const device  = new THREE.Quaternion();   // full device → world orientation
+  const yawFix  = new THREE.Quaternion();   // pure rotation about world up
+  const target  = new THREE.Quaternion();
+  const tmpEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+  let yawOffset  = 0;       // radians about world up
+  let haveOffset = false;   // set on the first reading, or by recenter
+  let haveReading = false;  // a usable alpha/beta/gamma has arrived
 
   // Smoothing: fraction of the remaining gap closed per 60fps-equivalent frame.
   // High enough that Chrome stays crisp; enough to damp iOS sensor jitter.
@@ -366,12 +409,75 @@ function setupGyro(camera) {
     return THREE.MathUtils.degToRad(deg);
   }
 
-  // Build the device's RAW orientation (no screen term) into `out`.
-  function deviceRawQuaternion(out) {
+  /** The device's full orientation, screen term included, into `out`. */
+  function deviceQuaternion(out) {
     euler.set(beta, alpha, -gamma, 'YXZ');
     out.setFromEuler(euler);
-    out.multiply(q1); // look out the back of the device
+    out.multiply(q1);                                        // out the back of the device
+    out.multiply(q0.setFromAxisAngle(ZEE, -screenOrient())); // portrait vs landscape
     return out;
+  }
+
+  /**
+   * The rotation of `q` about world +Y — its heading, with pitch and roll left
+   * out. This is the ONE quantity a heading correction may touch.
+   *
+   * It is the twist half of a swing/twist split, and it is exact rather than
+   * approximate: pre-multiplying by a rotation of t about world up maps
+   * (w + i·y) → e^{it/2}·(w + i·y), so this returns t more than it did before.
+   * Verified to 1e-13 deg over 20k random quaternions. Unlike reading the yaw
+   * off the forward vector it does not degenerate when you look straight up.
+   */
+  function yawAboutUp(q) { return 2 * Math.atan2(q.y, q.w); }
+
+  /** target = Ry(yawOffset) · device, into `target`. */
+  function buildTarget() {
+    deviceQuaternion(device);
+    yawFix.setFromAxisAngle(WORLD_UP, yawOffset);
+    return target.copy(yawFix).multiply(device);
+  }
+
+  /**
+   * Make the heading currently on screen the new neutral, WITHOUT moving the
+   * view. That is not a figure of speech: with the correction constrained to
+   * world-up, the shown heading is exactly `yawOffset + yawAboutUp(device)`, so
+   * solving for the offset that reproduces it returns the offset we already
+   * had. Recentering cannot swing the player round, by construction — which is
+   * the whole requirement. What it still does is real:
+   *
+   *   · establishes the neutral the FIRST time, from the heading the player was
+   *     already looking at with drag-look, so switching the gyro on is silent;
+   *   · re-derives the offset as a pure world-up yaw, repairing any state left
+   *     over from a stale or contaminated anchor;
+   *   · drops the smoothing lag, so "does not move" is literal, not approximate.
+   *
+   * Pitch and roll need no re-levelling here because they are never corrected
+   * at all — they come straight from gravity on every frame.
+   */
+  function reanchor() {
+    if (!haveReading) { haveOffset = false; return; } // the next reading will set it
+    const heading = yawAboutUp(deviceQuaternion(device));
+    // Degenerate only for an exact 180° flip about a horizontal axis, where the
+    // heading is genuinely undefined. Keep what we have rather than guess.
+    if (Math.abs(device.y) < 1e-6 && Math.abs(device.w) < 1e-6) return;
+    // Before the first anchor the player's heading is the drag-look yaw.
+    const shown = haveOffset ? yawOffset + heading : yaw;
+    yawOffset  = shown - heading;
+    haveOffset = true;
+    camera.quaternion.copy(buildTarget());
+    syncLookState();
+  }
+
+  /**
+   * Keep the drag-look yaw/pitch in step with where the gyro is actually
+   * pointing. Nothing reads them while the gyro drives, but they are what the
+   * camera falls back to the moment it stops — so without this, turning motion
+   * off would snap the view back to wherever the last finger drag left it.
+   */
+  function syncLookState() {
+    tmpEuler.setFromQuaternion(camera.quaternion, 'YXZ');
+    yaw   = tmpEuler.y;
+    pitch = tmpEuler.x;   // roll is dropped: drag-look has no roll to restore
   }
 
   window.addEventListener('deviceorientation', (e) => {
@@ -379,30 +485,26 @@ function setupGyro(camera) {
     alpha = THREE.MathUtils.degToRad(e.alpha);
     beta  = THREE.MathUtils.degToRad(e.beta);
     gamma = THREE.MathUtils.degToRad(e.gamma);
+    haveReading = true;
 
-    if (!haveAnchor) {
-      // Anchor the RAW hold (no screen term) — this becomes "looking forward".
-      anchorInverse.copy(deviceRawQuaternion(deviceRaw)).invert();
-      haveAnchor = true;
-    }
+    // First usable reading: adopt the heading the player already had, so the
+    // world does not swing the instant motion controls come alive.
+    if (!haveOffset) reanchor();
 
     gyroActive = true; // gyro takes over; touch-drag look stands down
   });
 
-  // "Recenter": drop the anchor so the next reading re-anchors at the current
-  // pose — re-levels the view however the phone is held right now.
-  gyroRecenter = () => { haveAnchor = false; };
+  // The mobile RECENTER control and the in-world menu both land here.
+  gyroRecenter = reanchor;
 
   return (delta) => {
-    if (!gyroActive || !haveAnchor) return;
+    if (!gyroActive || !haveOffset) return;
 
-    // target = anchorInverse · deviceRaw_now · q0(screenOrient)
-    deviceRawQuaternion(deviceRaw);
-    target.copy(anchorInverse).multiply(deviceRaw)
-          .multiply(q0.setFromAxisAngle(ZEE, -screenOrient()));
+    buildTarget();
 
     // Frame-rate-independent slerp toward the target (damps iOS jitter).
     const t = 1 - Math.pow(1 - SMOOTH, delta * 60);
     camera.quaternion.slerp(target, t);
+    syncLookState();
   };
 }
