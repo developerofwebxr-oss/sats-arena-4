@@ -3,16 +3,22 @@ import { isSkinUnlocked, skinPriceSats } from './payment-provider.js';
 import { registerPanel } from '../panel-layout.js';
 
 /**
- * skin-hud.js — the DOM control for skins (flat/mobile).
+ * skin-hud.js — the DOM control for worlds (flat/mobile).
  *
- *   - a SKIN button bottom-left that opens a small picker
- *   - the "Switching skin…" overlay both players see during a swap
+ *   - a WORLD button in the HUD grid that opens a small picker
+ *   - the "Switching world…" overlay both players see during a swap
  *   - gentle toasts for every refusal
  *
+ * P55 renamed the player-facing noun from SKIN to WORLD: these are places, not
+ * colour schemes, and "skin" undersold what switching one actually does. The
+ * code's identifiers still say skin — the registry, the network verbs and the
+ * CSS classes are internal, and churning them would touch far more than the
+ * words anyone reads.
+ *
  * DIMMING RULES (never the words "coming soon"):
- *   locked skin            → dimmed + "Unlock to use this skin"
+ *   locked world           → dimmed + "Unlock to use this world"
  *   during a match         → whole control dimmed + "Not during a match"
- *   peer (not host)        → whole control dimmed + "Only the host can change skin"
+ *   peer (not host)        → whole control dimmed + "Only the host can change world"
  * A dimmed row is still tappable so it can explain itself — silence is worse.
  *
  * The immersive VR/AR surface is deliberately NOT built here: the in-world menu
@@ -29,8 +35,9 @@ export function setupSkinHud({ skins, net }) {
   injectStyles();
 
   toggleBtn = document.createElement('button');
-  toggleBtn.id = 'skin-toggle';
-  toggleBtn.textContent = '🎨 SKIN';
+  toggleBtn.id = 'world-toggle';
+  toggleBtn.type = 'button';
+  toggleBtn.textContent = 'WORLD';
   toggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     const open = panel.style.display !== 'none';
@@ -45,14 +52,16 @@ export function setupSkinHud({ skins, net }) {
       renderList();
     }
   });
+  // Appended so it exists in the document; hud-grid.js then re-parents it into
+  // the 2x3 cluster and owns its size and look from there.
   document.body.appendChild(toggleBtn);
 
   panel = document.createElement('div');
-  panel.id = 'skin-panel';
+  panel.id = 'world-panel';
   panel.style.display = 'none';
   panel.innerHTML = `
-    <button id="skin-close" aria-label="Close">✕</button>
-    <div id="skin-title">SKIN</div>
+    <button id="skin-close" aria-label="Close">CLOSE</button>
+    <div id="skin-title">WORLD</div>
     <div id="skin-list"></div>
     <div id="skin-note"></div>
   `;
@@ -75,7 +84,7 @@ export function setupSkinHud({ skins, net }) {
 
   // P43: shared bottom-left layout. See panel-layout.js — CO-OP's panel used to
   // cover both this panel and the button that opens it.
-  registerPanel({ id: 'skin', panel, button: toggleBtn });
+  registerPanel({ id: 'world', panel, button: toggleBtn });
 
   toastEl = document.createElement('div');
   toastEl.id = 'skin-toast';
@@ -91,7 +100,7 @@ export function setSwitchOverlay(on, skinName) {
   overlay.style.display = on ? 'flex' : 'none';
   if (on) {
     const t = overlay.querySelector('#skin-ov-text');
-    if (t) t.textContent = skinName ? `Switching to ${skinName}…` : 'Switching skin…';
+    if (t) t.textContent = skinName ? `Switching to ${skinName}…` : 'Switching world…';
     if (panel) panel.style.display = 'none';
   } else {
     renderList();
@@ -135,7 +144,7 @@ function renderList() {
       e.stopPropagation();
       if (isActive) return;
       // Dimmed rows explain themselves rather than doing nothing.
-      if (!unlocked)  return skinToast('Unlock to use this skin');
+      if (!unlocked)  return skinToast('Unlock to use this world');
       if (loading)    return skinToast('Still loading…');
       if (!gate.ok)   return skinToast(gate.reason);
 
@@ -161,37 +170,36 @@ export function refreshSkinHud() { renderList(); }
 function injectStyles() {
   const style = document.createElement('style');
   style.textContent = `
-    /* SKIN belongs to the CO-OP control cluster, not to the RECENTER column.
-       Desktop: stacked directly ABOVE #coop-toggle (which is left:16 bottom:16,
-       31px tall), so 55px clears it by 8px. RECENTER is gyro/mobile-only and
-       never appears here. */
-    #skin-toggle {
-      position: fixed; left: 16px; bottom: 55px; z-index: 8000;
-      padding: 8px 12px; border-radius: 8px;
-      border: 1px solid var(--ui-primary-line); background: var(--ui-panel-chip);
-      color: var(--ui-text); font: 700 12px/1 monospace; letter-spacing: .12em; cursor: pointer;
-    }
-    #skin-panel {
-      position: fixed; left: 16px; bottom: 93px; z-index: 8001;
+    /* The WORLD button's SIZE AND LOOK are not here: hud-grid.js owns them, as
+       it does for every button in the 2x3 cluster. This file used to carry a
+       block of fixed-position and media-query column math to keep the button
+       clear of CO-OP and RECENTER; the grid makes all of it unnecessary, and
+       leaving it in would have fought the grid track for the button's width. */
+    #world-panel {
+      position: fixed; left: 16px; bottom: 120px; z-index: 8001;
       display: flex; flex-direction: column; gap: 8px;
       width: 210px; padding: 14px;
-      background: var(--ui-panel-solid); border: 1px solid var(--ui-primary-line); border-radius: 10px;
+      background: var(--ui-panel-solid); border: 1.5px solid var(--ui-primary-line);
       color: var(--ui-text); font: 12px monospace;
     }
     #skin-close {
-      position: absolute; top: 6px; right: 8px;
-      background: none; border: none; color: var(--ui-primary); cursor: pointer; font-size: 13px;
+      position: absolute; top: 8px; right: 10px;
+      background: none; border: none; color: var(--ui-primary); cursor: pointer;
+      font: 700 9px/1 monospace; letter-spacing: .1em;
     }
     #skin-title { font-weight: 700; letter-spacing: .18em; color: var(--ui-primary); }
     #skin-list { display: flex; flex-direction: column; gap: 6px; }
     .skin-row {
       display: flex; justify-content: space-between; align-items: center; gap: 8px;
-      padding: 8px 10px; border-radius: 6px; cursor: pointer;
-      border: 1px solid var(--ui-primary-line); background: var(--ui-panel-chip);
+      padding: 9px 10px; cursor: pointer;
+      border: 1.5px solid var(--ui-primary-line); background: var(--ui-panel-chip);
       color: var(--ui-text); font: 12px monospace; text-align: left;
     }
     .skin-row:hover { background: var(--ui-primary-faint); }
-    .skin-row.active { border-color: var(--ui-primary); color: var(--ui-primary); }
+    .skin-row.active {
+      border-color: var(--ui-primary); color: var(--ui-primary);
+      background: var(--ui-primary-18); box-shadow: 0 0 8px var(--ui-primary-50);
+    }
     .skin-row.dim { opacity: .45; }
     .skin-meta { font-size: 10px; opacity: .75; letter-spacing: .08em; }
     #skin-note { font-size: 10px; opacity: .7; line-height: 1.35; }
@@ -203,6 +211,8 @@ function injectStyles() {
       background: var(--ui-scrim); backdrop-filter: blur(2px);
     }
     .skin-ov-inner { text-align: center; color: var(--ui-primary); font: 700 16px monospace; letter-spacing: .14em; }
+    /* A spinner is round because it is a spinner, not because it is rounded —
+       the sharp rule is about panels and buttons. */
     .skin-ov-spin {
       width: 34px; height: 34px; margin: 0 auto 14px;
       border: 3px solid var(--ui-primary-dim); border-top-color: var(--ui-primary);
@@ -213,43 +223,9 @@ function injectStyles() {
 
     #skin-toast {
       position: fixed; left: 50%; bottom: 22%; transform: translateX(-50%);
-      z-index: 9900; padding: 9px 16px; border-radius: 8px;
-      background: var(--ui-panel); border: 1px solid var(--ui-primary-line); color: var(--ui-text);
+      z-index: 9900; padding: 9px 16px;
+      background: var(--ui-panel); border: 1.5px solid var(--ui-primary-line); color: var(--ui-text);
       font: 12px monospace; letter-spacing: .04em; pointer-events: none;
-    }
-
-    /* Mobile portrait: SKIN sits BESIDE CO-OP, forming one row above the
-       SCREEN/VR/AR switcher — [CO-OP][SKIN] over [SCREEN][VR][AR].
-
-       Placement reuses the mode switcher's OWN column math (modeswitcher.js
-       injectStyles + the #coop-toggle rule in coop-hud.js) rather than a
-       hand-placed offset, so it tracks any viewport width:
-         switcher width  SW  = min(100vw - 28px, 360px)
-         column width    COL = (SW - 12px) / 3        (12px = two 6px gaps)
-         switcher left   L   = (100vw - SW) / 2
-       CO-OP takes column 0 (over SCREEN); SKIN takes column 1 (over VR), i.e.
-       left = L + COL + 6px.
-
-       Breakpoint is 480px to MATCH the switcher and CO-OP rules — it was 820px,
-       which put SKIN on the mobile offset at tablet widths where the cluster
-       math does not apply.
-
-       This also resolves the RECENTER overlap: RECENTER is left:16 width:92
-       bottom:110 and ~87px tall (56px circle + two label lines), so the old
-       left:16 bottom:150 SKIN button sat directly on its label. SKIN now shares
-       CO-OP's row at bottom:73 (30px tall, topping out at 103) and sits in the
-       middle column, so it clears RECENTER both vertically and horizontally. */
-    @media (max-width: 480px) {
-      #skin-toggle {
-        bottom: 73px;
-        left: calc((100vw - min(calc(100vw - 28px), 360px)) / 2
-                   + (min(calc(100vw - 28px), 360px) - 12px) / 3 + 6px);
-        width: calc((min(calc(100vw - 28px), 360px) - 12px) / 3);
-        box-sizing: border-box;
-        text-align: center;
-        padding: 8px 4px;
-      }
-      #skin-panel { bottom: 112px; left: 16px; }
     }
   `;
   document.head.appendChild(style);

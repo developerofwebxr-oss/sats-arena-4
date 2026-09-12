@@ -13,6 +13,7 @@ import { setupAtmosphere } from './atmosphere.js';
 import { isARSession } from './armode.js';
 import { setSpawnMode, getTargetGroup } from './targets.js';
 import { setupModeSwitcher } from './modeswitcher.js';
+import { setupHudGrid } from './hud-grid.js';
 import { updateUpgrade, isRapidFire, getRemainingSeconds } from './upgrade.js';
 import { recordHit } from './score.js';
 import { setupVrUI } from './vrui.js';
@@ -183,10 +184,25 @@ createHUD(gatedShoot); // on-screen SHOOT button fires through the crosshair
 // AR coordinator — reconfigures the scene on AR session start/end.
 setupARMode({ renderer, scene, environment, weapon, setSpawnMode });
 
+// setupMovement owns all camera rotation:
+//   desktop  → mouse drag + arrow keys
+//   mobile   → touch-drag look, with the gyroscope layered on while the HUD's
+//              GYRO toggle is on (P55); `gyro` is that toggle's controller
+//   Quest VR → no-op (WebXR head tracking takes over)
+// It runs HERE, before the HUD, because the GYRO button needs that controller in
+// order to exist at all — a toggle built first and wired second is a toggle that
+// can be pressed before it does anything.
+const { updateMovement, gyro } = setupMovement(camera, renderer);
+
+// P55: the 2x3 HUD cluster. Built empty first, then each module hands it the
+// button that module already owns — see hud-grid.js on why it adopts rather
+// than builds.
+const hudGrid = setupHudGrid({ gyro });
+
 // Unified SCREEN / VR / AR mode switcher (replaces the separate VR/AR buttons).
 // Returns the mode controller; a future in-world 3D switcher can reuse its
 // enterVR / enterAR / exitToScreen methods.
-modeCtrl = setupModeSwitcher(renderer);
+modeCtrl = setupModeSwitcher(renderer, hudGrid);
 
 // DEV: the mode controller, so a headless check can drive enterVR/enterAR
 // against a stubbed WebXR and assert the A3 call ORDER (end -> request -> set).
@@ -212,6 +228,13 @@ skinNet = setupSkinNet({
 });
 setupSkinHud({ skins, net: skinNet });
 _exposeSkinDev(skins, skinNet);
+
+// Both action buttons exist now; place them in the grid's top row. Done here, in
+// one place, rather than inside each module — the grid's cell assignment is a
+// property of the cluster, not of co-op or of worlds.
+hudGrid.adopt('coop',  document.getElementById('coop-toggle'),  { icon: 'coop' });
+hudGrid.adopt('world', document.getElementById('world-toggle'), { icon: 'world' });
+hudGrid.refresh();
 
 // Preload the Gold Arena environment at boot so a switch stays instant and the
 // both-ready handshake never has to wait on a 7 MB download. The picker shows
@@ -317,12 +340,6 @@ setupMockDevPanel();
 // Wire mouse click and touch tap → onShoot (flat / non-VR mode).
 // In VR mode, xr.js handles shooting via selectstart on the controllers.
 setupInput(gatedShoot, renderer);
-
-// setupMovement owns all camera rotation:
-//   desktop  → mouse drag + arrow keys
-//   mobile   → gyroscope (with iOS permission flow) or virtual joystick fallback
-//   Quest VR → no-op (WebXR head tracking takes over)
-const { updateMovement } = setupMovement(camera, renderer);
 
 // ─── Clock ────────────────────────────────────────────────────────────────────
 const clock = new THREE.Clock();

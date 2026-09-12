@@ -10,9 +10,10 @@ import * as THREE from 'three';
  * Mobile:
  *   - Touch-drag to look — always available, so the phone is playable even
  *     before / without motion permission.
- *   - DeviceOrientation (gyroscope) → yaw + pitch, layered on top once granted.
- *   - iOS requires a permission button on first gesture; if denied or
- *     unavailable, touch-drag remains the look control.
+ *   - DeviceOrientation (gyroscope) → yaw + pitch, layered on top while the
+ *     HUD's GYRO toggle is on. No auto-start, no standalone prompt (P55).
+ *   - iOS requires permission from a user gesture; the GYRO tap IS that gesture.
+ *     If denied or unavailable, touch-drag remains the look control.
  *
  * Quest:
  *   - No-op. WebXR head tracking overrides the camera automatically.
@@ -40,9 +41,9 @@ let pitch = -0.2; // matches the initial tilt that was in scene.js
 let _dragging = false;
 export function isDragging() { return _dragging; }
 
-// The same "recenter" action the mobile RECENTER button fires (see
-// createRecenterButton below). Exported so the in-world VR/AR menu can invoke
-// the identical logic instead of duplicating it. No-op until the gyro path has
+// The same "recenter" action the HUD's RECENTER popup fires (hud-grid.js, via
+// the gyro controller). Exported so the in-world VR/AR menu can invoke the
+// identical logic instead of duplicating it. No-op until the gyro path has
 // installed gyroRecenter (desktop/VR never do).
 export function recenterView() {
   if (gyroRecenter) gyroRecenter();
@@ -51,6 +52,11 @@ export function recenterView() {
 // True once the gyroscope is actively driving the view. While true, touch-drag
 // look stands down so the two don't fight over yaw/pitch.
 let gyroActive = false;
+
+// The player's switch (P55). `gyroActive` says the sensor is currently steering;
+// this says they asked for it at all. Two flags rather than one because a reading
+// can arrive after the toggle went off, and that reading must not resurrect it.
+let gyroEnabled = false;
 
 // Set by setupGyro — clears the gyro anchor so the next reading re-captures the
 // current pose (the "recenter" action). Reuses the existing, tested anchor logic.
@@ -67,7 +73,7 @@ export function setupMovement(camera, renderer) {
 
   // Update functions collected here; called each frame by updateMovement().
   const updaters = [];
-  let recenterBtn = null; // mobile-only "⟲ RECENTER" button (created below)
+  let gyro = null;   // the controller the HUD's GYRO toggle drives; null on desktop
 
   if (!isMobile) {
     // ── Desktop ───────────────────────────────────────────────────────────────
@@ -76,24 +82,17 @@ export function setupMovement(camera, renderer) {
   } else {
     // ── Mobile ────────────────────────────────────────────────────────────────
     // Touch-drag look is always on (the reliable fallback). Gyro layers on top
-    // when available/granted and takes over via the gyroActive flag.
+    // when the player turns it on and takes over via the gyroActive flag.
     updaters.push(setupTouchLook(renderer));
-    setupMobileGyro(updaters, renderer, camera);
-    recenterBtn = createRecenterButton();
+    gyro = createGyroController(updaters, camera);
   }
 
   function updateMovement(delta) {
     // Skip all movement handling while inside a VR session —
     // the XR manager drives the camera pose directly.
-    if (renderer.xr.isPresenting) {
-      if (recenterBtn) recenterBtn.style.display = 'none'; // DOM not used in immersive
-      return;
-    }
+    if (renderer.xr.isPresenting) return;
 
     updaters.forEach(fn => fn(delta));
-
-    // Show the recenter button only while the gyroscope is actually driving.
-    if (recenterBtn) recenterBtn.style.display = gyroActive ? 'block' : 'none';
 
     // When the gyroscope is driving, it sets camera.quaternion directly (absolute
     // orientation) — don't overwrite it with the yaw/pitch euler below.
@@ -104,47 +103,7 @@ export function setupMovement(camera, renderer) {
     camera.rotation.set(pitch, yaw, 0);
   }
 
-  return { updateMovement };
-}
-
-// ── Recenter button (mobile, gyro only) ─────────────────────────────────────────
-// Tap (held straight) to re-level the view — fixes any mis-angled gyro calibration
-// without a reload. Placed bottom-left, above the mode switcher.
-function createRecenterButton() {
-  const btn = document.createElement('button');
-  btn.id = 'recenter-btn';
-  // Round secondary button: smaller, dimmer cyan circle with a ⟲ icon, label below.
-  // Block layout + text-align:center so the existing display:'block' toggle works.
-  btn.innerHTML = `
-    <div style="
-      width: 56px; height: 56px; border-radius: 50%; margin: 0 auto;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 34px; color: #00e5ff;
-      background: rgba(0,229,255,0.07); border: 1px solid rgba(0,229,255,0.55);
-      text-shadow: 0 0 8px rgba(0,229,255,0.7); box-shadow: 0 0 10px rgba(0,229,255,0.25);
-    ">⟲</div>
-    <div style="margin-top: 5px; font-size: 10px; letter-spacing: 0.06em; line-height: 1.3; color: #00e5ff; opacity: 0.75;">RECENTER<br>tilted? hold straight</div>`;
-  btn.style.cssText = `
-    display: none;
-    position: fixed;
-    bottom: 90px;
-    left: 16px;
-    width: 92px;
-    text-align: center;
-    background: transparent;
-    border: none;
-    padding: 0;
-    font-family: monospace;
-    cursor: pointer;
-    z-index: 200;
-  `;
-  btn.addEventListener('click', (e) => {
-    e.stopPropagation();   // don't let the tap reach the canvas shoot handler
-    if (gyroRecenter) gyroRecenter();
-    btn.blur();
-  });
-  document.body.appendChild(btn);
-  return btn;
+  return { updateMovement, gyro };
 }
 
 // ── Mouse drag ─────────────────────────────────────────────────────────────────
@@ -272,59 +231,67 @@ function setupTouchLook(renderer) {
   return (_delta) => {};
 }
 
-// ── Mobile gyro setup ──────────────────────────────────────────────────────────
-function setupMobileGyro(updaters, renderer, camera) {
-  if (typeof DeviceOrientationEvent === 'undefined') return; // touch-drag is the fallback
+// ── The gyro controller (P55) ────────────────────────────────────────────────
+// Motion look is no longer something the page turns on by itself. There is one
+// switch — the HUD's GYRO button — and this is what it drives. The old surface
+// was two pieces of furniture in the middle of the screen: a full-width "Enable
+// Motion Controls" prompt on iOS, and a RECENTER circle that appeared only once
+// the gyro happened to be live. Both are gone; the toggle and its popup replace
+// them, and this object is the whole seam between them and the sensor.
+//
+// ENABLE IS ASYNC BECAUSE iOS MAKES IT ASYNC. requestPermission() must be called
+// from inside a user gesture, so it is awaited in the toggle's click handler and
+// the result is what the button renders — never a guess, and never a prompt the
+// player did not ask for.
+//
+// The updater is installed ONCE, on the first successful enable, and afterwards
+// `gyroEnabled` gates it. Re-installing per enable would stack a second
+// deviceorientation listener and a second slerp writing the same camera.
+function createGyroController(updaters, camera) {
+  const available = typeof DeviceOrientationEvent !== 'undefined';
+  let installed = false;
 
-  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // iOS 13+ — must request permission from a user gesture (the button).
-    showMotionButton(updaters, camera);
-  } else {
-    // Android and others — no permission needed; start gyro directly.
-    updaters.push(setupGyro(camera));
-  }
+  return {
+    isAvailable: () => available,
+    isOn:        () => gyroEnabled,
+
+    /** @returns {Promise<boolean>} true once motion look is actually live. */
+    async enable() {
+      if (!available) return false;
+      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          if (await DeviceOrientationEvent.requestPermission() !== 'granted') return false;
+        } catch {
+          return false;   // denied, or called outside a gesture — stay off
+        }
+      }
+      if (!installed) { updaters.push(setupGyro(camera)); installed = true; }
+      gyroEnabled = true;
+      return true;
+    },
+
+    disable() {
+      gyroEnabled = false;
+      gyroActive  = false;          // touch-drag look takes back over
+      adoptCameraLook(camera);      // ...from where the gyro actually left us
+    },
+
+    recenter() { if (gyroRecenter) gyroRecenter(); },
+  };
 }
 
-// ── iOS motion permission prompt ───────────────────────────────────────────────
-// Centred prompt with a high z-index so nothing overlaps/steals the tap. Removed
-// after the choice; if denied or it errors, touch-drag look remains in control.
-function showMotionButton(updaters, camera) {
-  const btn = document.createElement('button');
-  btn.id = 'motion-btn';
-  btn.textContent = '⚡ Enable Motion Controls';
-  btn.style.cssText = `
-    position: fixed;
-    top: 42%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    padding: 16px 26px;
-    background: rgba(0,0,0,0.9);
-    color: #f7931a;
-    border: 1px solid #f7931a;
-    font-family: monospace;
-    font-size: 15px;
-    letter-spacing: 0.08em;
-    cursor: pointer;
-    z-index: 300;
-    text-shadow: 0 0 8px #f7931a;
-    box-shadow: 0 0 24px rgba(247,147,26,0.3);
-  `;
-
-  btn.addEventListener('click', async (e) => {
-    e.stopPropagation();
-    try {
-      const response = await DeviceOrientationEvent.requestPermission();
-      btn.remove();
-      if (response === 'granted') {
-        updaters.push(setupGyro(camera));
-      }
-      // If denied, do nothing — touch-drag look is already active.
-    } catch {
-      btn.remove(); // touch-drag look remains
-    }
-  });
-
-  document.body.appendChild(btn);
+/**
+ * Hand the camera's current orientation back to the drag-look bookkeeping.
+ *
+ * While the gyro drives, it writes camera.quaternion directly and `yaw`/`pitch`
+ * go stale — so without this, switching motion OFF would snap the view to
+ * wherever the last finger drag happened to leave it, which reads as the game
+ * throwing you somewhere. Roll is dropped because drag-look has none to restore.
+ */
+function adoptCameraLook(camera) {
+  const e = new THREE.Euler().setFromQuaternion(camera.quaternion, 'YXZ');
+  yaw   = e.y;
+  pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, e.x));
 }
 
 // ── Gyroscope (quaternion-based, robust) ───────────────────────────────────────
@@ -375,6 +342,7 @@ function setupGyro(camera) {
   }
 
   window.addEventListener('deviceorientation', (e) => {
+    if (!gyroEnabled) return;     // the toggle is off; readings are ignored
     if (e.alpha === null) return; // no usable sensor data
     alpha = THREE.MathUtils.degToRad(e.alpha);
     beta  = THREE.MathUtils.degToRad(e.beta);

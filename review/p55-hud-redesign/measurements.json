@@ -1,0 +1,1498 @@
+[
+  {
+    "name": "phone390-classic",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": true
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone390-gold-arena",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeLabelOnActiveFill": 10.95,
+        "panelBg": "rgb(20,15,8)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone390-carnivorous",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeLabelOnActiveFill": 14.16,
+        "panelBg": "rgb(13,5,5)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": true
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone414-classic",
+    "w": 414,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 87.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 109.3,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 202.7,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 109.3,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 202.7,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 274,
+        "h": 94,
+        "right": 290,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 302,
+        "y": 693,
+        "w": 92,
+        "h": 113,
+        "right": 394,
+        "bottom": 806
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 414,
+      "vh": 896
+    }
+  },
+  {
+    "name": "phone414-gold-arena",
+    "w": 414,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 87.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 109.3,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 202.7,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 109.3,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 202.7,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 274,
+        "h": 94,
+        "right": 290,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 302,
+        "y": 693,
+        "w": 92,
+        "h": 113,
+        "right": 394,
+        "bottom": 806
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeLabelOnActiveFill": 10.95,
+        "panelBg": "rgb(20,15,8)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": true
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 414,
+      "vh": 896
+    }
+  },
+  {
+    "name": "phone414-carnivorous",
+    "w": 414,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 87.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 109.3,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 202.7,
+          "y": 786,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 103.3,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 109.3,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 196.7,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 202.7,
+          "y": 836,
+          "w": 87.3,
+          "h": 44,
+          "right": 290,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 274,
+        "h": 94,
+        "right": 290,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 302,
+        "y": 693,
+        "w": 92,
+        "h": 113,
+        "right": 394,
+        "bottom": 806
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeLabelOnActiveFill": 14.16,
+        "panelBg": "rgb(13,5,5)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 414,
+      "vh": 896
+    }
+  },
+  {
+    "name": "phone390-gyro-off",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone390-tooltip",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": true,
+        "text": "WebXR unavailable on your device"
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone390-panels",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": false,
+        "world": false
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": true
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "phone390-world-panel",
+    "w": 390,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 79.3,
+        "h": 44,
+        "n": 6
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 101.3,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 186.7,
+          "y": 734,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 95.3,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 101.3,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 180.7,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 186.7,
+          "y": 784,
+          "w": 79.3,
+          "h": 44,
+          "right": 266,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 250,
+        "h": 94,
+        "right": 266,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 278,
+        "y": 641,
+        "w": 92,
+        "h": 113,
+        "right": 370,
+        "bottom": 754
+      },
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": false
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeLabelOnActiveFill": 14.16,
+        "panelBg": "rgb(13,5,5)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": {
+        "visible": false
+      },
+      "gyroVisible": true,
+      "skinStrings": [],
+      "vw": 390,
+      "vh": 844
+    }
+  },
+  {
+    "name": "desktop1280-classic",
+    "w": 1280,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 109.3,
+        "h": 44,
+        "n": 5
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1168,
+        "y": 663,
+        "w": 92,
+        "h": 113,
+        "right": 1260,
+        "bottom": 776
+      },
+      "gapToShoot": 812,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": null,
+      "gyroVisible": false,
+      "skinStrings": [],
+      "vw": 1280,
+      "vh": 800
+    }
+  },
+  {
+    "name": "desktop1280-gold-arena",
+    "w": 1280,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 109.3,
+        "h": 44,
+        "n": 5
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1168,
+        "y": 663,
+        "w": 92,
+        "h": 113,
+        "right": 1260,
+        "bottom": 776
+      },
+      "gapToShoot": 812,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeLabelOnActiveFill": 10.95,
+        "panelBg": "rgb(20,15,8)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": null,
+      "gyroVisible": false,
+      "skinStrings": [],
+      "vw": 1280,
+      "vh": 800
+    }
+  },
+  {
+    "name": "desktop1280-carnivorous",
+    "w": 1280,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 109.3,
+        "h": 44,
+        "n": 5
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1168,
+        "y": 663,
+        "w": 92,
+        "h": 113,
+        "right": 1260,
+        "bottom": 776
+      },
+      "gapToShoot": 812,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": null,
+        "world": null
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeLabelOnActiveFill": 14.16,
+        "panelBg": "rgb(13,5,5)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": null,
+      "gyroVisible": false,
+      "skinStrings": [],
+      "vw": 1280,
+      "vh": 800
+    }
+  },
+  {
+    "name": "desktop1280-panels",
+    "w": 1280,
+    "dod": {
+      "equal": {
+        "widthSpread": 0,
+        "heightSpread": 0,
+        "w": 109.3,
+        "h": 44,
+        "n": 5
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1168,
+        "y": 663,
+        "w": 92,
+        "h": 113,
+        "right": 1260,
+        "bottom": 776
+      },
+      "gapToShoot": 812,
+      "btnOverlap": 0,
+      "panelsOverlapGrid": {
+        "coop": false,
+        "world": false
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeLabelOnActiveFill": 11.25,
+        "panelBg": "rgb(6,6,14)"
+      },
+      "tooltip": {
+        "visible": false,
+        "text": ""
+      },
+      "popup": null,
+      "gyroVisible": false,
+      "skinStrings": [],
+      "vw": 1280,
+      "vh": 800
+    }
+  }
+]

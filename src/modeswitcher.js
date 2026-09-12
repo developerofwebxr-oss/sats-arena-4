@@ -9,8 +9,9 @@
  *     for views to react to state changes. NO DOM knowledge. A future set of
  *     3D buttons inside the VR scene can call these same methods.
  *
- *   createDomSwitcher(controller)
- *     The view. Builds the neon DOM buttons and wires them to the controller.
+ *   createDomSwitcher(controller, hudGrid)
+ *     The view. Creates the three buttons, hands them to hud-grid.js to place
+ *     and style, and wires them to the controller.
  *
  *   setupModeSwitcher(renderer)
  *     Composes both and returns the controller (so other code / a later 3D
@@ -201,136 +202,75 @@ export function createModeController(renderer) {
 
 // ── DOM view ─────────────────────────────────────────────────────────────────
 
-export function createDomSwitcher(controller) {
-  injectStyles();
-
-  const bar = document.createElement('div');
-  bar.id = 'mode-switcher';
-
-  // Each entry: mode key, label, accent color, and the action it triggers.
+/**
+ * The three mode buttons. They are CREATED here (this module owns what they do)
+ * and PLACED by hud-grid.js, which owns the 2x3 cluster's geometry and look —
+ * so there is exactly one description of a HUD button's size and treatment, and
+ * it is not in this file.
+ *
+ * ── UNAVAILABLE IS DIMMED AND STILL TAPPABLE (P55) ──────────────────────────
+ * The "WebXR unavailable on your device" caption used to live under every mode
+ * button, permanently, in a second font size — three lines of apology occupying
+ * the same row as the controls. It is now a tooltip you get by tapping, which
+ * is the same information at the moment it is actually wanted, and the button
+ * keeps `disabled` off so the tap can reach a handler at all: a `disabled`
+ * button swallows clicks, which is precisely how "nothing happens when I press
+ * it" became the unavailable state's whole experience.
+ */
+export function createDomSwitcher(controller, { adopt, showTooltip }) {
   const defs = [
-    { mode: 'screen', label: 'SCREEN', color: 'var(--ui-primary)', action: controller.exitToScreen },
-    { mode: 'vr',     label: 'VR',     color: 'var(--ui-accent)', action: controller.enterVR },
-    { mode: 'ar',     label: 'AR',     color: 'var(--ui-glow)', action: controller.enterAR },
+    { mode: 'screen', cell: 'screen', label: 'SCREEN', action: controller.exitToScreen },
+    { mode: 'vr',     cell: 'vr',     label: 'VR',     action: controller.enterVR },
+    { mode: 'ar',     cell: 'ar',     label: 'AR',     action: controller.enterAR },
   ];
 
   const buttons = defs.map((def) => {
     const btn = document.createElement('button');
+    btn.id = `mode-${def.mode}`;
+    btn.type = 'button';
     btn.className = 'mode-btn';
-    btn.style.setProperty('--accent', def.color);
+    adopt(def.cell, btn, { label: def.label });
 
-    const main = document.createElement('div');
-    main.className = 'mode-main';
-    main.textContent = def.label;
-
-    const sub = document.createElement('div');
-    sub.className = 'mode-sub';
-
-    btn.append(main, sub);
     btn.addEventListener('click', (e) => {
       e.stopPropagation(); // don't let the click reach the canvas shoot handler
-      def.action();
       btn.blur();          // drop focus so SPACE shoots instead of re-triggering this
+      if (btn.classList.contains('checking')) return;
+      if (btn.classList.contains('disabled')) {
+        showTooltip(btn, btn.dataset.reason || 'Not available on your device');
+        return;
+      }
+      def.action();
     });
 
-    bar.appendChild(btn);
-    return { def, btn, sub };
+    return { def, btn };
   });
-
-  document.body.appendChild(bar);
 
   // Re-render button states whenever the controller's state changes.
   controller.subscribe((state) => {
-    buttons.forEach(({ def, btn, sub }) => {
-      const isActive = state.activeMode === def.mode;
-      btn.classList.toggle('active', isActive);
+    buttons.forEach(({ def, btn }) => {
+      btn.classList.toggle('active', state.activeMode === def.mode);
 
       if (def.mode === 'screen') {
         // SCREEN is always available on every device.
         btn.classList.remove('checking', 'disabled');
-        sub.textContent = '';
         return;
       }
 
       const cap = state[def.mode]; // vr or ar
       btn.classList.toggle('checking', cap.status === 'checking');
       btn.classList.toggle('disabled', cap.status === 'unsupported');
-      btn.disabled = cap.status !== 'supported';
-
-      sub.textContent =
-        cap.status === 'checking'    ? 'checking…' :
-        cap.status === 'unsupported' ? cap.reason  : '';
+      // The tooltip's text, carried on the element so the click handler needs no
+      // closure over a value that changes.
+      btn.dataset.reason = cap.status === 'unsupported'
+        ? 'WebXR unavailable on your device' : '';
     });
   });
 }
 
 // ── Compose ──────────────────────────────────────────────────────────────────
 
-export function setupModeSwitcher(renderer) {
+export function setupModeSwitcher(renderer, hudGrid) {
   const controller = createModeController(renderer);
-  createDomSwitcher(controller);
+  createDomSwitcher(controller, hudGrid);
   return controller; // exposed so a future in-world 3D switcher can reuse it
-}
-
-// ── Styles ───────────────────────────────────────────────────────────────────
-
-function injectStyles() {
-  const style = document.createElement('style');
-  style.textContent = `
-    #mode-switcher {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 10px;
-      z-index: 200;
-      font-family: monospace;
-    }
-    .mode-btn {
-      min-width: 96px;
-      padding: 10px 14px;
-      background: var(--ui-panel-chip);
-      color: var(--accent);
-      border: 1px solid var(--accent);
-      cursor: pointer;
-      text-align: center;
-      letter-spacing: 0.1em;
-      transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
-    }
-    .mode-btn .mode-main { font-size: 16px; }
-    .mode-btn .mode-sub  { font-size: 10px; opacity: 0.7; min-height: 12px; margin-top: 3px; letter-spacing: 0.06em; }
-    /* Narrow phones: tighten so all three fit within ~390px with margins. */
-    @media (max-width: 480px) {
-      #mode-switcher { gap: 6px; width: calc(100vw - 28px); max-width: 360px; }
-      .mode-btn { min-width: 0; flex: 1; padding: 9px 6px; }
-      .mode-btn .mode-main { font-size: 14px; }
-      .mode-btn .mode-sub  { font-size: 9px; }
-    }
-    .mode-btn:hover:not(.disabled):not(.checking) {
-      background: color-mix(in srgb, var(--accent) 15%, var(--ui-panel-chip));
-    }
-    /* Active mode — filled glow in its accent color. */
-    .mode-btn.active {
-      background: color-mix(in srgb, var(--accent) 22%, var(--ui-panel-chip));
-      box-shadow: 0 0 16px var(--accent), inset 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
-      text-shadow: 0 0 8px var(--accent);
-    }
-    /* Checking… — neutral, not yet clickable. */
-    .mode-btn.checking {
-      opacity: 0.5;
-      cursor: default;
-      color: var(--ui-text-muted);
-      border-color: var(--ui-text-muted);
-    }
-    /* Unsupported — greyed with reason sublabel. */
-    .mode-btn.disabled {
-      opacity: 0.35;
-      cursor: not-allowed;
-      color: var(--ui-text-muted);
-      border-color: var(--ui-text-muted);
-      box-shadow: none;
-    }
-  `;
-  document.head.appendChild(style);
 }

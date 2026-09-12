@@ -79,14 +79,14 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
 
     // Mock provider auto-approves everything at 0 sats today; this is the seam a
     // real paywall drops into unchanged.
-    if (!isSkinUnlocked(skinId))   return { ok: false, reason: 'Skin locked' };
+    if (!isSkinUnlocked(skinId))   return { ok: false, reason: 'World locked' };
 
     // Assets still streaming — refuse rather than switch into an empty shell.
     const target = getSkin(skinId);
     if (target?.isReady && !target.isReady()) return { ok: false, reason: 'Still loading…' };
 
     // Peers cannot unilaterally switch — shared world, host authority.
-    if (hasPeer() && !isHost())    return { ok: false, reason: 'Only the host can change skin' };
+    if (hasPeer() && !isHost())    return { ok: false, reason: 'Only the host can change world' };
 
     if (skinId === skins.getActiveSkinId()) return { ok: false, reason: 'Already active' };
 
@@ -179,7 +179,7 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
     // Exposed so the HUD can explain WHY a control is dimmed.
     canSwitch() {
       if (isMatchActive())        return { ok: false, reason: 'Not during a match' };
-      if (hasPeer() && !isHost()) return { ok: false, reason: 'Only the host can change skin' };
+      if (hasPeer() && !isHost()) return { ok: false, reason: 'Only the host can change world' };
       if (pending)                return { ok: false, reason: 'Already switching…' };
       return { ok: true };
     },
