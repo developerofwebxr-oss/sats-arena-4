@@ -55,6 +55,45 @@ function setUpgradeLoading(loading) {
 }
 let lastShownSecond = -1; // so the countdown only re-renders when it changes
 
+// ── The top-left readouts (P56) ──────────────────────────────────────────────
+/**
+ * SCORE and SESSION are one type object in two places: same family, same size,
+ * WORD at 400 and VALUE at 700. Exported so coop-hud.js builds its chip through
+ * the same function rather than through a matching-looking string — one weight
+ * pair, one size, one place to change them.
+ *
+ * Both parts are written with textContent, never interpolated into innerHTML:
+ * the session code arrives from the network.
+ */
+export const HUD_READOUT_PX = 14;
+
+// RAPID FIRE's two lines, with explicit line-heights so the box's height is
+// arithmetic rather than whatever the font's default leading happens to be:
+// 6 + 14 + 2 + 10 + 6 + 2px of border = 40px. Its top edge is the SESSION chip's
+// (both 16) and its bottom edge lands on the SCORE line's (both 56) — that
+// span-for-span match is what "aligned with the session chip and score" means
+// here, and it is why the numbers are chosen rather than eyeballed.
+const RF_TITLE_PX = 14;
+const RF_SUB_PX   = 10;
+
+// SHOOT's circle and its target glyph.
+const SHOOT_PX      = 84;
+const SHOOT_ICON_PX = 60;
+
+export function setReadout(el, word, value) {
+  if (!el) return;
+  let w = el.querySelector('.hud-word');
+  let v = el.querySelector('.hud-value');
+  if (!w || !v) {
+    el.textContent = '';
+    w = document.createElement('span'); w.className = 'hud-word';
+    v = document.createElement('span'); v.className = 'hud-value';
+    el.append(w, document.createTextNode(' '), v);
+  }
+  w.textContent = word;
+  v.textContent = value;
+}
+
 // ── Styles ─────────────────────────────────────────────────────────────────
 function injectStyles() {
   const style = document.createElement('style');
@@ -64,6 +103,11 @@ function injectStyles() {
       50%  { box-shadow: 0 0 28px var(--ui-glow-strong), 0 0 56px var(--ui-glow-mid); }
       100% { box-shadow: 0 0 12px var(--ui-glow-soft), 0 0 24px var(--ui-glow-soft); }
     }
+    /* One weight pair for both top-left readouts. */
+    #score, #session-chip { font-size: ${HUD_READOUT_PX}px; }
+    .hud-word  { font-weight: 400; opacity: 0.85; }
+    .hud-value { font-weight: 700; }
+
     #upgrade-btn { animation: lightning-pulse 1.4s ease-in-out infinite; }
     #upgrade-btn.active {
       /* While rapid-fire is running, the button glows magenta to show it's live. */
@@ -82,20 +126,29 @@ function injectStyles() {
       border-radius: 50%; animation: mini-spin 0.7s linear infinite;
     }
 
-    /* Narrow phones: shrink the corner buttons so they don't crowd the top row
-       or collide with the bottom controls. */
+    /* Narrow phones: a touch tighter again, but top:16 is NOT overridden — the
+       box's top edge lines up with the SESSION chip's at every width, which is
+       the alignment the balance pass was about. */
     @media (max-width: 480px) {
-      #upgrade-btn { padding: 9px 12px; top: 12px; right: 12px; }
-      #upgrade-btn > div:first-child { font-size: 14px !important; }
-      #upgrade-btn > div:last-child  { font-size: 10px !important; }
+      #upgrade-btn { padding: 6px 10px; right: 12px; }
+      #upgrade-btn > div:first-child { font-size: 13px !important; }
+      #upgrade-btn > div:last-child  { font-size: 9px !important; }
       #shoot-btn { right: 14px; }
     }
 
-    /* Landscape: drop the corner buttons to the bottom row (≈ the mode-switcher
-       level) instead of floating mid-screen. Portrait position is unchanged.
+    /* ── SHOOT's vertical home, per orientation (P56) ──────────────────────────
+       It used to float at bottom:90 in portrait, which put it a third of the way
+       up the screen and well above the HUD grid — the two bottom-corner controls
+       read as belonging to different screens. It now sits on the SAME baseline as
+       the grid (both bottom:16), so the corner reads as one row.
+
+       Landscape gets its own, lower value rather than the same one: the viewport
+       is ~390px tall there, the grid already eats 110px of it, and the thumb
+       naturally falls lower on a phone held sideways. 24 -> 10 is the "a bit
+       lower" half of the request; portrait's 90 -> 16 is the "a lot lower" half.
        !important overrides the inline bottom set in JS. */
     @media (orientation: landscape) {
-      #shoot-btn { bottom: 24px !important; }
+      #shoot-btn { bottom: 10px !important; }
     }
   `;
   document.head.appendChild(style);
@@ -166,21 +219,26 @@ export function createHUD(onShoot) {
   // three lines never collide. See updateStatusBox().
 
   // ── SCORE (top-left, below the SESSION chip from coop-hud.js) ─────────────────
+  // P56: the same 14px monospace the SESSION chip uses, so the two lines of the
+  // top-left column read as one block instead of two unrelated readouts. Within
+  // the line the WORD is 400 and the NUMBER is 700 — the label is the quiet part,
+  // the value is the part you glance at. SESSION is built the same way in
+  // coop-hud.js; the shared class names are what keep them in step.
   scoreEl = document.createElement('div');
   scoreEl.id = 'score';
   scoreEl.style.cssText = `
     position: fixed;
-    top: 44px;
+    top: 40px;
     left: 16px;
     font-family: monospace;
-    font-size: 16px;
+    font-size: ${HUD_READOUT_PX}px;
     letter-spacing: 0.12em;
     color: var(--ui-glow);
     text-shadow: 0 0 10px var(--ui-glow);
     pointer-events: none;
     user-select: none;
   `;
-  scoreEl.textContent = 'SCORE 0';
+  setReadout(scoreEl, 'SCORE', '0');
   document.body.appendChild(scoreEl);
   applyScoreVisibility();   // honour any reason registered before the HUD existed
 
@@ -189,16 +247,21 @@ export function createHUD(onShoot) {
   // or after the session has already been upgraded.
   upgradeBtn = document.createElement('button');
   upgradeBtn.id = 'upgrade-btn';
+  // P56: the box used to be 18px/12px inside 14x22 padding, which made it the
+  // heaviest object on screen and left the top-left column (SESSION + SCORE)
+  // looking like a footnote beside it. It is now sized to that column: same
+  // top:16 as the SESSION chip, and a height that lands on the SCORE line rather
+  // than hanging below it. See RF_* below.
   upgradeBtn.innerHTML = `
-    <div style="font-size:18px; letter-spacing:0.12em;">RAPID FIRE</div>
-    <div style="font-size:12px; letter-spacing:0.16em; margin-top:5px; opacity:0.8;">${RAPID_FIRE_PRICE} sats &nbsp;·&nbsp; 60s</div>
+    <div style="font:${RF_TITLE_PX}px/1 monospace; letter-spacing:0.12em;">RAPID FIRE</div>
+    <div style="font:${RF_SUB_PX}px/1 monospace; letter-spacing:0.16em; margin-top:2px; opacity:0.8;">${RAPID_FIRE_PRICE} sats &nbsp;·&nbsp; 60s</div>
   `;
   upgradeDefaultHTML = upgradeBtn.innerHTML;
   upgradeBtn.style.cssText = `
     position: fixed;
     top: 16px;
     right: 16px;
-    padding: 14px 22px;
+    padding: 6px 12px;
     background: var(--ui-panel);
     color: var(--ui-glow);
     border: 1px solid var(--ui-glow);
@@ -226,14 +289,17 @@ export function createHUD(onShoot) {
   const shootBtn = document.createElement('button');
   shootBtn.id = 'shoot-btn';
   // Round primary button: bright cyan circle with a ◎ target icon, "SHOOT" below.
+  // P56: 92 -> 84px. Small enough that the column (84 + 6 + 13 = 103px) reads as
+  // the same order of object as the 94px HUD grid opposite it, and still nearly
+  // double the 44px minimum touch target.
   shootBtn.innerHTML = `
     <div style="
-      width: 92px; height: 92px; border-radius: 50%;
+      width: ${SHOOT_PX}px; height: ${SHOOT_PX}px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       background: var(--ui-primary-dim); border: 2px solid var(--ui-primary);
       box-shadow: 0 0 22px var(--ui-primary-line);
     ">
-      <svg width="66" height="66" viewBox="0 0 100 100" fill="none" stroke="var(--ui-primary)"
+      <svg width="${SHOOT_ICON_PX}" height="${SHOOT_ICON_PX}" viewBox="0 0 100 100" fill="none" stroke="var(--ui-primary)"
            stroke-width="5" stroke-linecap="round" style="filter: drop-shadow(0 0 4px var(--ui-primary));">
         <circle cx="50" cy="50" r="15" />
         <line x1="50" y1="4"  x2="50" y2="30" />
@@ -242,14 +308,15 @@ export function createHUD(onShoot) {
         <line x1="70" y1="50" x2="96" y2="50" />
       </svg>
     </div>
-    <div style="margin-top: 6px; font-size: 13px; letter-spacing: 0.18em; color: var(--ui-primary); text-shadow: 0 0 8px var(--ui-primary);">SHOOT</div>`;
-  // Bottom-right, above the mode switcher. Width = circle so it sits cleanly in
-  // the corner in both portrait and landscape.
+    <div style="margin-top: 6px; font-size: 12px; letter-spacing: 0.18em; color: var(--ui-primary); text-shadow: 0 0 8px var(--ui-primary);">SHOOT</div>`;
+  // Bottom-right, on the same baseline as the HUD grid. Width = circle so it sits
+  // cleanly in the corner in both portrait and landscape; the landscape media
+  // query above overrides `bottom` and explains why it differs there.
   shootBtn.style.cssText = `
     position: fixed;
-    bottom: 90px;
+    bottom: 16px;
     right: 20px;
-    width: 92px;
+    width: ${SHOOT_PX}px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -419,7 +486,7 @@ export function updateRapidFireHUD() {
   const score = getScore();
   if (score !== lastShownScore) {
     lastShownScore = score;
-    scoreEl.textContent = `SCORE ${score}`;
+    setReadout(scoreEl, 'SCORE', String(score));
   }
 
   // ── Detect a fresh/repeat payment: paidCount INCREASING since last seen ──────
@@ -456,7 +523,7 @@ function updateStatusBox(active) {
       lastShownSecond = secs;
       const m = Math.floor(secs / 60);
       const s = String(secs % 60).padStart(2, '0');
-      upgradeBtn.innerHTML = `<div style="font-size:16px; letter-spacing:0.12em;">▶ RAPID FIRE ${m}:${s}</div>`;
+      upgradeBtn.innerHTML = `<div style="font:${RF_TITLE_PX}px/1 monospace; letter-spacing:0.12em;">▶ RAPID FIRE ${m}:${s}</div>`;
     }
     upgradeBtn.disabled = true;
     upgradeBtn.style.cursor = 'default';

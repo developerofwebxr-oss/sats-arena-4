@@ -60,7 +60,7 @@ export function setupSkinHud({ skins, net }) {
   panel.id = 'world-panel';
   panel.style.display = 'none';
   panel.innerHTML = `
-    <button id="skin-close" aria-label="Close">CLOSE</button>
+    <button id="skin-close" type="button" aria-label="Close" title="Close">X</button>
     <div id="skin-title">WORLD</div>
     <div id="skin-list"></div>
     <div id="skin-note"></div>
@@ -182,11 +182,17 @@ function injectStyles() {
       background: var(--ui-panel-solid); border: 1.5px solid var(--ui-primary-line);
       color: var(--ui-text); font: 12px monospace;
     }
+    /* P56: an X, matching #coop-close exactly — see the note there. */
     #skin-close {
-      position: absolute; top: 8px; right: 10px;
-      background: none; border: none; color: var(--ui-primary); cursor: pointer;
-      font: 700 9px/1 monospace; letter-spacing: .1em;
+      position: absolute; top: 8px; right: 8px;
+      width: 24px; height: 24px;
+      display: flex; align-items: center; justify-content: center;
+      background: none; border: 1.5px solid var(--ui-primary-line); border-radius: 0;
+      color: var(--ui-primary); cursor: pointer; padding: 0;
+      font: 700 12px/1 monospace; opacity: .85;
     }
+    #skin-close:hover { background: var(--ui-primary-faint); opacity: 1; }
+    #skin-close:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
     #skin-title { font-weight: 700; letter-spacing: .18em; color: var(--ui-primary); }
     #skin-list { display: flex; flex-direction: column; gap: 6px; }
     .skin-row {
