@@ -91,8 +91,8 @@ let tooltipTimer = null;
 let gyroApi = null;
 let shootEl = null;
 let gyroTouched = false;  // the player has used the toggle; the restore stands down
-let gyroDenied = false;   // a tap was refused; offer the re-request
-let gyroHint   = false;   // ...and refused again with no dialog, so say why
+let gyroBlocked = false;  // a tap was refused — the hint panel is showing
+let gyroSilent  = false;  // ...and no dialog appeared, so the OS will not ask again
 
 /** Cell name → grid-area. Explicit, so a hidden GYRO leaves its track empty. */
 const CELLS = {
@@ -140,11 +140,24 @@ export function setupHudGrid({ gyro } = {}) {
   for (const t of [0, 60, 250, 600, 1200]) setTimeout(measure, t);
   requestAnimationFrame(measure);
 
-  // A tap anywhere else closes the tooltip. Capture phase, so a button's own
-  // stopPropagation cannot leave a stale tooltip on screen.
-  document.addEventListener('click', (e) => {
+  // A tap anywhere else closes whichever transient is up.
+  //
+  // POINTERDOWN, not click, and this is not a detail: input.js calls
+  // preventDefault() on a touchend that lands on the canvas, to stop the
+  // synthetic click double-firing a shot. That means a finger tap on the GAME —
+  // by far the most likely "somewhere else" — produces no click event at all, so
+  // a click-based dismissal silently does nothing on a phone. Measured: the X
+  // and the GYRO tap closed the panel, an outside tap did not. pointerdown fires
+  // for mouse and touch alike and nothing suppresses it.
+  //
+  // Capture phase, so a button's own stopPropagation cannot leave a transient
+  // stranded on screen — which is how the blocked panel became unclosable.
+  const dismissOutside = (e) => {
     if (tooltip && !tooltip.contains(e.target)) hideTooltip();
-  }, true);
+    if (gyroBlocked && !popup?.contains(e.target) && !gyroBtn?.contains(e.target)) dismissBlocked();
+  };
+  document.addEventListener('pointerdown', dismissOutside, true);
+  document.addEventListener('click', dismissOutside, true);   // belt and braces
 
   return { adopt, showTooltip, refresh: measure };
 }
@@ -198,8 +211,13 @@ function buildGyroButton() {
   popup.style.display = 'none';
   popup.innerHTML = `
     <button id="recenter-go" type="button">RECENTER</button>
-    <button id="gyro-allow" type="button">ALLOW MOTION</button>
-    <div id="gyro-hint"></div>`;
+    <div id="gyro-block">
+      <div id="gyro-hint"></div>
+      <div id="gyro-block-row">
+        <button id="gyro-allow" type="button">TRY AGAIN</button>
+        <button id="gyro-close" type="button" aria-label="Close" title="Close">X</button>
+      </div>
+    </div>`;
   document.body.appendChild(popup);
   registerClusterMember(popup);
 
@@ -216,13 +234,25 @@ function buildGyroButton() {
     e.currentTarget.blur();
   });
 
-  // ALLOW MOTION re-runs the REAL request every time it is tapped. It never
-  // reports success it did not get: the button only turns GYRO on if enable()
-  // resolved to a live sensor.
+  // TRY AGAIN re-runs the REAL request every time it is tapped, because the
+  // player may have gone to Settings in between. It never reports success it did
+  // not get: GYRO only turns on if enable() resolved to a live sensor.
   popup.querySelector('#gyro-allow').addEventListener('click', async (e) => {
     e.stopPropagation();
     e.currentTarget.blur();
     await requestMotion();
+  });
+
+  // ── THE WAY OUT (P58) ─────────────────────────────────────────────────────
+  // Three of them, because this panel used to have none. `gyroBlocked` was a
+  // one-way latch: nothing cleared it but a successful enable, and on an origin
+  // where iOS has remembered a denial a successful enable is exactly what can
+  // never happen. Five taps measured, five silent refusals, the panel never
+  // closed. A state the game can enter and not leave is not a state.
+  popup.querySelector('#gyro-close').addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.currentTarget.blur();
+    dismissBlocked();
   });
 
   gyroBtn.addEventListener('click', async (e) => {
@@ -231,12 +261,11 @@ function buildGyroButton() {
     gyroTouched = true;
     if (gyroApi.isOn()) {
       gyroApi.disable();
-      gyroDenied = false; gyroHint = false;
       rememberGyro(false);
-      renderGyro();
+      dismissBlocked();          // also clears any stale hint
       return;
     }
-    rememberGyro(true);   // the intent is the tap, whether or not permission lands
+    if (gyroBlocked) { dismissBlocked(); return; }   // the missing branch
     await requestMotion();
   });
 
@@ -260,47 +289,65 @@ function buildGyroButton() {
   renderGyro();
 }
 
+/** Below this, the platform answered without putting a dialog up. */
+const SILENT_REFUSAL_MS = 250;
+
 /**
  * Ask for motion, from inside the gesture that called this.
  *
- * iOS remembers a refusal: the second and every later request resolves 'denied'
+ * iOS remembers a refusal for the origin: every later request resolves 'denied'
  * with no dialog shown at all, which from the player's side is a button that
- * does nothing. So the live request is ALWAYS attempted first — a permission can
- * be restored in Settings and we must not cache our own pessimism — and the hint
- * about Settings only appears once a tap has actually come back refused a second
- * time, i.e. once we have evidence that no dialog is coming.
+ * does nothing. The live request is therefore ALWAYS attempted first — a
+ * permission restored in Settings must be picked up without a reload, and we
+ * must never cache our own pessimism — and HOW LONG IT TOOK is what tells us
+ * which refusal we got. A dialog costs human time; a remembered denial comes
+ * back in single-digit milliseconds. That distinction is the difference between
+ * "you declined, try again" and "your browser will not ask again, here is what
+ * to change", and it is measured rather than guessed at.
  */
 async function requestMotion() {
+  const t0 = performance.now();
   const ok = await gyroApi.enable({ prompt: true });   // reached only from a tap
+  const elapsed = performance.now() - t0;
+
   if (ok) {
-    gyroDenied = false;
-    gyroHint = false;
-  } else if (gyroDenied) {
-    gyroHint = true;     // refused again, silently — it is a Settings problem now
+    gyroBlocked = false;
+    gyroSilent  = false;
+    rememberGyro(true);    // only ever remembered when it actually turned on
   } else {
-    gyroDenied = true;   // first refusal: offer the re-request
+    gyroBlocked = true;
+    gyroSilent  = elapsed < SILENT_REFUSAL_MS;
   }
   renderGyro();
   return ok;
+}
+
+/** Close the blocked panel and go back to plain finger-drag look. */
+function dismissBlocked() {
+  gyroBlocked = false;
+  gyroSilent  = false;
+  renderGyro();
 }
 
 function renderGyro() {
   if (!gyroBtn || !gyroApi) return;
   const on = gyroApi.isOn();
   gyroBtn.classList.toggle('active', on);
-  gyroBtn.classList.toggle('denied', !on && gyroDenied);
+  gyroBtn.classList.toggle('denied', !on && gyroBlocked);
   gyroBtn.setAttribute('aria-pressed', String(on));
   if (popup) {
-    const show = on || gyroDenied;
-    popup.style.display = show ? 'block' : 'none';
-    popup.classList.toggle('is-denied', !on && gyroDenied);
-    const hint = popup.querySelector('#gyro-hint');
-    hint.textContent = gyroHint
-      ? 'Still blocked. Turn on Motion & Orientation Access in iOS Settings, under Apps > Safari.'
-      : '';
-    hint.style.display = gyroHint ? 'block' : 'none';
+    popup.style.display = (on || gyroBlocked) ? 'block' : 'none';
+    popup.classList.toggle('is-blocked', !on && gyroBlocked);
+    popup.querySelector('#gyro-hint').textContent = !gyroBlocked ? '' : (gyroSilent
+      // No dialog appeared, so there is nothing to tap through — say what to change.
+      ? 'Safari won\u2019t ask again. Turn on Motion & Orientation Access in Settings > Apps > Safari, then clear this site\u2019s data.'
+      // A dialog did appear and was declined; asking again is still worth a tap.
+      : 'Motion access declined. Try again, or turn it on in Settings > Apps > Safari.');
     relayoutPanels();   // the cluster just got taller or shorter
   }
+  // One transient at a time, the P55 rule: the hint panel and the tooltip never
+  // share the screen.
+  if (gyroBlocked) hideTooltip();
 }
 
 /**
@@ -377,6 +424,7 @@ function measure() {
   const g = grid.getBoundingClientRect();
   const col = (g.width - 2 * GAP) / 3;
   document.documentElement.style.setProperty('--hud-col-w', `${col}px`);
+  document.documentElement.style.setProperty('--hud-grid-w', `${g.width}px`);
   document.documentElement.style.setProperty('--hud-gyro-left', `${Math.round(g.left + 2 * (col + GAP))}px`);
 
   for (const el of grid.children) fitLabel(el);
@@ -524,35 +572,44 @@ function injectStyles() {
       width: var(--hud-col-w, 88px);
       z-index: 9050;
     }
-    #gyro-pop #gyro-allow, #gyro-pop #gyro-hint { display: none; }
-    #gyro-pop.is-denied #recenter-go { display: none; }
-    #gyro-pop.is-denied #gyro-allow  { display: flex; }
-    /* The refused state needs room for two words, and it is not one button wide
-       enough to hold them — so it borrows a little to the LEFT, never to the
-       right, where SHOOT is. */
-    #gyro-pop.is-denied {
-      width: calc(2 * var(--hud-col-w, 88px) + var(--hud-gap));
-      left: calc(var(--hud-gyro-left, 16px) - var(--hud-col-w, 88px) - var(--hud-gap));
+    #gyro-pop #gyro-block { display: none; }
+    #gyro-pop.is-blocked #recenter-go { display: none; }
+    #gyro-pop.is-blocked #gyro-block  { display: block; }
+    /* The blocked panel carries a sentence, so it takes the GRID'S OWN WIDTH and
+       its left edge — the widest thing it can be without reaching past the grid,
+       which is itself measured to stay 12px clear of SHOOT. It grows upward, so
+       it never covers the grid either. Two lines instead of six at one button's
+       width, and it lines up with the cluster rather than floating over it. */
+    #gyro-pop.is-blocked {
+      width: var(--hud-grid-w, 250px);
+      left: var(--hud-edge);
     }
-    #recenter-go, #gyro-allow {
-      width: 100%; height: ${POPUP_H}px;
+    #gyro-block-row { display: flex; gap: var(--hud-gap); margin-top: var(--hud-gap); }
+    #gyro-allow {
+      flex: 1 1 auto; height: 30px;
       box-sizing: border-box;
       display: flex; align-items: center; justify-content: center;
       border: var(--hud-border-w) solid var(--ui-primary);
       border-radius: var(--hud-radius);
-      background: var(--hud-bg);
-      color: var(--ui-primary);
-      font: 700 11px/1 monospace;
-      letter-spacing: var(--hud-track);
-      cursor: pointer;
-      box-shadow: var(--hud-glow);
+      background: var(--hud-bg); color: var(--ui-primary);
+      font: 700 10px/1 monospace; letter-spacing: var(--hud-track); cursor: pointer;
     }
-    #recenter-go:hover, #gyro-allow:hover { background: var(--hud-fill); }
-    #gyro-allow { border-color: var(--ui-danger); color: var(--ui-danger); box-shadow: none; }
-    #gyro-allow:hover { background: var(--ui-danger-faint); }
+    #gyro-allow:hover { background: var(--hud-fill); }
+    #gyro-close {
+      flex: 0 0 30px; height: 30px;
+      box-sizing: border-box;
+      display: flex; align-items: center; justify-content: center;
+      border: var(--hud-border-w) solid var(--ui-primary-line);
+      border-radius: var(--hud-radius);
+      background: var(--hud-bg); color: var(--ui-primary);
+      font: 700 12px/1 monospace; cursor: pointer; padding: 0;
+    }
+    #gyro-close:hover { background: var(--ui-primary-faint); }
+    #gyro-allow:focus-visible, #gyro-close:focus-visible {
+      outline: 2px solid var(--ui-primary); outline-offset: 2px;
+    }
     #gyro-hint {
-      margin-top: var(--hud-gap);
-      padding: 7px 9px;
+      padding: 8px 9px;
       border: var(--hud-border-w) solid var(--ui-danger-line);
       border-radius: var(--hud-radius);
       background: var(--hud-bg);
@@ -583,7 +640,7 @@ function injectStyles() {
        round SHOOT reticle, the loading spinners and the co-op status dot are not
        in that list and stay round: they are circular because of what they are,
        not because of a rounding style. */
-    #hud-grid, #hud-grid > *, #hud-tooltip, #gyro-pop, #recenter-go, #gyro-allow, #gyro-hint,
+    #hud-grid, #hud-grid > *, #hud-tooltip, #gyro-pop, #recenter-go, #gyro-allow, #gyro-close, #gyro-hint, #gyro-block,
     #score, #session-chip, #upgrade-btn, #rf-panel,
     #coop-panel, #coop-panel input, #coop-panel button, #coop-panel .coop-req,
     #world-panel, #world-panel input, #world-panel button, #world-panel .skin-row,

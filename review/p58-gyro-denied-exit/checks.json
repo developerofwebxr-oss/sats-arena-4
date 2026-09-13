@@ -1,0 +1,197 @@
+[
+ {
+  "n": "silent denial opens the panel",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": true,
+   "popup": "block",
+   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "tryAgain": true,
+   "x": true,
+   "recenter": false,
+   "perm": 1,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "panel offers TRY AGAIN and X",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": true,
+   "popup": "block",
+   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "tryAgain": true,
+   "x": true,
+   "recenter": false,
+   "perm": 1,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "hint says the browser will not ask again",
+  "v": true,
+  "got": "Safari won’t ask again. Turn on Motion & Orie"
+ },
+ {
+  "n": "panel covers neither grid nor SHOOT",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": true,
+   "popup": "block",
+   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "tryAgain": true,
+   "x": true,
+   "recenter": false,
+   "perm": 1,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "drag-look still works while blocked",
+  "v": true
+ },
+ {
+  "n": "a canvas drag also dismisses it (pointerdown)",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": false,
+   "popup": "none",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 1,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "X dismisses",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": false,
+   "popup": "none",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 2,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "re-opens after X",
+  "v": true
+ },
+ {
+  "n": "GYRO tap dismisses",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": false,
+   "popup": "none",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 3,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "re-opens again",
+  "v": true
+ },
+ {
+  "n": "outside tap dismisses",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": false,
+   "popup": "none",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 4,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "drag-look works after dismissal",
+  "v": true
+ },
+ {
+  "n": "10 open/close cycles never trap",
+  "v": true
+ },
+ {
+  "n": "TRY AGAIN after enabling in Settings turns GYRO on",
+  "v": true,
+  "got": {
+   "on": true,
+   "blocked": false,
+   "popup": "block",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 16,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "and motion drives the camera, no reload",
+  "v": true
+ },
+ {
+  "n": "declined-via-dialog is distinguished",
+  "v": true,
+  "got": "Motion access declined. Try again, or turn it"
+ },
+ {
+  "n": "dialog case still dismissible",
+  "v": true
+ },
+ {
+  "n": "reload comes back clean, not blocked",
+  "v": true,
+  "got": {
+   "on": false,
+   "blocked": false,
+   "popup": "none",
+   "hint": "",
+   "tryAgain": true,
+   "x": true,
+   "recenter": true,
+   "perm": 0,
+   "coversGrid": false,
+   "coversShoot": false,
+   "onScreen": true
+  }
+ },
+ {
+  "n": "drag-look works on the fresh load",
+  "v": true
+ }
+]
