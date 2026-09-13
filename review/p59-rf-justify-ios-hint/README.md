@@ -76,3 +76,56 @@ does not reflect a hidden ancestor — measured `ownComputedDisplay: flex`,
 row.
 
 Screenshots: `rapidfire-390.png`, `rapidfire-1280.png`, `hint-390.png`, `hint-414.png`.
+
+---
+
+## 3 — RECENTER matches GYRO (fast-follow, same branch)
+
+**First, a regression of mine.** P58 (`863fccf`) deleted RECENTER's style rule.
+Rewriting the denied-panel CSS, I replaced a block that also held
+`#recenter-go, #gyro-allow {…}` and `#recenter-go:hover`; from then on RECENTER
+rendered as a bare browser button with only the sharp-corner rule applying. That
+is the "differently-styled pill" the owner saw. The P58b/P59 suites tested
+RECENTER's visibility and overlaps but never its styling, which is how it shipped.
+
+**The fix makes it structurally impossible to repeat.** RECENTER now carries the
+grid's own `.hud-btn` class — the one rule every grid button uses for the 1.5px
+primary border, sharp corners, panelBg surface, theme text colour, uppercase
+monospace label and hover glow — instead of a hand-copied set of the same
+declarations. Only two things are overridden, both as the owner asked: height
+(36px) and type size (11px).
+
+Its width comes from GYRO's **measured** box, unrounded, rather than from column
+arithmetic — which only agreed with it to within the rounding a `1fr` track and a
+`Math.round()` on `left` each introduced.
+
+| viewport / world | RECENTER | GYRO | Δ width | edges |
+|---|---|---|---|---|
+| 390 × all three | 82 × 36 @ 192..274 | 82 @ 192..274 | **0.00** | identical |
+| 414 × all three | 90 × 36 @ 208..298 | 90 @ 208..298 | **0.00** | identical |
+| 1280 × all three | 109.34 × 36 @ 246.66..356 | 109.34 @ 246.66..356 | **0.00** | identical |
+
+(1280 is emulated with touch — on a non-touch desktop GYRO and RECENTER don't exist.)
+
+**93/93 checks** across 3 widths × 3 worlds: visible with GYRO on; width and both
+edges within ±1px; sits directly above GYRO; border identical to the grid buttons
+and this world's primary; sharp on all four corners; surface, label colour,
+family, weight, uppercase and tracking identical to a grid button; 36px tall with
+11px letters; clear of the grid and SHOOT; CO-OP and WORLD opening still hide it,
+and it returns when CO-OP closes.
+
+Two notes on how parity was measured, because the first run's strict assertions
+failed for reasons that aren't differences:
+
+* **Border.** `--hud-border-w` is `1.5px`; at this emulated device scale Chromium
+  reports the rendered border as `1px` for *every* HUD button, RECENTER and grid
+  alike. Parity is asserted as RECENTER == grid button, plus the token itself.
+* **Tracking.** Both labels are `0.08em`. RECENTER's is 0.88px and a grid label's
+  is 0.96px (1.04px at desktop) only because RECENTER keeps its smaller 11px
+  letters — 0.88/11 = 0.96/12 = 1.04/13 = 0.08. Parity is asserted in em.
+
+Every earlier suite re-run against this build: P59 27/27, P58 19/19, P58b 14/14,
+P57 10/10.
+
+Screenshots: `recenter-390-classic.png`, `recenter-390-gold-arena.png`,
+`recenter-390-carnivorous.png`.
