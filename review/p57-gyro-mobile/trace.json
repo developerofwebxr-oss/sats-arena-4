@@ -1,0 +1,200 @@
+[
+ {
+  "world": "classic",
+  "phase": "ON",
+  "rows": [
+   {
+    "label": "after GYRO on, before any orientation event",
+    "q": [
+     -0.09983,
+     0,
+     0,
+     0.995
+    ]
+   },
+   {
+    "label": "orientation alpha=0   beta=90",
+    "q": [
+     -0.0001,
+     0,
+     0,
+     1
+    ]
+   },
+   {
+    "label": "orientation alpha=90  beta=90",
+    "q": [
+     0,
+     0.70711,
+     0,
+     0.70711
+    ]
+   },
+   {
+    "label": "orientation alpha=180 beta=60",
+    "q": [
+     0,
+     0.96593,
+     0.25882,
+     0
+    ]
+   },
+   {
+    "label": "orientation alpha=270 beta=75 gamma=15",
+    "q": [
+     0.07946,
+     0.60355,
+     0.10355,
+     -0.78657
+    ]
+   }
+  ],
+  "perm": [
+   "gesture"
+  ],
+  "adds": 1,
+  "active": true,
+  "recenterVisible": true
+ },
+ {
+  "world": "classic",
+  "phase": "RECENTER",
+  "afterRecenter": [
+   0,
+   0,
+   0,
+   -1
+  ]
+ },
+ {
+  "world": "classic",
+  "phase": "OFF",
+  "before": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "afterOrientation": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "orientationIgnored": true,
+  "active": false,
+  "popup": "none",
+  "dragBefore": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "dragAfter": [
+   0,
+   0.27636,
+   0,
+   0.96106
+  ],
+  "dragLookWorks": true
+ },
+ {
+  "world": "carnivorous",
+  "phase": "ON",
+  "rows": [
+   {
+    "label": "after GYRO on, before any orientation event",
+    "q": [
+     -0.09983,
+     0,
+     0,
+     0.995
+    ]
+   },
+   {
+    "label": "orientation alpha=0   beta=90",
+    "q": [
+     -0.0001,
+     0,
+     0,
+     1
+    ]
+   },
+   {
+    "label": "orientation alpha=90  beta=90",
+    "q": [
+     0,
+     0.70711,
+     0,
+     0.70711
+    ]
+   },
+   {
+    "label": "orientation alpha=180 beta=60",
+    "q": [
+     0,
+     0.96593,
+     0.25882,
+     0
+    ]
+   },
+   {
+    "label": "orientation alpha=270 beta=75 gamma=15",
+    "q": [
+     0.07946,
+     0.60355,
+     0.10355,
+     -0.78657
+    ]
+   }
+  ],
+  "perm": [
+   "gesture"
+  ],
+  "adds": 1,
+  "active": true,
+  "recenterVisible": true
+ },
+ {
+  "world": "carnivorous",
+  "phase": "RECENTER",
+  "afterRecenter": [
+   0,
+   0,
+   0,
+   -1
+  ]
+ },
+ {
+  "world": "carnivorous",
+  "phase": "OFF",
+  "before": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "afterOrientation": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "orientationIgnored": true,
+  "active": false,
+  "popup": "none",
+  "dragBefore": [
+   0,
+   0,
+   0,
+   1
+  ],
+  "dragAfter": [
+   0,
+   0.27636,
+   0,
+   0.96106
+  ],
+  "dragLookWorks": true
+ }
+]

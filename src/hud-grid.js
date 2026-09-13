@@ -229,20 +229,33 @@ function buildGyroButton() {
     e.stopPropagation();
     gyroBtn.blur();
     gyroTouched = true;
-    if (gyroApi.isOn()) { gyroApi.disable(); gyroDenied = false; gyroHint = false; renderGyro(); return; }
+    if (gyroApi.isOn()) {
+      gyroApi.disable();
+      gyroDenied = false; gyroHint = false;
+      rememberGyro(false);
+      renderGyro();
+      return;
+    }
+    rememberGyro(true);   // the intent is the tap, whether or not permission lands
     await requestMotion();
   });
 
-  // Restore the session's choice. On iOS an ungranted origin will simply refuse
-  // outside a gesture, so this does NOT count as a denial the player made —
-  // a silent restore that fails just leaves the button honestly OFF.
+  // ── Restoring the session's choice, WITHOUT asking (P57) ──────────────────
+  // This used to call enable() plainly, which on iOS fired requestPermission()
+  // with no user gesture behind it. That is not a harmless failure: Safari
+  // spends the page load's one chance on it, so the tap that follows is refused
+  // before the dialog is ever shown — and every later tap with it. A player who
+  // had ever switched GYRO on therefore found it permanently dead on the next
+  // load, which is exactly the reported "it does nothing".
   //
-  // The guard is not paranoia: enable() is async, and a player who taps GYRO
-  // while the restore is still in flight had their choice overwritten a moment
-  // later by a promise that started before they pressed anything. Once the
-  // player has touched the control, the restore has nothing left to say.
+  // `prompt: false` says: resume if the platform needs no permission, otherwise
+  // leave it off and wait for a tap, because only a tap may legally ask.
+  //
+  // The gyroTouched guard stays for the other race: enable() is async, and a
+  // player who taps while the restore is in flight must not have their choice
+  // overwritten by a promise that started before they pressed anything.
   if (sessionStorage.getItem('hudGyro') === 'on') {
-    gyroApi.enable().then(() => { if (!gyroTouched) renderGyro(); }).catch(() => {});
+    gyroApi.enable({ prompt: false }).then(() => { if (!gyroTouched) renderGyro(); }).catch(() => {});
   }
   renderGyro();
 }
@@ -258,7 +271,7 @@ function buildGyroButton() {
  * time, i.e. once we have evidence that no dialog is coming.
  */
 async function requestMotion() {
-  const ok = await gyroApi.enable();
+  const ok = await gyroApi.enable({ prompt: true });   // reached only from a tap
   if (ok) {
     gyroDenied = false;
     gyroHint = false;
@@ -288,6 +301,18 @@ function renderGyro() {
     hint.style.display = gyroHint ? 'block' : 'none';
     relayoutPanels();   // the cluster just got taller or shorter
   }
+}
+
+/**
+ * Remember the player's INTENT, and only when the player expressed it.
+ *
+ * renderGyro() used to write this on every render — including the one during
+ * boot, before an async restore could have resolved — so a load that could not
+ * resume silently erased the choice it was trying to restore. Writing it from
+ * the tap handlers alone keeps "I want motion look" true across a reload that
+ * was not allowed to ask for permission yet.
+ */
+function rememberGyro(on) {
   try { sessionStorage.setItem('hudGyro', on ? 'on' : 'off'); } catch { /* private mode */ }
 }
 
