@@ -1,0 +1,500 @@
+[
+ {
+  "label": "iOS fresh, 1 tap -> ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "gesture"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": null
+  },
+  "post": {
+   "adds": 1,
+   "perm": [
+    "gesture"
+   ],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "iOS returning, 1 tap -> ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "gesture"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [
+    "gesture"
+   ],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "iOS returning, 2 taps -> OFF",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "gesture"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [
+    "gesture"
+   ],
+   "err": [],
+   "active": false,
+   "denied": false,
+   "stored": "off",
+   "allow": false,
+   "MOVED": false
+  }
+ },
+ {
+  "label": "iOS returning, 3 taps -> ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "gesture",
+     "gesture"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [
+    "gesture",
+    "gesture"
+   ],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "iOS double-click one gesture",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "gesture",
+     "gesture"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": null
+  },
+  "post": {
+   "adds": 1,
+   "perm": [
+    "gesture",
+    "gesture"
+   ],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "iOS refuses -> re-grant shown",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 0
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": [
+     "call"
+    ]
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": null
+  },
+  "post": {
+   "adds": 0,
+   "perm": [
+    "call"
+   ],
+   "err": [],
+   "active": false,
+   "denied": true,
+   "stored": "on",
+   "allow": true,
+   "MOVED": false
+  }
+ },
+ {
+  "label": "Android fresh, 1 tap -> ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": []
+   }
+  ],
+  "pre": {
+   "adds": 0,
+   "perm": [],
+   "active": false,
+   "stored": null
+  },
+  "post": {
+   "adds": 1,
+   "perm": [],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "Android returning resumes ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": []
+   }
+  ],
+  "pre": {
+   "adds": 1,
+   "perm": [],
+   "active": true,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ },
+ {
+  "label": "Android returning, 1 tap -> OFF",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": []
+   }
+  ],
+  "pre": {
+   "adds": 1,
+   "perm": [],
+   "active": true,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [],
+   "err": [],
+   "active": false,
+   "denied": false,
+   "stored": "off",
+   "allow": false,
+   "MOVED": false
+  }
+ },
+ {
+  "label": "Android returning, 2 taps -> ON",
+  "pass": true,
+  "checks": [
+   {
+    "name": "active",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "motion",
+    "ok": true,
+    "got": true
+   },
+   {
+    "name": "listener",
+    "ok": true,
+    "got": 1
+   },
+   {
+    "name": "allowUI",
+    "ok": true,
+    "got": false
+   },
+   {
+    "name": "no gesture-less request",
+    "ok": true,
+    "got": []
+   }
+  ],
+  "pre": {
+   "adds": 1,
+   "perm": [],
+   "active": true,
+   "stored": "on"
+  },
+  "post": {
+   "adds": 1,
+   "perm": [],
+   "err": [],
+   "active": true,
+   "denied": false,
+   "stored": "on",
+   "allow": false,
+   "MOVED": true
+  }
+ }
+]

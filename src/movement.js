@@ -247,27 +247,76 @@ function setupTouchLook(renderer) {
 // The updater is installed ONCE, on the first successful enable, and afterwards
 // `gyroEnabled` gates it. Re-installing per enable would stack a second
 // deviceorientation listener and a second slerp writing the same camera.
+//
+// ── ONLY A TAP MAY ASK (P57) ────────────────────────────────────────────────
+// enable() takes `prompt`, and everything automatic must pass false. See the
+// note on enable(): a gesture-less requestPermission() on iOS is not a harmless
+// failure, it burns the page's one opportunity to show the dialog at all.
 function createGyroController(updaters, camera) {
   const available = typeof DeviceOrientationEvent !== 'undefined';
   let installed = false;
 
-  return {
-    isAvailable: () => available,
-    isOn:        () => gyroEnabled,
+  /**
+   * The permission gate, or null where there is none.
+   *
+   * iOS puts it on DeviceOrientationEvent; the DeviceMotionEvent one is the same
+   * "Motion & Orientation Access" grant, so it is only a fallback for a browser
+   * that somehow ships one and not the other. Asking through both would risk two
+   * dialogs for one permission.
+   */
+  function permissionGate() {
+    if (!available) return null;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+      return () => DeviceOrientationEvent.requestPermission();
+    }
+    if (typeof DeviceMotionEvent !== 'undefined'
+        && typeof DeviceMotionEvent.requestPermission === 'function') {
+      return () => DeviceMotionEvent.requestPermission();
+    }
+    return null;   // Android and desktop Chrome: nothing to ask for
+  }
 
-    /** @returns {Promise<boolean>} true once motion look is actually live. */
-    async enable() {
+  function install() {
+    if (!installed) { updaters.push(setupGyro(camera)); installed = true; }
+    gyroEnabled = true;
+    return true;
+  }
+
+  return {
+    isAvailable:     () => available,
+    isOn:            () => gyroEnabled,
+    needsPermission: () => permissionGate() !== null,
+
+    /**
+     * Turn motion look on.
+     *
+     * `prompt` is not a convenience — it is the whole P57 fix. Calling
+     * requestPermission() outside a user gesture does not merely fail on iOS: it
+     * SPENDS THE PAGE'S ONE CHANCE. Safari will not raise the dialog again for
+     * that page load once the page has asked without a gesture, so the tap that
+     * follows is refused before the user ever sees a prompt — and because the
+     * refusal is remembered, every later tap is refused too. Measured: a session
+     * restore firing one gesture-less request left the toggle dead at one, two
+     * and three subsequent taps, with the deviceorientation listener never
+     * attached.
+     *
+     * So: only a real tap may pass `prompt: true`. Anything automatic passes
+     * false and simply declines to resume on a platform that would need to ask.
+     *
+     * @param {{prompt?: boolean}} [opts]
+     * @returns {Promise<boolean>} true once motion look is actually live.
+     */
+    async enable({ prompt = true } = {}) {
       if (!available) return false;
-      if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try {
-          if (await DeviceOrientationEvent.requestPermission() !== 'granted') return false;
-        } catch {
-          return false;   // denied, or called outside a gesture — stay off
-        }
+      const ask = permissionGate();
+      if (!ask) return install();          // nothing to ask: Android, and desktop
+      if (!prompt) return false;           // would have to ask, and may not — stay off
+      try {
+        if (await ask() !== 'granted') return false;
+      } catch {
+        return false;                      // denied, or called outside a gesture
       }
-      if (!installed) { updaters.push(setupGyro(camera)); installed = true; }
-      gyroEnabled = true;
-      return true;
+      return install();
     },
 
     disable() {
