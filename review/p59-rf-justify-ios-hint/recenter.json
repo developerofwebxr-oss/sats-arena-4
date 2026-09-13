@@ -1,0 +1,101 @@
+{
+ "390/classic": {
+  "rcW": 82,
+  "gyroW": 82,
+  "rcX": 192,
+  "gyroX": 192,
+  "rcRight": 274,
+  "gyroRight": 274,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "390/gold-arena": {
+  "rcW": 82,
+  "gyroW": 82,
+  "rcX": 192,
+  "gyroX": 192,
+  "rcRight": 274,
+  "gyroRight": 274,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "390/carnivorous": {
+  "rcW": 82,
+  "gyroW": 82,
+  "rcX": 192,
+  "gyroX": 192,
+  "rcRight": 274,
+  "gyroRight": 274,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "414/classic": {
+  "rcW": 90,
+  "gyroW": 90,
+  "rcX": 208,
+  "gyroX": 208,
+  "rcRight": 298,
+  "gyroRight": 298,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "414/gold-arena": {
+  "rcW": 90,
+  "gyroW": 90,
+  "rcX": 208,
+  "gyroX": 208,
+  "rcRight": 298,
+  "gyroRight": 298,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "414/carnivorous": {
+  "rcW": 90,
+  "gyroW": 90,
+  "rcX": 208,
+  "gyroX": 208,
+  "rcRight": 298,
+  "gyroRight": 298,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "1280/classic": {
+  "rcW": 109.34,
+  "gyroW": 109.34,
+  "rcX": 246.66,
+  "gyroX": 246.66,
+  "rcRight": 356,
+  "gyroRight": 356,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "1280/gold-arena": {
+  "rcW": 109.34,
+  "gyroW": 109.34,
+  "rcX": 246.66,
+  "gyroX": 246.66,
+  "rcRight": 356,
+  "gyroRight": 356,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ },
+ "1280/carnivorous": {
+  "rcW": 109.34,
+  "gyroW": 109.34,
+  "rcX": 246.66,
+  "gyroX": 246.66,
+  "rcRight": 356,
+  "gyroRight": 356,
+  "h": 36,
+  "font": "11px",
+  "gap": 6
+ }
+}

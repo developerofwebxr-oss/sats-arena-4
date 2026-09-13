@@ -218,7 +218,7 @@ function buildGyroButton() {
   popup.id = 'gyro-pop';
   popup.style.display = 'none';
   popup.innerHTML = `
-    <button id="recenter-go" type="button">RECENTER</button>
+    <button id="recenter-go" class="hud-btn hud-btn-sub" type="button"><span class="hud-label">RECENTER</span></button>
     <div id="gyro-block">
       <div id="gyro-hint"></div>
       <div id="gyro-block-row">
@@ -515,9 +515,18 @@ function measure() {
   // the grid's own measured box, so they cannot drift from it.
   const g = grid.getBoundingClientRect();
   const col = (g.width - 2 * GAP) / 3;
-  document.documentElement.style.setProperty('--hud-col-w', `${col}px`);
   document.documentElement.style.setProperty('--hud-grid-w', `${g.width}px`);
-  document.documentElement.style.setProperty('--hud-gyro-left', `${Math.round(g.left + 2 * (col + GAP))}px`);
+  // The popup takes GYRO's own measured box, unrounded, when GYRO is on screen —
+  // not the column arithmetic, which agrees with it only to within the rounding
+  // a 1fr track and a Math.round() on `left` each introduce. The arithmetic stays
+  // as the fallback for the moment before GYRO has a box.
+  const gb = gyroBtn && gyroBtn.getBoundingClientRect();
+  const hasGyroBox = gb && gb.width > 0;
+  document.documentElement.style.setProperty('--hud-col-w', `${hasGyroBox ? gb.width : col}px`);
+  document.documentElement.style.setProperty('--hud-gyro-left',
+    `${hasGyroBox ? gb.left : g.left + 2 * (col + GAP)}px`);
+  const rc = document.getElementById('recenter-go');
+  if (rc) fitLabel(rc);
 
   for (const el of grid.children) fitLabel(el);
   restorePopupIfClear();
@@ -666,6 +675,20 @@ function injectStyles() {
       z-index: 9050;
     }
     #gyro-pop #gyro-block { display: none; }
+    /* ── RECENTER is a GYRO sibling, not its own pill (P59) ───────────────────
+       It takes the grid's own .hud-btn rule — border, sharp corners, panelBg
+       surface, theme text colour, uppercase monospace, hover glow — so it cannot
+       drift from the button it sits on. It used to carry a hand-copied block of
+       the same declarations, and P58's rewrite of the neighbouring denied-panel
+       CSS deleted that block along with the rules it was replacing: from then on
+       RECENTER rendered as a bare browser button. Sharing the class is what makes
+       that impossible to repeat.
+
+       Only two things differ, both deliberately: the height and the type size.
+       It is the shorter, secondary control over the 44px button, and it keeps the
+       low profile the owner asked to preserve. Its width is not set here at all —
+       the popup is sized to GYRO's MEASURED box (see measure()). */
+    #gyro-pop #recenter-go { height: ${POPUP_H}px; font: 700 11px/1 monospace; }
     #gyro-pop.is-blocked #recenter-go { display: none; }
     #gyro-pop.is-blocked #gyro-block  { display: block; }
     /* The blocked panel carries a sentence, so it takes the GRID'S OWN WIDTH and
