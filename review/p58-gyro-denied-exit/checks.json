@@ -6,7 +6,7 @@
    "on": false,
    "blocked": true,
    "popup": "block",
-   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "hint": "Safari is refusing without asking. Settings >",
    "tryAgain": true,
    "x": true,
    "recenter": false,
@@ -23,7 +23,7 @@
    "on": false,
    "blocked": true,
    "popup": "block",
-   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "hint": "Safari is refusing without asking. Settings >",
    "tryAgain": true,
    "x": true,
    "recenter": false,
@@ -34,9 +34,9 @@
   }
  },
  {
-  "n": "hint says the browser will not ask again",
+  "n": "hint says the OS is refusing without asking",
   "v": true,
-  "got": "Safari won’t ask again. Turn on Motion & Orie"
+  "got": "Safari is refusing without asking. Settings >"
  },
  {
   "n": "panel covers neither grid nor SHOOT",
@@ -45,7 +45,7 @@
    "on": false,
    "blocked": true,
    "popup": "block",
-   "hint": "Safari won’t ask again. Turn on Motion & Orie",
+   "hint": "Safari is refusing without asking. Settings >",
    "tryAgain": true,
    "x": true,
    "recenter": false,

@@ -1,0 +1,117 @@
+[
+ {
+  "n": "boot asked for nothing",
+  "v": true,
+  "got": {
+   "preAdds": 0,
+   "perm": [
+    {
+     "act": true
+    }
+   ]
+  }
+ },
+ {
+  "n": "the tap prompts, with user activation",
+  "v": true,
+  "got": [
+   {
+    "act": true
+   }
+  ]
+ },
+ {
+  "n": "granted -> listener attached + GYRO on",
+  "v": true,
+  "got": {
+   "perm": [
+    {
+     "act": true
+    }
+   ],
+   "adds": 1,
+   "on": true
+  }
+ },
+ {
+  "n": "and the camera follows orientation",
+  "v": true
+ },
+ {
+  "n": "asks again on the next enable (over and over)",
+  "v": true,
+  "got": {
+   "perm": 2,
+   "on": true
+  }
+ },
+ {
+  "n": "sub-line left-aligns with the RAPID FIRE title",
+  "v": true,
+  "got": {
+   "box": {
+    "x": 254.1,
+    "w": 119.9
+   },
+   "title": {
+    "x": 267.1,
+    "w": 93.9
+   },
+   "sub": {
+    "x": 267.1,
+    "w": 93.9
+   },
+   "leftDelta": 0,
+   "tracking": "1.08px",
+   "text": "21 sats·60s"
+  }
+ },
+ {
+  "n": "landscape: RECENTER shows with GYRO on",
+  "v": true
+ },
+ {
+  "n": "landscape, popup up: nothing overlaps",
+  "v": true,
+  "got": []
+ },
+ {
+  "n": "CO-OP open auto-closes the popup",
+  "v": true,
+  "got": [
+   "hud-grid",
+   "shoot-btn",
+   "coop-panel",
+   "score"
+  ]
+ },
+ {
+  "n": "landscape, CO-OP open: nothing overlaps",
+  "v": true,
+  "got": []
+ },
+ {
+  "n": "RECENTER comes back when CO-OP closes",
+  "v": true,
+  "got": [
+   "hud-grid",
+   "shoot-btn",
+   "gyro-pop",
+   "score"
+  ]
+ },
+ {
+  "n": "poisoned origin -> dismissible hint",
+  "v": true,
+  "got": "Safari is refusing without asking. Settings > Apps > Safari: turn on Motion & Orientation Access, then Clear History and Website Data — that is what lets it prompt again."
+ },
+ {
+  "n": "and it still closes",
+  "v": true
+ },
+ {
+  "n": "portrait, both panels open: nothing overlaps",
+  "v": true,
+  "got": []
+ }
+]
