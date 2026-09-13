@@ -254,7 +254,7 @@ export function createHUD(onShoot) {
   // than hanging below it. See RF_* below.
   upgradeBtn.innerHTML = `
     <div style="font:${RF_TITLE_PX}px/1 monospace; letter-spacing:0.12em;">RAPID FIRE</div>
-    <div style="font:${RF_SUB_PX}px/1 monospace; letter-spacing:0.16em; margin-top:2px; opacity:0.8;">${RAPID_FIRE_PRICE} sats &nbsp;·&nbsp; 60s</div>
+    <div style="font:${RF_SUB_PX}px/1 monospace; letter-spacing:0.12em; margin-top:3px; opacity:0.8;">${RAPID_FIRE_PRICE} sats<span style="opacity:.55; margin:0 3px;">·</span>60s</div>
   `;
   upgradeDefaultHTML = upgradeBtn.innerHTML;
   upgradeBtn.style.cssText = `
@@ -262,11 +262,11 @@ export function createHUD(onShoot) {
     top: 16px;
     right: 16px;
     padding: 6px 12px;
+    text-align: left;
     background: var(--ui-panel);
     color: var(--ui-glow);
     border: 1px solid var(--ui-glow);
     font-family: monospace;
-    text-align: center;
     cursor: pointer;
     text-shadow: 0 0 10px var(--ui-glow);
     z-index: 200;

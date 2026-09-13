@@ -159,7 +159,15 @@ export function setupHudGrid({ gyro } = {}) {
   document.addEventListener('pointerdown', dismissOutside, true);
   document.addEventListener('click', dismissOutside, true);   // belt and braces
 
-  return { adopt, showTooltip, refresh: measure };
+  // refresh() is called from main.js once every module has built its button AND
+  // its panel — which is the first moment the stand-down observers have anything
+  // to observe. Binding them in setupHudGrid() attached them to null: this module
+  // is created before coop-hud and skin-hud, by design.
+  return {
+    adopt,
+    showTooltip,
+    refresh: () => { standDownForPanels(); measure(); },
+  };
 }
 
 const ICONS = { coop: ICON_COOP, world: ICON_WORLD, gyro: ICON_GYRO };
@@ -329,6 +337,51 @@ function dismissBlocked() {
   renderGyro();
 }
 
+/**
+ * The GYRO popup stands down when a panel opens (P58b).
+ *
+ * P43 keeps PANELS off each other, and P55 made the popup cluster furniture so
+ * panels come home above it. That is enough in portrait. In LANDSCAPE it is not:
+ * the viewport is ~390px tall, the grid already takes 110 of it, and a CO-OP
+ * panel that needs 250 has nowhere to go but through whatever is sitting between
+ * it and the grid. Restacking horizontally was the alternative and it is worse —
+ * it moves a control the player is mid-way through using.
+ *
+ * So the rule is precedence, not geometry: A PANEL THE PLAYER JUST OPENED OUTRANKS
+ * AN ATTACHED POPUP. RECENTER is one tap from coming back (it reappears with the
+ * toggle), and the blocked hint is dismissible by design, so neither loses
+ * anything by yielding. Nothing here reaches into P43 — it watches the same
+ * `display` the panels already mutate, which is the P43 lesson about observing
+ * the thing that changes rather than patching four toggles.
+ */
+let standDownBound = false;
+function standDownForPanels() {
+  if (standDownBound) return;
+  const els = ['coop-panel', 'world-panel'].map((id) => document.getElementById(id));
+  if (els.some((el) => !el)) return;     // not built yet; the next refresh will
+  standDownBound = true;
+  for (const el of els) {
+    new MutationObserver(() => {
+      const open = el.style.display !== 'none' && el.style.display !== '';
+      // Closing is half the rule: what stood down has to stand back up, or
+      // "auto-close" is just a slower way of losing RECENTER.
+      if (!open) { restorePopupIfClear(); return; }
+      if (gyroBlocked) dismissBlocked();
+      else if (popup && gyroApi?.isOn()) popup.style.display = 'none';
+    }).observe(el, { attributes: true, attributeFilter: ['style'] });
+  }
+}
+
+/** Put RECENTER back when no panel is covering the corner any more. */
+function restorePopupIfClear() {
+  if (!popup || !gyroApi?.isOn() || gyroBlocked) return;
+  const anyOpen = ['coop-panel', 'world-panel'].some((id) => {
+    const el = document.getElementById(id);
+    return el && el.style.display !== 'none' && el.style.display !== '';
+  });
+  if (!anyOpen) popup.style.display = 'block';
+}
+
 function renderGyro() {
   if (!gyroBtn || !gyroApi) return;
   const on = gyroApi.isOn();
@@ -336,11 +389,15 @@ function renderGyro() {
   gyroBtn.classList.toggle('denied', !on && gyroBlocked);
   gyroBtn.setAttribute('aria-pressed', String(on));
   if (popup) {
-    popup.style.display = (on || gyroBlocked) ? 'block' : 'none';
+    const panelOpen = ['coop-panel', 'world-panel'].some((id) => {
+      const el = document.getElementById(id);
+      return el && el.style.display !== 'none' && el.style.display !== '';
+    });
+    popup.style.display = ((on || gyroBlocked) && !panelOpen) ? 'block' : 'none';
     popup.classList.toggle('is-blocked', !on && gyroBlocked);
     popup.querySelector('#gyro-hint').textContent = !gyroBlocked ? '' : (gyroSilent
       // No dialog appeared, so there is nothing to tap through — say what to change.
-      ? 'Safari won\u2019t ask again. Turn on Motion & Orientation Access in Settings > Apps > Safari, then clear this site\u2019s data.'
+      ? 'Safari is refusing without asking. Settings > Apps > Safari: turn on Motion & Orientation Access, then Clear History and Website Data \u2014 that is what lets it prompt again.'
       // A dialog did appear and was declined; asking again is still worth a tap.
       : 'Motion access declined. Try again, or turn it on in Settings > Apps > Safari.');
     relayoutPanels();   // the cluster just got taller or shorter
@@ -428,6 +485,7 @@ function measure() {
   document.documentElement.style.setProperty('--hud-gyro-left', `${Math.round(g.left + 2 * (col + GAP))}px`);
 
   for (const el of grid.children) fitLabel(el);
+  restorePopupIfClear();
 }
 
 /**

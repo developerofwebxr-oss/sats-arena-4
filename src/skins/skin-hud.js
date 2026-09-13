@@ -183,6 +183,22 @@ function injectStyles() {
       color: var(--ui-text); font: 12px monospace;
     }
     /* P56: an X, matching #coop-close exactly — see the note there. */
+
+    /* ── Landscape headroom (P58b) ─────────────────────────────────────────────
+       A panel comes home above the 2x3 cluster, which in landscape leaves it
+       ~260px of a ~390px viewport — and the CO-OP panel is taller than that, so
+       it grew straight through SCORE and SESSION in the top-left. Measured:
+       "coop-panel x score".
+
+       The cap is the arithmetic of what is already on screen, not a magic
+       number: the cluster is 110 (16 edge + 44 + 6 + 44), P43's gap is 10, the
+       readouts end at 56, and 4 keeps them apart. In portrait this evaluates to
+       far more than the panel needs and changes nothing. */
+    #world-panel {
+      max-height: calc(100dvh - 180px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
     #skin-close {
       position: absolute; top: 8px; right: 8px;
       width: 24px; height: 24px;

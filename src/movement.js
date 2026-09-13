@@ -256,24 +256,32 @@ function createGyroController(updaters, camera) {
   const available = typeof DeviceOrientationEvent !== 'undefined';
   let installed = false;
 
+  /** True where the platform has a motion permission to ask for (iOS). */
+  function needsPermission() {
+    if (!available) return false;
+    return typeof DeviceOrientationEvent.requestPermission === 'function'
+        || (typeof DeviceMotionEvent !== 'undefined'
+            && typeof DeviceMotionEvent.requestPermission === 'function');
+  }
+
   /**
-   * The permission gate, or null where there is none.
+   * Ask. THE CALL SHAPE IS DELIBERATE AND IT IS THE OLD ONE.
    *
-   * iOS puts it on DeviceOrientationEvent; the DeviceMotionEvent one is the same
-   * "Motion & Orientation Access" grant, so it is only a fallback for a browser
-   * that somehow ships one and not the other. Asking through both would risk two
-   * dialogs for one permission.
+   * Before the toggle existed, this was one line at the top of a click handler —
+   * `await DeviceOrientationEvent.requestPermission()` — and it prompted on every
+   * load, reliably, on the owner's phone. The toggle wrapped it in an arrow
+   * function returned by a factory, called from an async method, called from
+   * another async function, called from the handler. Every one of those frames
+   * runs synchronously, so none of them SHOULD cost the gesture, but "should" is
+   * doing a lot of work in a sentence about Safari's transient activation. The
+   * indirection bought nothing, so it is gone: this is now the first statement
+   * of a plain, non-async function invoked straight from the tap.
    */
-  function permissionGate() {
-    if (!available) return null;
+  function askForMotion() {
     if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-      return () => DeviceOrientationEvent.requestPermission();
+      return DeviceOrientationEvent.requestPermission();
     }
-    if (typeof DeviceMotionEvent !== 'undefined'
-        && typeof DeviceMotionEvent.requestPermission === 'function') {
-      return () => DeviceMotionEvent.requestPermission();
-    }
-    return null;   // Android and desktop Chrome: nothing to ask for
+    return DeviceMotionEvent.requestPermission();
   }
 
   function install() {
@@ -285,38 +293,39 @@ function createGyroController(updaters, camera) {
   return {
     isAvailable:     () => available,
     isOn:            () => gyroEnabled,
-    needsPermission: () => permissionGate() !== null,
+    needsPermission,
 
     /**
      * Turn motion look on.
      *
-     * `prompt` is not a convenience — it is the whole P57 fix. Calling
-     * requestPermission() outside a user gesture does not merely fail on iOS: it
-     * SPENDS THE PAGE'S ONE CHANCE. Safari will not raise the dialog again for
-     * that page load once the page has asked without a gesture, so the tap that
-     * follows is refused before the user ever sees a prompt — and because the
-     * refusal is remembered, every later tap is refused too. Measured: a session
-     * restore firing one gesture-less request left the toggle dead at one, two
-     * and three subsequent taps, with the deviceorientation listener never
-     * attached.
+     * NOT `async`, on purpose. An async function body still starts synchronously,
+     * but writing it as a plain function that returns a promise makes it obvious
+     * at a glance that nothing is awaited before the permission call — which is
+     * the one property this code has to keep.
      *
-     * So: only a real tap may pass `prompt: true`. Anything automatic passes
-     * false and simply declines to resume on a platform that would need to ask.
+     * `prompt` is P57's rule and it stays: calling requestPermission() outside a
+     * user gesture does not merely fail on iOS, it SPENDS THE PAGE'S ONE CHANCE,
+     * and Safari then refuses the tap that follows without ever showing a dialog.
+     * Only a real tap may pass true; anything automatic passes false and declines
+     * to resume on a platform that would have to ask.
      *
      * @param {{prompt?: boolean}} [opts]
      * @returns {Promise<boolean>} true once motion look is actually live.
      */
-    async enable({ prompt = true } = {}) {
-      if (!available) return false;
-      const ask = permissionGate();
-      if (!ask) return install();          // nothing to ask: Android, and desktop
-      if (!prompt) return false;           // would have to ask, and may not — stay off
+    enable({ prompt = true } = {}) {
+      if (!available) return Promise.resolve(false);
+      if (!needsPermission()) return Promise.resolve(install());  // Android, desktop
+      if (!prompt) return Promise.resolve(false);
+      let asked;
       try {
-        if (await ask() !== 'granted') return false;
+        asked = askForMotion();          // ← the call, straight from the gesture
       } catch {
-        return false;                      // denied, or called outside a gesture
+        return Promise.resolve(false);
       }
-      return install();
+      return Promise.resolve(asked).then(
+        (r) => (r === 'granted' ? install() : false),
+        () => false,
+      );
     },
 
     disable() {
