@@ -1,0 +1,3602 @@
+[
+  {
+    "name": "p390-classic",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p390-gold-arena",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeOnFill": 10.95,
+        "scoreWordOnPanelBg": 10.7,
+        "scoreValueOnPanelBg": 10.7,
+        "sessionWordOnPanelBg": 12.84
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p390-carnivorous",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeOnFill": 14.16,
+        "scoreWordOnPanelBg": 5.44,
+        "scoreValueOnPanelBg": 5.44,
+        "sessionWordOnPanelBg": 5.74
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p414-classic",
+    "w": 414,
+    "dod": {
+      "vw": 414,
+      "vh": 896,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 90,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 112,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 208,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 112,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 208,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 282,
+        "h": 94,
+        "right": 298,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 310,
+        "y": 776,
+        "w": 84,
+        "h": 104,
+        "right": 394,
+        "bottom": 880
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 269.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 398,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p414-gold-arena",
+    "w": 414,
+    "dod": {
+      "vw": 414,
+      "vh": 896,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 90,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 112,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 208,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 112,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 208,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 282,
+        "h": 94,
+        "right": 298,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 310,
+        "y": 776,
+        "w": 84,
+        "h": 104,
+        "right": 394,
+        "bottom": 880
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 269.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 398,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeOnFill": 10.95,
+        "scoreWordOnPanelBg": 10.7,
+        "scoreValueOnPanelBg": 10.7,
+        "sessionWordOnPanelBg": 12.84
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p414-carnivorous",
+    "w": 414,
+    "dod": {
+      "vw": 414,
+      "vh": 896,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 90,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 112,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 208,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 112,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 208,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 282,
+        "h": 94,
+        "right": 298,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 310,
+        "y": 776,
+        "w": 84,
+        "h": 104,
+        "right": 394,
+        "bottom": 880
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 269.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 398,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeOnFill": 14.16,
+        "scoreWordOnPanelBg": 5.44,
+        "scoreValueOnPanelBg": 5.44,
+        "sessionWordOnPanelBg": 5.74
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "land844-classic",
+    "w": 844,
+    "dod": {
+      "vw": 844,
+      "vh": 390,
+      "orientation": "landscape",
+      "equal": {
+        "n": 6,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 324
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 324
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 246.7,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 324
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 374
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 374
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 374
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 280,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 374
+      },
+      "shoot": {
+        "x": 740,
+        "y": 276,
+        "w": 84,
+        "h": 104,
+        "right": 824,
+        "bottom": 380
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 384,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 687.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 828,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "land844-gold-arena",
+    "w": 844,
+    "dod": {
+      "vw": 844,
+      "vh": 390,
+      "orientation": "landscape",
+      "equal": {
+        "n": 6,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 324
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 324
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 246.7,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 324
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 374
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 374
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 374
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 280,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 374
+      },
+      "shoot": {
+        "x": 740,
+        "y": 276,
+        "w": 84,
+        "h": 104,
+        "right": 824,
+        "bottom": 380
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 384,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 687.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 828,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeOnFill": 10.95,
+        "scoreWordOnPanelBg": 10.7,
+        "scoreValueOnPanelBg": 10.7,
+        "sessionWordOnPanelBg": 12.84
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "land844-carnivorous",
+    "w": 844,
+    "dod": {
+      "vw": 844,
+      "vh": 390,
+      "orientation": "landscape",
+      "equal": {
+        "n": 6,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 324
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 324
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 246.7,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 324
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 374
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 374
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 374
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 280,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 374
+      },
+      "shoot": {
+        "x": 740,
+        "y": 276,
+        "w": 84,
+        "h": 104,
+        "right": 824,
+        "bottom": 380
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 384,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 687.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 828,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": true,
+        "denied": false,
+        "popup": "block",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeOnFill": 14.16,
+        "scoreWordOnPanelBg": 5.44,
+        "scoreValueOnPanelBg": 5.44,
+        "sessionWordOnPanelBg": 5.74
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "desk1280-classic",
+    "w": 1280,
+    "dod": {
+      "vw": 1280,
+      "vh": 800,
+      "orientation": "landscape",
+      "equal": {
+        "n": 5,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1176,
+        "y": 686,
+        "w": 84,
+        "h": 104,
+        "right": 1260,
+        "bottom": 790
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 820,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 1123.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 1264,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": false,
+        "on": false,
+        "denied": false,
+        "popup": null,
+        "allowVisible": false,
+        "recenterVisible": false,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "desk1280-gold-arena",
+    "w": 1280,
+    "dod": {
+      "vw": 1280,
+      "vh": 800,
+      "orientation": "landscape",
+      "equal": {
+        "n": 5,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1176,
+        "y": 686,
+        "w": 84,
+        "h": 104,
+        "right": 1260,
+        "bottom": 790
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 820,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 1123.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 1264,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        }
+      ],
+      "gyro": {
+        "visible": false,
+        "on": false,
+        "denied": false,
+        "popup": null,
+        "allowVisible": false,
+        "recenterVisible": false,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeOnFill": 10.95,
+        "scoreWordOnPanelBg": 10.7,
+        "scoreValueOnPanelBg": 10.7,
+        "sessionWordOnPanelBg": 12.84
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "desk1280-carnivorous",
+    "w": 1280,
+    "dod": {
+      "vw": 1280,
+      "vh": 800,
+      "orientation": "landscape",
+      "equal": {
+        "n": 5,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1176,
+        "y": 686,
+        "w": 84,
+        "h": 104,
+        "right": 1260,
+        "bottom": 790
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 820,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 1123.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 1264,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        }
+      ],
+      "gyro": {
+        "visible": false,
+        "on": false,
+        "denied": false,
+        "popup": null,
+        "allowVisible": false,
+        "recenterVisible": false,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeOnFill": 14.16,
+        "scoreWordOnPanelBg": 5.44,
+        "scoreValueOnPanelBg": 5.44,
+        "sessionWordOnPanelBg": 5.74
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p390-denied",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": false,
+        "denied": true,
+        "popup": "block",
+        "allowVisible": true,
+        "recenterVisible": false,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p390-denied-hint",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": false,
+        "denied": true,
+        "popup": "block",
+        "allowVisible": true,
+        "recenterVisible": false,
+        "hint": "Still blocked. Turn on Motion & Orientation Access in iOS Settings, under Apps > Safari."
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p390-close-x",
+    "w": 390,
+    "dod": {
+      "vw": 390,
+      "vh": 844,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 82,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 778
+        },
+        {
+          "id": "world-toggle",
+          "x": 104,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 778
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 192,
+          "y": 734,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 778
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 98,
+          "bottom": 828
+        },
+        {
+          "id": "mode-vr",
+          "x": 104,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 186,
+          "bottom": 828
+        },
+        {
+          "id": "mode-ar",
+          "x": 192,
+          "y": 784,
+          "w": 82,
+          "h": 44,
+          "right": 274,
+          "bottom": 828
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 734,
+        "w": 258,
+        "h": 94,
+        "right": 274,
+        "bottom": 828
+      },
+      "shoot": {
+        "x": 286,
+        "y": 724,
+        "w": 84,
+        "h": 104,
+        "right": 370,
+        "bottom": 828
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 245.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 374,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 223,
+            "y": 479,
+            "w": 24,
+            "h": 24,
+            "right": 247,
+            "bottom": 503
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 193,
+            "y": 303,
+            "w": 24,
+            "h": 24,
+            "right": 217,
+            "bottom": 327
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": false,
+        "denied": false,
+        "popup": "none",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "p414-close-x-world",
+    "w": 414,
+    "dod": {
+      "vw": 414,
+      "vh": 896,
+      "orientation": "portrait",
+      "equal": {
+        "n": 6,
+        "w": 90,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 830
+        },
+        {
+          "id": "world-toggle",
+          "x": 112,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 830
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 208,
+          "y": 786,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 830
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 106,
+          "bottom": 880
+        },
+        {
+          "id": "mode-vr",
+          "x": 112,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 202,
+          "bottom": 880
+        },
+        {
+          "id": "mode-ar",
+          "x": 208,
+          "y": 836,
+          "w": 90,
+          "h": 44,
+          "right": 298,
+          "bottom": 880
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 786,
+        "w": 282,
+        "h": 94,
+        "right": 298,
+        "bottom": 880
+      },
+      "shoot": {
+        "x": 310,
+        "y": 776,
+        "w": 84,
+        "h": 104,
+        "right": 394,
+        "bottom": 880
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 16,
+      "gridBottomOffset": 16,
+      "gapToShoot": 12,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 269.1,
+        "y": 16,
+        "w": 128.9,
+        "h": 38,
+        "right": 398,
+        "bottom": 54
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 13,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 0,
+            "y": 0,
+            "w": 0,
+            "h": 0,
+            "right": 0,
+            "bottom": 0
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 193,
+            "y": 619,
+            "w": 24,
+            "h": 24,
+            "right": 217,
+            "bottom": 643
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(193, 18, 31)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": false,
+        "denied": false,
+        "popup": "none",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "carnivorous",
+        "labelOnPanelBg": 15.64,
+        "activeOnFill": 14.16,
+        "scoreWordOnPanelBg": 5.44,
+        "scoreValueOnPanelBg": 5.44,
+        "sessionWordOnPanelBg": 5.74
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "land844-close-x",
+    "w": 844,
+    "dod": {
+      "vw": 844,
+      "vh": 390,
+      "orientation": "landscape",
+      "equal": {
+        "n": 6,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 324
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 324
+        },
+        {
+          "id": "gyro-toggle",
+          "x": 246.7,
+          "y": 280,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 324
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 374
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 374
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 330,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 374
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 280,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 374
+      },
+      "shoot": {
+        "x": 740,
+        "y": 276,
+        "w": 84,
+        "h": 104,
+        "right": 824,
+        "bottom": 380
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 384,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 687.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 828,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 223,
+            "y": 25,
+            "w": 24,
+            "h": 24,
+            "right": 247,
+            "bottom": 49
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 443,
+            "y": 113,
+            "w": 24,
+            "h": 24,
+            "right": 467,
+            "bottom": 137
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(232, 182, 88)"
+        }
+      ],
+      "gyro": {
+        "visible": true,
+        "on": false,
+        "denied": false,
+        "popup": "none",
+        "allowVisible": false,
+        "recenterVisible": true,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "gold-arena",
+        "labelOnPanelBg": 15.6,
+        "activeOnFill": 10.95,
+        "scoreWordOnPanelBg": 10.7,
+        "scoreValueOnPanelBg": 10.7,
+        "sessionWordOnPanelBg": 12.84
+      },
+      "skinStrings": []
+    }
+  },
+  {
+    "name": "desk1280-close-x",
+    "w": 1280,
+    "dod": {
+      "vw": 1280,
+      "vh": 800,
+      "orientation": "landscape",
+      "equal": {
+        "n": 5,
+        "w": 109.3,
+        "h": 44,
+        "widthSpread": 0,
+        "heightSpread": 0
+      },
+      "boxes": [
+        {
+          "id": "coop-toggle",
+          "x": 16,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 734
+        },
+        {
+          "id": "world-toggle",
+          "x": 131.3,
+          "y": 690,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 734
+        },
+        {
+          "id": "mode-screen",
+          "x": 16,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 125.3,
+          "bottom": 784
+        },
+        {
+          "id": "mode-vr",
+          "x": 131.3,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 240.7,
+          "bottom": 784
+        },
+        {
+          "id": "mode-ar",
+          "x": 246.7,
+          "y": 740,
+          "w": 109.3,
+          "h": 44,
+          "right": 356,
+          "bottom": 784
+        }
+      ],
+      "grid": {
+        "x": 16,
+        "y": 690,
+        "w": 340,
+        "h": 94,
+        "right": 356,
+        "bottom": 784
+      },
+      "shoot": {
+        "x": 1176,
+        "y": 686,
+        "w": 84,
+        "h": 104,
+        "right": 1260,
+        "bottom": 790
+      },
+      "shootCircle": {
+        "w": 84,
+        "h": 84
+      },
+      "shootBottomOffset": 10,
+      "gridBottomOffset": 16,
+      "gapToShoot": 820,
+      "btnOverlap": 0,
+      "shootOverGrid": false,
+      "rapidFire": {
+        "x": 1123.7,
+        "y": 16,
+        "w": 140.3,
+        "h": 40,
+        "right": 1264,
+        "bottom": 56
+      },
+      "score": {
+        "x": 16,
+        "y": 40,
+        "w": 70.8,
+        "h": 16,
+        "right": 86.8,
+        "bottom": 56
+      },
+      "sessionChip": {
+        "x": 16,
+        "y": 16,
+        "w": 131.4,
+        "h": 14,
+        "right": 147.4,
+        "bottom": 30
+      },
+      "type": {
+        "scoreWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "scoreValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "sessionWord": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        },
+        "sessionValue": {
+          "px": 14,
+          "weight": "700",
+          "family": "monospace"
+        },
+        "rfTitle": {
+          "px": 14,
+          "weight": "400",
+          "family": "monospace"
+        }
+      },
+      "closeButtons": [
+        {
+          "id": "coop-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 223,
+            "y": 435,
+            "w": 24,
+            "h": 24,
+            "right": 247,
+            "bottom": 459
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        },
+        {
+          "id": "skin-close",
+          "text": "X",
+          "aria": "Close",
+          "radius": "0px",
+          "box": {
+            "x": 193,
+            "y": 259,
+            "w": 24,
+            "h": 24,
+            "right": 217,
+            "bottom": 283
+          },
+          "tabbable": true,
+          "colorThemed": "rgb(0, 229, 255)"
+        }
+      ],
+      "gyro": {
+        "visible": false,
+        "on": false,
+        "denied": false,
+        "popup": null,
+        "allowVisible": false,
+        "recenterVisible": false,
+        "hint": ""
+      },
+      "roundedExceptions": [],
+      "emoji": [],
+      "contrast": {
+        "skin": "classic",
+        "labelOnPanelBg": 15.78,
+        "activeOnFill": 11.25,
+        "scoreWordOnPanelBg": 8.79,
+        "scoreValueOnPanelBg": 8.79,
+        "sessionWordOnPanelBg": 14.52
+      },
+      "skinStrings": []
+    }
+  }
+]

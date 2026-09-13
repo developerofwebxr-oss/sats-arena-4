@@ -90,6 +90,9 @@ let tooltip = null;
 let tooltipTimer = null;
 let gyroApi = null;
 let shootEl = null;
+let gyroTouched = false;  // the player has used the toggle; the restore stands down
+let gyroDenied = false;   // a tap was refused; offer the re-request
+let gyroHint   = false;   // ...and refused again with no dialog, so say why
 
 /** Cell name → grid-area. Explicit, so a hidden GYRO leaves its track empty. */
 const CELLS = {
@@ -182,17 +185,23 @@ function buildGyroButton() {
     return;
   }
 
+  // ── One slot above GYRO, two states (P56) ─────────────────────────────────
+  // ON            → RECENTER
+  // refused       → ALLOW MOTION, plus a hint once a tap has been refused
+  //                 WITHOUT a dialog appearing
+  // otherwise     → hidden
+  //
+  // One element rather than two competing for the same 88x36 patch of screen,
+  // because two would each need to know whether the other was showing.
   popup = document.createElement('div');
-  popup.id = 'recenter-pop';
+  popup.id = 'gyro-pop';
   popup.style.display = 'none';
-  popup.innerHTML = `<button id="recenter-go" type="button">RECENTER</button>`;
+  popup.innerHTML = `
+    <button id="recenter-go" type="button">RECENTER</button>
+    <button id="gyro-allow" type="button">ALLOW MOTION</button>
+    <div id="gyro-hint"></div>`;
   document.body.appendChild(popup);
   registerClusterMember(popup);
-  popup.querySelector('#recenter-go').addEventListener('click', (e) => {
-    e.stopPropagation();
-    gyroApi.recenter();
-    e.currentTarget.blur();
-  });
 
   // The popup is CLUSTER FURNITURE, not a panel: it is attached to GYRO, one
   // button wide, and it never competes for the panel home. Registering it as a
@@ -201,32 +210,82 @@ function buildGyroButton() {
   // 390px screen. Declaring it part of the cluster makes the CO-OP and WORLD
   // panels come home above it, which is all it ever needed.
 
-  // The permission request must happen inside the gesture, so it is awaited
-  // here in the click handler rather than deferred to a later tick.
+  popup.querySelector('#recenter-go').addEventListener('click', (e) => {
+    e.stopPropagation();
+    gyroApi.recenter();
+    e.currentTarget.blur();
+  });
+
+  // ALLOW MOTION re-runs the REAL request every time it is tapped. It never
+  // reports success it did not get: the button only turns GYRO on if enable()
+  // resolved to a live sensor.
+  popup.querySelector('#gyro-allow').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    e.currentTarget.blur();
+    await requestMotion();
+  });
+
   gyroBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     gyroBtn.blur();
-    if (gyroApi.isOn()) { gyroApi.disable(); renderGyro(); return; }
-    const ok = await gyroApi.enable();
-    renderGyro();
-    if (!ok) showTooltip(gyroBtn, 'Motion access was not granted');
+    gyroTouched = true;
+    if (gyroApi.isOn()) { gyroApi.disable(); gyroDenied = false; gyroHint = false; renderGyro(); return; }
+    await requestMotion();
   });
 
   // Restore the session's choice. On iOS an ungranted origin will simply refuse
-  // outside a gesture, and the button honestly comes back OFF.
+  // outside a gesture, so this does NOT count as a denial the player made —
+  // a silent restore that fails just leaves the button honestly OFF.
+  //
+  // The guard is not paranoia: enable() is async, and a player who taps GYRO
+  // while the restore is still in flight had their choice overwritten a moment
+  // later by a promise that started before they pressed anything. Once the
+  // player has touched the control, the restore has nothing left to say.
   if (sessionStorage.getItem('hudGyro') === 'on') {
-    gyroApi.enable().then(renderGyro).catch(() => {});
+    gyroApi.enable().then(() => { if (!gyroTouched) renderGyro(); }).catch(() => {});
   }
   renderGyro();
+}
+
+/**
+ * Ask for motion, from inside the gesture that called this.
+ *
+ * iOS remembers a refusal: the second and every later request resolves 'denied'
+ * with no dialog shown at all, which from the player's side is a button that
+ * does nothing. So the live request is ALWAYS attempted first — a permission can
+ * be restored in Settings and we must not cache our own pessimism — and the hint
+ * about Settings only appears once a tap has actually come back refused a second
+ * time, i.e. once we have evidence that no dialog is coming.
+ */
+async function requestMotion() {
+  const ok = await gyroApi.enable();
+  if (ok) {
+    gyroDenied = false;
+    gyroHint = false;
+  } else if (gyroDenied) {
+    gyroHint = true;     // refused again, silently — it is a Settings problem now
+  } else {
+    gyroDenied = true;   // first refusal: offer the re-request
+  }
+  renderGyro();
+  return ok;
 }
 
 function renderGyro() {
   if (!gyroBtn || !gyroApi) return;
   const on = gyroApi.isOn();
   gyroBtn.classList.toggle('active', on);
+  gyroBtn.classList.toggle('denied', !on && gyroDenied);
   gyroBtn.setAttribute('aria-pressed', String(on));
   if (popup) {
-    popup.style.display = on ? 'block' : 'none';
+    const show = on || gyroDenied;
+    popup.style.display = show ? 'block' : 'none';
+    popup.classList.toggle('is-denied', !on && gyroDenied);
+    const hint = popup.querySelector('#gyro-hint');
+    hint.textContent = gyroHint
+      ? 'Still blocked. Turn on Motion & Orientation Access in iOS Settings, under Apps > Safari.'
+      : '';
+    hint.style.display = gyroHint ? 'block' : 'none';
     relayoutPanels();   // the cluster just got taller or shorter
   }
   try { sessionStorage.setItem('hudGyro', on ? 'on' : 'off'); } catch { /* private mode */ }
@@ -414,6 +473,12 @@ function injectStyles() {
     }
     .hud-btn.active .hud-ico { color: var(--ui-primary); }
 
+    /* Refused: the button that is blocked should look blocked, or the red popup
+       below it reads as belonging to nothing. Border and icon only — the label
+       keeps the theme text colour, as in every other state. */
+    .hud-btn.denied { border-color: var(--ui-danger); }
+    .hud-btn.denied .hud-ico { color: var(--ui-danger); }
+
     /* Unavailable: dimmed, still tappable — the tap is what explains it. */
     .hud-btn.disabled {
       opacity: 0.40;
@@ -422,17 +487,30 @@ function injectStyles() {
     }
     .hud-btn.checking { opacity: 0.55; cursor: default; }
 
-    /* ── RECENTER popup: one column wide, directly over GYRO ───────────────── */
-    #recenter-pop {
+    /* ── The GYRO popup: one column wide, directly over GYRO ──────────────────
+       Two states in one slot. RECENTER is fixed at ${POPUP_H}px; the refused
+       state is allowed to grow, because a hint that does not fit is a hint
+       nobody reads. Both are cluster members, so the CO-OP and WORLD panels come
+       home above whichever is showing. */
+    #gyro-pop {
       position: fixed;
       left: var(--hud-gyro-left, 16px);
       bottom: calc(var(--hud-edge) + 2 * var(--hud-btn-h) + 2 * var(--hud-gap));
       width: var(--hud-col-w, 88px);
-      height: ${POPUP_H}px;
       z-index: 9050;
     }
-    #recenter-go {
-      width: 100%; height: 100%;
+    #gyro-pop #gyro-allow, #gyro-pop #gyro-hint { display: none; }
+    #gyro-pop.is-denied #recenter-go { display: none; }
+    #gyro-pop.is-denied #gyro-allow  { display: flex; }
+    /* The refused state needs room for two words, and it is not one button wide
+       enough to hold them — so it borrows a little to the LEFT, never to the
+       right, where SHOOT is. */
+    #gyro-pop.is-denied {
+      width: calc(2 * var(--hud-col-w, 88px) + var(--hud-gap));
+      left: calc(var(--hud-gyro-left, 16px) - var(--hud-col-w, 88px) - var(--hud-gap));
+    }
+    #recenter-go, #gyro-allow {
+      width: 100%; height: ${POPUP_H}px;
       box-sizing: border-box;
       display: flex; align-items: center; justify-content: center;
       border: var(--hud-border-w) solid var(--ui-primary);
@@ -444,7 +522,19 @@ function injectStyles() {
       cursor: pointer;
       box-shadow: var(--hud-glow);
     }
-    #recenter-go:hover { background: var(--hud-fill); }
+    #recenter-go:hover, #gyro-allow:hover { background: var(--hud-fill); }
+    #gyro-allow { border-color: var(--ui-danger); color: var(--ui-danger); box-shadow: none; }
+    #gyro-allow:hover { background: var(--ui-danger-faint); }
+    #gyro-hint {
+      margin-top: var(--hud-gap);
+      padding: 7px 9px;
+      border: var(--hud-border-w) solid var(--ui-danger-line);
+      border-radius: var(--hud-radius);
+      background: var(--hud-bg);
+      color: var(--hud-text);
+      font: 10px/1.35 monospace;
+      letter-spacing: 0.03em;
+    }
 
     /* ── Tooltip ───────────────────────────────────────────────────────────── */
     #hud-tooltip {
@@ -468,7 +558,7 @@ function injectStyles() {
        round SHOOT reticle, the loading spinners and the co-op status dot are not
        in that list and stay round: they are circular because of what they are,
        not because of a rounding style. */
-    #hud-grid, #hud-grid > *, #hud-tooltip, #recenter-pop, #recenter-go,
+    #hud-grid, #hud-grid > *, #hud-tooltip, #gyro-pop, #recenter-go, #gyro-allow, #gyro-hint,
     #score, #session-chip, #upgrade-btn, #rf-panel,
     #coop-panel, #coop-panel input, #coop-panel button, #coop-panel .coop-req,
     #world-panel, #world-panel input, #world-panel button, #world-panel .skin-row,

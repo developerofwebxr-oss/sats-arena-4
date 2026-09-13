@@ -31,6 +31,7 @@ import {
   setPaymentToken,
 } from '../lightning.js';
 import { registerPanel } from '../panel-layout.js';
+import { HUD_READOUT_PX, setReadout } from '../hud.js';
 
 let panel, codeInput, nameInput, joinBtn, statusEl, countEl, codeDisplay, muteBtn;
 let sessionChip;
@@ -85,7 +86,7 @@ export function setupCoopHud() {
   panel.style.display = 'none';
 
   panel.innerHTML = `
-    <button id="coop-close" aria-label="Close">CLOSE</button>
+    <button id="coop-close" type="button" aria-label="Close" title="Close">X</button>
     <div id="coop-title">CO-OP SESSION</div>
     <div class="coop-row">
       <label class="coop-label">FRIEND'S CODE</label>
@@ -119,10 +120,18 @@ export function setupCoopHud() {
 
   sessionChip = document.createElement('div');
   sessionChip.id = 'session-chip';
+  // P56: no weight in the shorthand — the WORD and the VALUE carry their own
+  // (400 / 700, from hud.js's shared rule), and the size comes from the same
+  // constant SCORE uses so the two lines of this column match.
   sessionChip.style.cssText = `
     position: fixed; top: 16px; left: 16px; z-index: 8000;
-    font: 700 13px/1 monospace; letter-spacing: .18em;
-    color: var(--ui-primary); text-shadow: 0 0 8px var(--ui-primary);
+    font: ${HUD_READOUT_PX}px/1 monospace; letter-spacing: .18em;
+    /* primary-BRIGHT, not primary. theme.js derives it for exactly this case —
+       the primary hue used as text — and it is what makes the chip legible in
+       Carnivorous, whose primary is a deliberately dark blood red: measured
+       3.24:1 against that world's panel, against 5.74:1 for the bright variant.
+       The halo stays full primary; a glow is not the thing you read. */
+    color: var(--ui-primary-bright); text-shadow: 0 0 8px var(--ui-primary);
     pointer-events: none; user-select: none; display: none;
   `;
   document.body.appendChild(sessionChip);
@@ -239,7 +248,7 @@ async function _claimUniqueCode() {
 
 function _updateChip(code) {
   if (code && /^[A-Z0-9]{1,8}$/.test(code)) {
-    sessionChip.textContent = `SESSION ${code}`;
+    setReadout(sessionChip, 'SESSION', code);
     sessionChip.style.display = 'block';
   } else {
     sessionChip.style.display = 'none';
@@ -610,22 +619,32 @@ function injectStyles() {
       margin-bottom: 2px;
       padding-right: 20px;
     }
-    /* Same close affordance as the WORLD panel — two panels that open into the
-       same corner should not dismiss in two different type sizes. */
+    /* P56: an X, not the word — it is universally read as close and it gives the
+       panel title back the width the word was taking. Identical rule in
+       skin-hud.js for the WORLD panel; two panels that open into the same corner
+       must not dismiss in two different ways. Sharp, bordered and 24px square so
+       it is a real target rather than a glyph you have to aim at. */
     #coop-close {
       position: absolute;
       top: 8px;
-      right: 10px;
+      right: 8px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       background: none;
-      border: none;
+      border: 1.5px solid var(--ui-primary-line);
+      border-radius: 0;
       color: var(--ui-primary);
-      font: 700 9px/1 monospace;
-      letter-spacing: .1em;
+      font: 700 12px/1 monospace;
       cursor: pointer;
-      padding: 2px 0;
-      opacity: 0.75;
+      padding: 0;
+      opacity: 0.85;
       z-index: 1;
     }
+    #coop-close:hover { background: var(--ui-primary-faint); opacity: 1; }
+    #coop-close:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
     #coop-close:hover { opacity: 1; }
     .coop-row { display: flex; flex-direction: column; gap: 4px; }
     .coop-label { font-size: 10px; letter-spacing: .12em; color: var(--ui-primary); opacity:.7; }
