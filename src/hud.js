@@ -103,6 +103,13 @@ function injectStyles() {
       50%  { box-shadow: 0 0 28px var(--ui-glow-strong), 0 0 56px var(--ui-glow-mid); }
       100% { box-shadow: 0 0 12px var(--ui-glow-soft), 0 0 24px var(--ui-glow-soft); }
     }
+    /* RAPID FIRE: sub-line justified to the title's glyph edges (P59). */
+    #upgrade-btn .rf-title { letter-spacing: 0.12em; margin-right: -0.12em; white-space: nowrap; }
+    #upgrade-btn .rf-sub   { display: flex; justify-content: space-between; align-items: baseline;
+                             letter-spacing: 0.12em; white-space: nowrap; }
+    #upgrade-btn .rf-last  { margin-right: -0.12em; }
+    #upgrade-btn .rf-dot   { opacity: .55; }
+
     /* One weight pair for both top-left readouts. */
     #score, #session-chip { font-size: ${HUD_READOUT_PX}px; }
     .hud-word  { font-weight: 400; opacity: 0.85; }
@@ -252,9 +259,24 @@ export function createHUD(onShoot) {
   // looking like a footnote beside it. It is now sized to that column: same
   // top:16 as the SESSION chip, and a height that lands on the SCORE line rather
   // than hanging below it. See RF_* below.
+  // P59: the sub-line is FULL-JUSTIFIED to the title — the "2" of "21 sats"
+  // under the "R", the "s" of "60s" under the "E". Two mechanisms make that exact
+  // rather than approximate:
+  //
+  //   · The box shrinks to its widest line, which is the title, so the sub-line's
+  //     flex row IS the title's width and space-between spreads "21 sats · 60s"
+  //     end to end across it. No measured pixel is copied anywhere, so it holds at
+  //     the phone's 13/9px and the desktop's 14/10px alike.
+  //
+  //   · letter-spacing is applied AFTER every character, the last one included, so
+  //     each line's box ends one tracking-width past its final glyph — and the
+  //     title (0.12em of 14px) and the sub-line (0.12em of 10px) overshoot by
+  //     DIFFERENT amounts. A negative right margin of exactly one tracking cancels
+  //     it on both, so what gets aligned is where the "E" and the "s" end, not
+  //     where their invisible trailing space does.
   upgradeBtn.innerHTML = `
-    <div style="font:${RF_TITLE_PX}px/1 monospace; letter-spacing:0.12em;">RAPID FIRE</div>
-    <div style="font:${RF_SUB_PX}px/1 monospace; letter-spacing:0.12em; margin-top:3px; opacity:0.8;">${RAPID_FIRE_PRICE} sats<span style="opacity:.55; margin:0 3px;">·</span>60s</div>
+    <div style="font:${RF_TITLE_PX}px/1 monospace;"><span class="rf-title">RAPID FIRE</span></div>
+    <div class="rf-sub" style="font:${RF_SUB_PX}px/1 monospace; margin-top:3px; opacity:0.8;"><span>${RAPID_FIRE_PRICE} sats</span><span class="rf-dot">·</span><span class="rf-last">60s</span></div>
   `;
   upgradeDefaultHTML = upgradeBtn.innerHTML;
   upgradeBtn.style.cssText = `

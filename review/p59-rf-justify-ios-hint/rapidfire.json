@@ -1,0 +1,59 @@
+{
+ "390": {
+  "titleFont": "13px",
+  "subFont": "9px",
+  "titleLeft": 268.67,
+  "titleRight": 360.99,
+  "subLeft": 268.67,
+  "subRight": 361,
+  "subText": "21 sats·60s",
+  "box": {
+   "top": 16,
+   "bottom": 55,
+   "w": 118.3
+  },
+  "score": {
+   "bottom": 56
+  },
+  "leftDelta": 0,
+  "rightDelta": 0.01
+ },
+ "414": {
+  "titleFont": "13px",
+  "subFont": "9px",
+  "titleLeft": 292.67,
+  "titleRight": 384.99,
+  "subLeft": 292.67,
+  "subRight": 385,
+  "subText": "21 sats·60s",
+  "box": {
+   "top": 16,
+   "bottom": 55,
+   "w": 118.3
+  },
+  "score": {
+   "bottom": 56
+  },
+  "leftDelta": 0,
+  "rightDelta": 0.01
+ },
+ "1280": {
+  "titleFont": "14px",
+  "subFont": "10px",
+  "titleLeft": 1151.58,
+  "titleRight": 1250.99,
+  "subLeft": 1151.58,
+  "subRight": 1250.99,
+  "subText": "21 sats·60s",
+  "box": {
+   "top": 16,
+   "bottom": 57,
+   "w": 125.4
+  },
+  "score": {
+   "bottom": 56
+  },
+  "leftDelta": 0,
+  "rightDelta": 0
+ }
+}

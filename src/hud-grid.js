@@ -330,6 +330,45 @@ async function requestMotion() {
   return ok;
 }
 
+/**
+ * The blocked panel's words (P59).
+ *
+ * The previous copy told the player to "turn on Motion & Orientation Access" in
+ * Safari's settings. That toggle was REMOVED in iOS 13 — it does not exist on
+ * iOS 16, 17 or 18, and the owner went looking for it and could not find it. On a
+ * current iPhone the permission is asked per site, and a refusal is remembered
+ * per site, so the one real recovery is to delete this site's website data:
+ * that is what lets the prompt come back.
+ *
+ * The second line exists because the whole flow is Safari's. Opened from inside
+ * another app (a chat app's in-app browser, the Google app) or in Chrome, the
+ * motion permission and the stored site data live in THAT app, and the Safari
+ * path above will not touch them.
+ *
+ * Built from nodes, not innerHTML — nothing here is user data, but a HUD string
+ * that is only safe because of who wrote it is one refactor from not being.
+ */
+function renderHint() {
+  const hint = popup?.querySelector('#gyro-hint');
+  if (!hint) return;
+  hint.textContent = '';
+  if (!gyroBlocked) return;
+  const line = (text, cls) => {
+    const el = document.createElement('div');
+    if (cls) el.className = cls;
+    el.textContent = text;
+    hint.appendChild(el);
+  };
+  if (gyroSilent) {
+    line('Safari won\u2019t ask again.', 'gh-lead');
+    line('Settings \u203a Apps \u203a Safari \u203a Advanced \u203a Website Data \u203a delete this site, then reload and tap GYRO.');
+  } else {
+    line('Motion access declined.', 'gh-lead');
+    line('Try again. If it stops asking, delete this site\u2019s data in Safari\u2019s Website Data settings.');
+  }
+  line('Must be Safari \u2014 Chrome and in-app browsers keep motion and site data in their own settings.', 'gh-note');
+}
+
 /** Close the blocked panel and go back to plain finger-drag look. */
 function dismissBlocked() {
   gyroBlocked = false;
@@ -395,11 +434,7 @@ function renderGyro() {
     });
     popup.style.display = ((on || gyroBlocked) && !panelOpen) ? 'block' : 'none';
     popup.classList.toggle('is-blocked', !on && gyroBlocked);
-    popup.querySelector('#gyro-hint').textContent = !gyroBlocked ? '' : (gyroSilent
-      // No dialog appeared, so there is nothing to tap through — say what to change.
-      ? 'Safari is refusing without asking. Settings > Apps > Safari: turn on Motion & Orientation Access, then Clear History and Website Data \u2014 that is what lets it prompt again.'
-      // A dialog did appear and was declined; asking again is still worth a tap.
-      : 'Motion access declined. Try again, or turn it on in Settings > Apps > Safari.');
+    renderHint();
     relayoutPanels();   // the cluster just got taller or shorter
   }
   // One transient at a time, the P55 rule: the hint panel and the tooltip never
@@ -666,7 +701,10 @@ function injectStyles() {
     #gyro-allow:focus-visible, #gyro-close:focus-visible {
       outline: 2px solid var(--ui-primary); outline-offset: 2px;
     }
+    #gyro-hint .gh-lead { font-weight: 700; margin-bottom: 3px; }
+    #gyro-hint .gh-note { margin-top: 5px; opacity: .72; font-size: 9px; }
     #gyro-hint {
+      overflow-wrap: anywhere;
       padding: 8px 9px;
       border: var(--hud-border-w) solid var(--ui-danger-line);
       border-radius: var(--hud-radius);
