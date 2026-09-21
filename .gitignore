@@ -7,3 +7,6 @@ dist/
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+# Verification screenshots stay local
+verification/
