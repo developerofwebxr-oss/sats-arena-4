@@ -15,7 +15,11 @@
  *   isLightningEnabled()    — is VITE_LIGHTNING=on?
  *   getSessionCode()        — current code (the coop room code, or null)
  *   getPaidCount()          — settled payments for this session
- *   activateWithCode(code)  — register the coop code + start polling (call after join)
+ *   activateWithCode(code, authToken)
+ *                           — point Lightning at a session + start polling. authToken
+ *                             is the token valid FOR THAT CODE: ownerToken for your
+ *                             own code (solo or hosting), paymentToken for a friend's.
+ *   isPaidCountKnown()      — false until the first answer for the current code
  *   deactivate()            — stop polling (call on leave)
  *   createInvoice()         — POST a 21-sat invoice, returns { payment_request, payment_hash }
  *   getBackendUrl()         — for dev simulate-payment button
@@ -36,35 +40,38 @@ const POLL_MS = 2500;
 
 let code          = null;
 let paidCount     = 0;
+let _known        = false; // has the server answered for the CURRENT code yet?
 let _pollTimer    = null;
-let _ownerToken   = null;
-let _paymentToken = null;
+let _authToken    = null;  // the token valid for `code` — never another session's
 
 export function isLightningEnabled()      { return LIGHTNING_ON; }
 export function getSessionCode()          { return code; }
 export function getPaidCount()            { return paidCount; }
+export function isPaidCountKnown()        { return _known; }
 export function getBackendUrl()           { return BACKEND_URL; }
-export function setOwnerToken(token)      { _ownerToken   = token || null; }
-export function setPaymentToken(token)    { _paymentToken = token || null; }
 
 /**
- * activateWithCode(roomCode) — call from coop-hud.js after joinSession() succeeds.
- * Registers the coop room code as the Lightning session on the server, then
- * starts polling paidCount. Idempotent: safe to call if already active.
+ * activateWithCode(roomCode, authToken) — point Lightning at a session.
+ *
+ * Pre-present fix A: this used to run only AFTER the LiveKit join succeeded, so a
+ * solo player whose own-room join failed (or was slow) never got a buyable RAPID
+ * FIRE, and LEAVE deactivated it for good. coop-hud.js now calls it the moment
+ * the code is claimed, and again on join/leave. It also used to poll with the
+ * device's OWN ownerToken even inside a friend's session, which that session
+ * rejects (403) — the token now always travels with the code it belongs to.
+ *
+ * The code is set synchronously so the HUD can offer the purchase at once; the
+ * PUT is only a touch, and polling starts whether or not it succeeds.
  */
-export async function activateWithCode(roomCode) {
-  if (!LIGHTNING_ON) return;
-  if (_pollTimer !== null) deactivate(); // clean up any prior poll
-
-  try {
-    const res  = await fetch(`${BACKEND_URL}/session/${roomCode}`, { method: 'PUT' });
-    const data = await res.json();
-    code      = roomCode;
-    paidCount = data.paidCount || 0;
-    startPolling();
-  } catch (err) {
-    console.warn('[lightning] session activate failed', err);
-  }
+export function activateWithCode(roomCode, authToken = null) {
+  if (!LIGHTNING_ON || !roomCode) return;
+  if (code === roomCode && _authToken === authToken && _pollTimer !== null) return;
+  deactivate(); // clean up any prior poll
+  code       = roomCode;
+  _authToken = authToken || null;
+  fetch(`${BACKEND_URL}/session/${roomCode}`, { method: 'PUT' })
+    .catch((err) => console.warn('[lightning] session touch failed', err));
+  startPolling();
 }
 
 /** Stop polling and clear state (called on leave). */
@@ -73,12 +80,14 @@ export function deactivate() {
     clearTimeout(_pollTimer);
     _pollTimer = null;
   }
-  code      = null;
-  paidCount = 0;
+  code       = null;
+  paidCount  = 0;
+  _known     = false;
+  _authToken = null;
 }
 
 export async function createInvoice() {
-  if (!code) throw new Error('no session — join a co-op room first');
+  if (!code) throw new Error('no session code yet — try again in a moment');
   const res = await fetch(`${BACKEND_URL}/session/${code}/invoice`, { method: 'POST' });
   if (!res.ok) throw new Error(`invoice failed (${res.status})`);
   return res.json(); // { payment_hash, payment_request }
@@ -87,20 +96,23 @@ export async function createInvoice() {
 // ── Internals ──────────────────────────────────────────────────────────────────
 
 function startPolling() {
+  const forCode = code;
   const tick = async () => {
-    if (!code) return;
+    if (code !== forCode) return;          // superseded by a newer activate
     try {
-      const authToken = _ownerToken || _paymentToken;
-      const headers   = authToken ? { Authorization: `Bearer ${authToken}` } : {};
-      const res  = await fetch(`${BACKEND_URL}/session/${code}`, { headers });
-      if (res.ok) {
+      const headers = _authToken ? { Authorization: `Bearer ${_authToken}` } : {};
+      const res  = await fetch(`${BACKEND_URL}/session/${forCode}`, { headers });
+      if (res.ok && code === forCode) {
         const data = await res.json();
-        if (data.exists && typeof data.paidCount === 'number') paidCount = data.paidCount;
+        if (data.exists && typeof data.paidCount === 'number') {
+          paidCount = data.paidCount;
+          _known    = true;
+        }
       }
     } catch {
       // transient — retry next tick
     } finally {
-      if (code) _pollTimer = setTimeout(tick, POLL_MS);
+      if (code === forCode) _pollTimer = setTimeout(tick, POLL_MS);
     }
   };
   tick();

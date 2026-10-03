@@ -324,7 +324,9 @@ app.get('/session/:code/join-request/:requestId', rl('poll-status', 20), (req, r
 // ── SESSION STATUS (owner-only — closes public enumeration oracle) ─────────────
 // GET /session/:code?ownerToken=... OR Authorization: Bearer <ownerToken>
 // Without correct ownerToken: always 403, regardless of whether code is live.
-app.get('/session/:code', rl('session-poll', 30), async (req, res) => {
+// 90/min: every player polls every 2.5 s (24/min), and players in one room are
+// usually on one Wi-Fi — one public IP. At 30/min two devices already tripped it.
+app.get('/session/:code', rl('session-poll', 90), async (req, res) => {
   const code    = normalizeCode(req.params.code);
   const token   = req.query.ownerToken || bearerToken(req);
   const session = sessions.get(code);
@@ -387,10 +389,16 @@ app.post('/session/:code/simulate-payment', (req, res) => {
 });
 
 // ── INVOICE ───────────────────────────────────────────────────────────────────
-app.post('/session/:code/invoice', async (req, res) => {
+// Pre-present fix A: refuses an UNKNOWN code (404) instead of creating a session
+// for it. pay.html is the only caller that can name a code it does not own, and
+// a typo there used to produce a payable invoice that no game would ever poll —
+// 21 sats into the void. Every game client has already claimed or touched its
+// code before it can ask for an invoice, so they are unaffected. Rate-limited so
+// the 404 is not a cheap enumeration oracle.
+app.post('/session/:code/invoice', rl('invoice', 10), async (req, res) => {
   const code = normalizeCode(req.params.code);
-  let session = sessions.get(code);
-  if (!session) { session = _newSession(code); sessions.set(code, session); }
+  const session = sessions.get(code);
+  if (!session) return res.status(404).json({ error: 'session not found' });
   try {
     const inv = await lnbitsCreateInvoice(INVOICE_AMOUNT, `Sats Arena rapid-fire (${code})`);
     session.openInvoices.push(inv.payment_hash);

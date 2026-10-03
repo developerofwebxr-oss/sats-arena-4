@@ -27,8 +27,6 @@ import {
   activateWithCode,
   deactivate as deactivateLightning,
   getBackendUrl,
-  setOwnerToken,
-  setPaymentToken,
 } from '../lightning.js';
 import { registerPanel } from '../panel-layout.js';
 import { HUD_READOUT_PX, setReadout } from '../hud.js';
@@ -171,7 +169,9 @@ export function setupCoopHud() {
     ownCode    = code;
     ownerToken = tok;
     _updateChip(code);
-    setOwnerToken(tok);
+    // Fix A: a solo device IS a session owner, so RAPID FIRE is buyable from the
+    // moment the code is claimed — not only once the LiveKit room join succeeds.
+    if (tok && isLightningEnabled()) activateWithCode(code, tok);
 
     // Start polling BEFORE auto-join so knock requests are visible even if
     // the room connection is slow or temporarily fails.
@@ -188,7 +188,6 @@ export function setupCoopHud() {
       // just the mute button; the JOIN row stays available so the host can still
       // join a friend's code.
       showMuteControl();
-      if (isLightningEnabled()) activateWithCode(code);
     } catch (e) {
       console.warn('[coop] auto-join own room failed', e);
       // Polling continues — host can still approve/deny
@@ -279,7 +278,7 @@ async function handleJoin() {
       showJoined(code);
       setStatus('Connected!', 'ok');
       refreshCount();
-      if (isLightningEnabled()) activateWithCode(code);
+      if (isLightningEnabled()) activateWithCode(code, null); // dev transports only
     } catch (err) {
       console.error('[coop]', err);
       setStatus(err.message, 'err');
@@ -314,10 +313,9 @@ async function handleJoin() {
     showJoined(code);
     setStatus('Connected!', 'ok');
     refreshCount();
-    if (isLightningEnabled()) {
-      if (paymentToken) setPaymentToken(paymentToken);
-      activateWithCode(code);
-    }
+    // In a friend's session we read THEIR paidCount with the read-only token
+    // they handed us — never with our own ownerToken, which their session rejects.
+    if (isLightningEnabled()) activateWithCode(code, paymentToken);
   } catch (err) {
     console.error('[coop]', err);
     const msg = err.message || '';
@@ -502,7 +500,12 @@ async function handleLeave() {
   joined = false;
   showDisconnected();
   setStatus('Left session', '');
-  if (isLightningEnabled()) deactivateLightning();
+  // Fix A: leaving drops you back to SOLO, where you still own your code — so
+  // rapid-fire points back at your own session instead of switching off for good.
+  if (isLightningEnabled()) {
+    if (ownCode && ownerToken) activateWithCode(ownCode, ownerToken);
+    else deactivateLightning();
+  }
 }
 
 async function handleMute() {

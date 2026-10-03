@@ -3,7 +3,9 @@ import { createScene } from './scene.js';
 import { watchForNewBuild } from './build-freshness.js';
 import { setupXR, recenterXRView, canRecenterXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
-import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge } from './hud.js';
+import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge,
+         rapidFireWhoCopy, payPageUrl } from './hud.js';
+import { getSessionCode } from './lightning.js';
 import { setupInput } from './input.js';
 import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
@@ -122,6 +124,8 @@ const vrMenu = setupVrMenu(scene, renderer, {
                                     : { ok: false, reason: 'not ready' }),
   isRapidFire, getRemainingSeconds,              // upgrade.js
   getAvailableCharges, activateCharge,           // hud.js — the ACTIVATE half of the pay flow
+  rapidFireWhoCopy, payPageUrl,                  // hud.js — the chooser's copy + pay.html address
+  getPayCode: getSessionCode,                    // lightning.js — the code pay.html must be given
 
   // ── co-op ─────────────────────────────────────────────────────────────────
   coopToggleMute,                                // coop-hud.js  — DOM MUTE button

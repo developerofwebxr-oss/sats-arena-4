@@ -2,8 +2,9 @@
 // is import()ed at the call site rather than parsed on every page load.
 import { playReloadSound } from './audio.js';
 import { grantRapidFire, isRapidFire, getRemainingSeconds } from './upgrade.js';
-import { isLightningEnabled, getSessionCode, getPaidCount, createInvoice } from './lightning.js';
+import { isLightningEnabled, getSessionCode, getPaidCount, isPaidCountKnown, createInvoice } from './lightning.js';
 import { getScore } from './score.js';
+import { getParticipantCount } from './net/room.js';
 
 /**
  * hud.js — all DOM overlays.
@@ -30,7 +31,8 @@ let upgradeBtn;
 //   window on BOTH clients (host + joiner each poll the same counter). The status
 //   box reflects the ACTIVE WINDOW (isRapidFire()), not the permanent paid flag,
 //   so it reverts to buyable when the window ends and a new payment works again.
-let lastPaid       = 0;   // highest paidCount seen — a higher value = fresh payment
+let lastPaid       = null; // highest paidCount seen for lastPaidCode; null = not baselined
+let lastPaidCode   = null; // the session lastPaid belongs to (solo ↔ friend's switches it)
 let sessionGranted = false; // legacy: kept for the VR ACTIVATE panel charge API
 
 let payModal;        // payment QR overlay
@@ -42,6 +44,12 @@ let payModalCopyBtn;
 let currentInvoice = '';
 let upgradeDefaultHTML = '';
 let purchasing = false; // guard against double-taps
+
+let chooser;          // fix A: "pay here / pay from another device" panel
+let chooserWho;       // "upgrades you · 60 s" | "upgrades both players · 60 s"
+let chooserRemote;    // the other-device instructions, revealed on demand
+let chooserCode;
+let chooserUrl;
 
 function setUpgradeLoading(loading) {
   purchasing = loading;
@@ -116,6 +124,10 @@ function injectStyles() {
     .hud-value { font-weight: 700; }
 
     #upgrade-btn { animation: lightning-pulse 1.4s ease-in-out infinite; }
+
+    /* Pay chooser (fix A): hover lifts the fill, keyboard focus gets a ring. */
+    #pay-chooser button:hover { background: var(--ui-glow-soft) !important; }
+    #pay-chooser button:focus-visible { outline: 2px solid var(--ui-primary-bright); outline-offset: 3px; }
     #upgrade-btn.active {
       /* While rapid-fire is running, the button glows magenta to show it's live. */
       animation: none;
@@ -296,7 +308,7 @@ export function createHUD(onShoot) {
 
   upgradeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    purchaseRapidFire();
+    openChooser();
     upgradeBtn.blur();
   });
 
@@ -357,6 +369,128 @@ export function createHUD(onShoot) {
   document.body.appendChild(shootBtn);
 
   buildPaymentModal();
+  buildChooser();
+}
+
+// ── Pay chooser (fix A — restores SA2's chooser) ────────────────────────────
+// RAPID FIRE always opens this first. "Pay here" is the QR/wallet flow below;
+// "Pay from another device" exists because nobody can scan a QR from inside a
+// headset — it shows this session's code and the pay.html address instead.
+
+/** Who a payment upgrades, as the copy says it. Shared with the VR menu. */
+export function rapidFireWhoCopy() {
+  return getParticipantCount() >= 2 ? 'upgrades both players · 60 s' : 'upgrades you · 60 s';
+}
+
+/** The pay page for this build, e.g. https://…/sats-arena-4/pay.html */
+export function payPageUrl() {
+  return new URL(`${import.meta.env.BASE_URL}pay.html`, location.origin).href;
+}
+
+function buildChooser() {
+  chooser = document.createElement('div');
+  chooser.id = 'pay-chooser';
+  chooser.setAttribute('role', 'dialog');
+  chooser.setAttribute('aria-label', 'Rapid fire');
+  chooser.setAttribute('aria-modal', 'true');
+  chooser.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChooser(); });
+  chooser.style.cssText = `
+    display: none; position: fixed; inset: 0; z-index: 300;
+    background: var(--ui-panel);
+    flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    font-family: monospace; color: var(--ui-glow); text-align: center; padding: 24px;
+  `;
+  chooser.addEventListener('click', (e) => e.stopPropagation());
+
+  const title = document.createElement('div');
+  title.textContent = `RAPID FIRE · ${RAPID_FIRE_PRICE} SATS`;
+  title.style.cssText = 'font-size: 20px; letter-spacing: 0.12em; text-shadow: 0 0 8px var(--ui-glow);';
+
+  chooserWho = document.createElement('div');
+  chooserWho.style.cssText = 'font-size: 13px; letter-spacing: 0.14em; color: var(--ui-accent); text-shadow: 0 0 8px var(--ui-accent);';
+
+  const btnCss = (colour) => `
+    width: min(340px, 100%); padding: 14px 24px; background: transparent; color: ${colour};
+    border: 1px solid ${colour}; font-family: monospace; cursor: pointer;
+    text-shadow: 0 0 8px ${colour};
+  `;
+  const twoLine = (main, sub) => `<div style="font-size:17px; letter-spacing:0.1em;">${main}</div>
+    <div style="font-size:12px; opacity:0.75; margin-top:5px; letter-spacing:0.12em;">${sub}</div>`;
+
+  const hereBtn = document.createElement('button');
+  hereBtn.id = 'pay-here';
+  hereBtn.type = 'button';
+  hereBtn.innerHTML = twoLine('PAY HERE', 'QR · open in wallet');
+  hereBtn.style.cssText = btnCss('var(--ui-glow)');
+  hereBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeChooser();
+    purchaseRapidFire();   // the existing same-device flow
+  });
+
+  const orLine = document.createElement('div');
+  orLine.textContent = '— or —';
+  orLine.style.cssText = 'font-size: 12px; opacity: 0.5; letter-spacing: 0.2em;';
+
+  const remoteBtn = document.createElement('button');
+  remoteBtn.id = 'pay-remote';
+  remoteBtn.type = 'button';
+  remoteBtn.innerHTML = twoLine('PAY FROM ANOTHER DEVICE', 'phone · for headsets');
+  remoteBtn.style.cssText = btnCss('var(--ui-primary-bright)');
+  remoteBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chooserRemote.style.display = 'flex';
+    remoteBtn.setAttribute('aria-expanded', 'true');
+  });
+  remoteBtn.setAttribute('aria-controls', 'pay-remote-info');
+
+  // The instructions. Written with textContent: the code comes off the network.
+  chooserRemote = document.createElement('div');
+  chooserRemote.id = 'pay-remote-info';
+  chooserRemote.setAttribute('aria-live', 'polite');
+  chooserRemote.style.cssText = `
+    display: none; flex-direction: column; align-items: center; gap: 6px;
+    font-size: 13px; letter-spacing: 0.08em; color: var(--ui-primary-bright); line-height: 1.5;
+  `;
+  const l1 = document.createElement('div'); l1.textContent = 'on your phone, open';
+  chooserUrl = document.createElement('div');
+  chooserUrl.translate = false;
+  chooserUrl.style.cssText = 'font-weight: 700; word-break: break-all; max-width: 90vw; user-select: all;';
+  const l2 = document.createElement('div'); l2.textContent = 'and enter';
+  chooserCode = document.createElement('div');
+  chooserCode.translate = false;
+  chooserCode.style.cssText = 'font-size: 32px; font-weight: 700; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--ui-glow); text-shadow: 0 0 10px var(--ui-glow);';
+  const l3 = document.createElement('div'); l3.textContent = 'rapid fire starts here once it is paid';
+  l3.style.opacity = '0.7';
+  chooserRemote.append(l1, chooserUrl, l2, chooserCode, l3);
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.textContent = 'CANCEL';
+  cancelBtn.style.cssText = `
+    margin-top: 4px; padding: 10px 20px; background: transparent;
+    color: var(--ui-text-muted); border: 1px solid var(--ui-text-muted); font-family: monospace;
+    letter-spacing: 0.1em; cursor: pointer;
+  `;
+  cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeChooser(); cancelBtn.blur(); });
+
+  chooser.append(title, chooserWho, hereBtn, orLine, remoteBtn, chooserRemote, cancelBtn);
+  document.body.appendChild(chooser);
+}
+
+function openChooser() {
+  if (purchasing || isRapidFire()) return;
+  chooserWho.textContent = rapidFireWhoCopy();
+  chooserCode.textContent = getSessionCode() || '…';
+  chooserUrl.textContent = payPageUrl().replace(/^https?:\/\//, '');
+  chooserRemote.style.display = 'none';
+  chooser.querySelector('#pay-remote').setAttribute('aria-expanded', 'false');
+  chooser.style.display = 'flex';
+  chooser.querySelector('#pay-here').focus({ preventScroll: true });
+}
+
+function closeChooser() {
+  if (chooser) chooser.style.display = 'none';
 }
 
 // ── Payment modal (QR) ──────────────────────────────────────────────────────
@@ -516,11 +650,21 @@ export function updateRapidFireHUD() {
   // host + joiner each poll the same session's paidCount (ownerToken /
   // paymentToken) and independently grant, so one payment still upgrades BOTH —
   // now repeatable. Not gated on sessionGranted, so a 2nd payment re-triggers.
-  if (isLightningEnabled() && getSessionCode()) {
+  // Fix A: the baseline is per SESSION CODE. A device now moves between its own
+  // session (solo) and a friend's, and each has its own counter — comparing a
+  // friend's 0 against our own 2 would swallow their next payment, and a resumed
+  // session (fix D) must not re-grant payments made before the refresh.
+  const sc = isLightningEnabled() ? getSessionCode() : null;
+  if (sc !== lastPaidCode) { lastPaidCode = sc; lastPaid = null; }
+  if (sc && isPaidCountKnown()) {
     const paid = getPaidCount();
-    if (paid > lastPaid) {
+    if (lastPaid === null) {
+      lastPaid = paid;                    // first answer for this code: baseline only
+      if (paid >= 1) sessionGranted = true; // nothing banked to "activate" either
+    } else if (paid > lastPaid) {
       lastPaid = paid;
       closePaymentModal();
+      closeChooser();
       grantRapidFire();      // fresh window on EVERY increment (repeatable)
       sessionGranted = true; // legacy VR charge-panel suppression (unchanged)
     }

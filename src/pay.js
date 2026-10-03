@@ -14,8 +14,13 @@
 
 import QRCode from 'qrcode';
 
-const BACKEND_URL = (import.meta.env.VITE_BACKEND_URL
-  || 'https://sats-arena-production.up.railway.app').replace(/\/+$/, '');
+// Same normalisation as lightning.js, and the same (THIS project's) fallback —
+// it used to default to the sibling sats-arena backend.
+const BACKEND_URL = (() => {
+  const raw = (import.meta.env.VITE_BACKEND_URL
+    || 'https://sats-arena-4-production.up.railway.app').replace(/\/+$/, '');
+  return raw.startsWith('http') ? raw : `https://${raw}`;
+})();
 
 const codeLine  = document.getElementById('code-line');
 const codeEntry = document.getElementById('code-entry');
@@ -46,17 +51,23 @@ async function startForCode(rawCode) {
   codeEntry.style.display = 'none';
 
   try {
-    const check = await (await fetch(`${BACKEND_URL}/session/${code}`)).json();
-    if (!check.exists) {
+    // Fix A: no separate existence check. GET /session/:code is owner/reader-only
+    // (it closed a public enumeration oracle), so the old check answered 403 —
+    // "not found" — for EVERY code and this page could never pay. The invoice
+    // endpoint itself now refuses unknown codes with a 404.
+    setStatus('creating invoice…');
+    const res = await fetch(`${BACKEND_URL}/session/${code}/invoice`, { method: 'POST' });
+    if (res.status === 404) {
       showCodeEntry('session not found or expired — check the code');
       return;
     }
-
-    codeLine.textContent = `session ${code} · pay 21 sats`;
-    setStatus('creating invoice…');
-
-    const inv = await (await fetch(`${BACKEND_URL}/session/${code}/invoice`, { method: 'POST' })).json();
+    if (res.status === 429) {
+      showCodeEntry('too many tries — wait a minute and try again');
+      return;
+    }
+    const inv = await res.json();
     if (!inv.payment_request) throw new Error('no invoice');
+    codeLine.textContent = `session ${code} · pay 21 sats`;
     invoiceStr = inv.payment_request;
 
     openLink.href = `lightning:${invoiceStr}`;

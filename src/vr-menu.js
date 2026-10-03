@@ -186,6 +186,7 @@ export function setupVrMenu(scene, renderer, deps) {
     const code    = deps.getOwnCode ? deps.getOwnCode() : null;
 
     if (view === 'skins') return buildSkinsModel();
+    if (view === 'rapid') return buildRapidModel();
 
     const out = [];
 
@@ -215,10 +216,9 @@ export function setupVrMenu(scene, renderer, deps) {
       });
     }
 
-    // RAPID FIRE. In a headset the DOM pay modal is invisible, so what is
-    // surfaced here is the half that WORKS in-world: spending a banked charge.
-    // Buying still needs the phone, and the row says so rather than opening a
-    // QR nobody can see.
+    // RAPID FIRE. Fix A: always buyable — it opens the same chooser as the DOM
+    // button (the 'rapid' view below), in-world. A banked charge, when there is
+    // one, is still spent directly.
     const live    = deps.isRapidFire ? deps.isRapidFire() : false;
     const charges = deps.getAvailableCharges ? deps.getAvailableCharges() : 0;
     if (live) {
@@ -228,8 +228,8 @@ export function setupVrMenu(scene, renderer, deps) {
     } else if (charges > 0) {
       out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: `${charges} READY`, tone: 'glow' });
     } else {
-      out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: '21 SATS', tone: 'glow',
-                 state: 'unavailable', reason: 'pay on your phone — it upgrades both players' });
+      out.push({ kind: 'submenu', id: 'rapid-pay', label: 'RAPID FIRE', meta: '21 SATS', tone: 'glow',
+                 reason: deps.rapidFireWhoCopy ? deps.rapidFireWhoCopy() : null });
     }
 
     // 3 ── CO-OP
@@ -298,6 +298,30 @@ export function setupVrMenu(scene, renderer, deps) {
     return out;
   }
 
+  // The in-world pay chooser (fix A). The same two choices as the DOM one, but
+  // "pay here" is honest about the headset: a QR on this panel cannot be scanned
+  // by anyone, so the other-device route is spelled out right here instead.
+  function buildRapidModel() {
+    // Paid while reading this? The purchase is done — back to the top level.
+    if (deps.isRapidFire && deps.isRapidFire()) { view = 'root'; return buildModel(); }
+    const code = deps.getPayCode ? deps.getPayCode() : null;
+    const url  = deps.payPageUrl ? deps.payPageUrl().replace(/^https?:\/\//, '') : 'pay.html';
+    return [
+      { kind: 'header', code: deps.getOwnCode ? deps.getOwnCode() : null,
+        status: statusLine(deps.isCoopJoined(), deps.getParticipantCount?.() || 0,
+                           deps.isMatchActive?.() || false) },
+      { kind: 'section', label: 'RAPID FIRE · 21 SATS' },
+      { kind: 'note', id: 'who', tone: 'accent',
+        lines: [(deps.rapidFireWhoCopy ? deps.rapidFireWhoCopy() : '').toUpperCase()] },
+      { kind: 'note', id: 'pay-remote', tone: 'primary', title: 'PAY FROM ANOTHER DEVICE',
+        lines: ['on your phone, open', url, `and enter  ${code || '…'}`] },
+      { kind: 'item', id: 'pay-here', label: 'PAY HERE', tone: 'glow', state: 'unavailable',
+        reason: "a QR can't be scanned inside a headset" },
+      { kind: 'rule' },
+      { kind: 'item', id: 'back', label: '‹ BACK', tone: 'primary' },
+    ];
+  }
+
   function statusLine(joined, peers, inMatch) {
     if (inMatch) return 'MATCH IN PROGRESS';
     if (!joined) return 'SOLO · WAITING FOR A FRIEND';
@@ -320,6 +344,7 @@ export function setupVrMenu(scene, renderer, deps) {
         case 'section': h = LABEL_H + SECTION_GAP; break;
         case 'rule':    h = 20; break;
         case 'request': h = 84; break;
+        case 'note':    h = 16 + (e.title ? 34 : 0) + e.lines.length * 30; break;
         default:        h = e.reason ? ROW_REASON : ROW_H; break;
       }
       laid.push({ ...e, y, h });
@@ -447,6 +472,11 @@ export function setupVrMenu(scene, renderer, deps) {
 
       case 'skins':
         view = 'skins';
+        lastSig = null;
+        break;
+
+      case 'rapid-pay':
+        view = 'rapid';
         lastSig = null;
         break;
 
@@ -592,6 +622,7 @@ export function setupVrMenu(scene, renderer, deps) {
       deps.isRapidFire && deps.isRapidFire() && deps.getRemainingSeconds
         ? Math.ceil(deps.getRemainingSeconds()) : 0,
       deps.getAvailableCharges ? deps.getAvailableCharges() : 0,
+      deps.getPayCode ? deps.getPayCode() : '',
       pending.length, top ? top.requestId : '',
       performance.now() < confirmUntil,
     ].join('|');
@@ -624,6 +655,7 @@ export function setupVrMenu(scene, renderer, deps) {
         case 'request': drawRequest(r); break;
         case 'toggle':  drawToggle(r);  break;
         case 'submenu': drawSubmenu(r); break;
+        case 'note':    drawNote(r);    break;
         default:        drawItem(r);    break;
       }
     }
@@ -838,6 +870,28 @@ export function setupVrMenu(scene, renderer, deps) {
     ctx.fillText(r.on ? 'ON' : 'OFF', sx - 12, labelY);
 
     if (r.reason) drawReason(r);
+  }
+
+  /** Inert text block — instructions, not a target. Optional title line. */
+  function drawNote(r) {
+    const colour = toneColour(r.tone);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    let y = r.y + 8;
+    if (r.title) {
+      ctx.font = `bold ${F_TITLE}px monospace`;
+      ctx.fillStyle = colour;
+      ctx.shadowColor = colour; ctx.shadowBlur = 8;
+      ctx.fillText(r.title, PAD + 22, y + 16);
+      ctx.shadowBlur = 0;
+      y += 34;
+    }
+    ctx.font = `bold ${F_LABEL}px monospace`;
+    for (const line of r.lines) {
+      ctx.fillStyle = hexA(colour, 0.9);
+      ctx.fillText(line, PAD + 22, y + 15);
+      y += 30;
+    }
   }
 
   /** Approve / deny, only ever drawn when someone is actually knocking. */
