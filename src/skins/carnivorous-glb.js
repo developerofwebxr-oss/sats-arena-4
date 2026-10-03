@@ -312,10 +312,9 @@ export async function setupSnapperTarget(hooks) {
       // holds for longer, so +33 keeps it worth chasing without making the
       // rarer, harder Satoshi pointless.
       points: 33,
-      // MORE FREQUENT than Satoshi (20-40s): this is the Carnivorous arena's
-      // signature event, not a rare surprise, and the room is built around
-      // twelve maws that should feel alive.
-      spawnCadence: [10, 20],
+      // RARER than Satoshi (8-14 s) — flipped pre-present so Satoshi is the one
+      // you see most. Still frequent enough that the twelve maws feel alive.
+      spawnCadence: [16, 28],
       // ...and it stays out longer than Satoshi's 7s. It is bigger and easier
       // to hit, so the extra time is about letting a player who is facing the
       // wrong way turn around, not about making it easy.

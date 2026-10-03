@@ -192,9 +192,9 @@ export function setupSatoshiTarget(hooks) {
       // and nothing else changes.
       model: { kind: 'plane', texture: tex, size: [0.78, 0.78] },
       points: 42,
-      // RARE on purpose: at 20-40 s a player sees maybe two in a 4:20 match, so
-      // it stays an event rather than becoming the main scoring loop.
-      spawnCadence: [20, 40],
+      // FREQUENT (pre-present flip): Satoshi is the Gold Arena's headline, so he
+      // comes out more often than the Snapper does in Carnivorous (16-28 s).
+      spawnCadence: [8, 14],
       holdTime: 7,
       emergeSeconds: 0.45,
       emergeStyle: 'pop',
