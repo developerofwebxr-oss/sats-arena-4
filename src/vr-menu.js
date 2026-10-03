@@ -179,6 +179,7 @@ export function setupVrMenu(scene, renderer, deps) {
    *                cannot offer it. No dead rows.
    */
   function buildModel() {
+    if (view === 'code') return buildCodeModel();   // fix D
     const joined  = deps.isCoopJoined();
     const muted   = deps.isCoopMuted();
     const peers   = deps.getParticipantCount ? deps.getParticipantCount() : 0;
@@ -249,6 +250,8 @@ export function setupVrMenu(scene, renderer, deps) {
       reason: deps.canCompete() ? null
             : inMatch ? 'a match is already running' : 'needs 2 players',
     });
+    // Fix D: reload without losing the code, or deliberately take a new one.
+    out.push({ kind: 'submenu', id: 'code-menu', label: 'SESSION CODE', meta: 'RELOAD · NEW', tone: 'primary' });
     // Requests only exist when somebody is knocking; there is no empty state.
     if (pending.length > 0) {
       out.push({ kind: 'request', id: 'request', name: pending[0].requesterName || 'Someone',
@@ -328,6 +331,21 @@ export function setupVrMenu(scene, renderer, deps) {
     const friends = Math.max(0, peers - 1);
     if (friends <= 0) return 'CONNECTED · WAITING FOR A FRIEND';
     return friends === 1 ? '1 FRIEND CONNECTED' : `${friends} FRIENDS CONNECTED`;
+  }
+
+  function buildCodeModel() {
+    return [
+      { kind: 'header', code: deps.getOwnCode ? deps.getOwnCode() : null,
+        status: statusLine(deps.isCoopJoined(), deps.getParticipantCount?.() || 0,
+                           deps.isMatchActive?.() || false) },
+      { kind: 'section', label: 'SESSION CODE' },
+      { kind: 'item', id: 'reload', label: 'RELOAD', meta: 'KEEPS YOUR CODE', tone: 'primary',
+        reason: 'reloads the page — you leave VR' },
+      { kind: 'item', id: 'newcode', label: 'NEW CODE', tone: 'accent',
+        reason: 'friends will need the new code' },
+      { kind: 'rule' },
+      { kind: 'item', id: 'back', label: '‹ BACK', tone: 'primary' },
+    ];
   }
 
   // ── Layout: assign a y and height to every entry ──────────────────────────
@@ -463,6 +481,21 @@ export function setupVrMenu(scene, renderer, deps) {
     switch (id) {
       case 'resume':
         closeMenu();
+        break;
+
+      case 'code-menu':
+        view = 'code';
+        lastSig = null;
+        break;
+
+      case 'reload':
+        closeMenu();
+        deps.reloadKeepCode?.();
+        break;
+
+      case 'newcode':
+        closeMenu();
+        deps.reloadNewCode?.();
         break;
 
       case 'recenter': {

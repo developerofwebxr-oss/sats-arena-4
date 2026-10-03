@@ -24,6 +24,7 @@ import {
   setupCoopHud, setCoopMode,
   coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
   onPendingRequests, approveJoinRequest, denyJoinRequest, getOwnCode,
+  reloadKeepCode, reloadNewCode,
 } from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
@@ -136,6 +137,7 @@ const vrMenu = setupVrMenu(scene, renderer, {
   onPendingRequests,                             // coop-hud.js  — knock polling mirror
   approveJoinRequest,                            // coop-hud.js  — DOM ✓ on a knock card
   denyJoinRequest,                               // coop-hud.js  — DOM ✗ on a knock card
+  reloadKeepCode, reloadNewCode,                 // coop-hud.js  — RELOAD / NEW CODE (fix D)
 
   // ── exit ──────────────────────────────────────────────────────────────────
   coopLeave,                                     // coop-hud.js  — DOM LEAVE button

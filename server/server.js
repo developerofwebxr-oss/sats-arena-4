@@ -117,6 +117,13 @@ function bearerToken(req) {
   return (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
 }
 
+// Constant-time compare for secrets (ownerToken), so a resume attempt cannot
+// learn a token byte-by-byte from response timing.
+function tokensEqual(a, b) {
+  const x = Buffer.from(String(a)), y = Buffer.from(String(b));
+  return x.length === y.length && crypto.timingSafeEqual(x, y);
+}
+
 function normalizeCode(raw) {
   return String(raw || '').toUpperCase().trim();
 }
@@ -137,13 +144,27 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 // ── CLAIM ─────────────────────────────────────────────────────────────────────
 // POST /session/:code/claim
 // Establishes ownership of a code. Returns ownerToken on success, {taken:true}
-// if already claimed by someone else. Rate-limited to 5/min to slow enumeration.
-app.post('/session/:code/claim', rl('claim', 5), (req, res) => {
+// if already claimed by someone else. Rate-limited to slow enumeration.
+// 20/min (was 5): players in one room share a Wi-Fi IP, and every refresh now
+// claims (fix D). Still far too slow to enumerate a 31^4 code space.
+app.post('/session/:code/claim', rl('claim', 20), (req, res) => {
   const code = normalizeCode(req.params.code);
   if (!/^[A-Z0-9]{1,8}$/.test(code)) return res.status(400).json({ error: 'invalid code' });
 
   const existing = sessions.get(code);
-  if (existing?.ownerToken) return res.json({ taken: true });
+  if (existing?.ownerToken) {
+    // Pre-present fix D: RESUME. A page refresh re-presents the ownerToken it
+    // kept in sessionStorage; if it matches this still-live session, hand the
+    // same session back instead of `taken`, so the code survives the refresh.
+    // A wrong or missing token is indistinguishable from any other taken code.
+    const presented = String(req.body?.ownerToken || '');
+    if (presented && tokensEqual(presented, existing.ownerToken)) {
+      existing.lastSeen = Date.now();
+      console.log(`[claim] ${code} resumed`);
+      return res.json({ code, ownerToken: existing.ownerToken, paymentToken: existing.paymentToken, resumed: true });
+    }
+    return res.json({ taken: true });
+  }
 
   const ownerToken   = crypto.randomBytes(32).toString('hex');
   const paymentToken = crypto.randomBytes(32).toString('hex');
