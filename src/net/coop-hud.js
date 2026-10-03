@@ -7,7 +7,10 @@
  *   → POST /token (ticket consumed, single-use) → join LiveKit room (knock path).
  *   For BC/Mock transport: no server approval required (dev/local only).
  *
- * ownerToken is held in memory only, never in localStorage or the DOM.
+ * Fix D: this device's code + ownerToken are kept in sessionStorage (per tab,
+ * same origin, gone when the tab closes) so a refresh RESUMES the same code —
+ * never in localStorage or the DOM. A friend's room is not persisted beyond its
+ * code: admission tickets are single-use, so a joiner re-knocks after a refresh.
  */
 
 import {
@@ -27,8 +30,6 @@ import {
   activateWithCode,
   deactivate as deactivateLightning,
   getBackendUrl,
-  setOwnerToken,
-  setPaymentToken,
 } from '../lightning.js';
 import { registerPanel } from '../panel-layout.js';
 import { HUD_READOUT_PX, setReadout } from '../hud.js';
@@ -45,6 +46,23 @@ let ownerToken   = null; // secret returned by /claim; held in memory only
 let _ownerPollTimer = null; // timer for polling pending join requests
 let _pending     = [];   // last pending join-request list (mirrored to the VR menu)
 let _pendingCbs  = [];   // subscribers notified whenever that list changes
+
+// ── Fix D: code persistence (sessionStorage, per tab) ─────────────────────────
+const SS_OWN    = 'sa4.own';     // { code, ownerToken } — this device's session
+const SS_FRIEND = 'sa4.friend';  // the friend's code we were in, for the rejoin prompt
+function _ssGet(k)    { try { return JSON.parse(sessionStorage.getItem(k) || 'null'); } catch { return null; } }
+function _ssSet(k, v) { try { sessionStorage.setItem(k, JSON.stringify(v)); } catch { /* private mode */ } }
+function _ssDel(k)    { try { sessionStorage.removeItem(k); } catch { /* private mode */ } }
+
+/** Reload the page and come back on the SAME code (the claim resumes it). */
+export function reloadKeepCode() { location.reload(); }
+
+/** Drop this tab's code and reload — the next load claims a fresh one. */
+export function reloadNewCode() {
+  _ssDel(SS_OWN);
+  _ssDel(SS_FRIEND);
+  location.reload();
+}
 
 // Called from main.js when the XR mode changes.
 export function setCoopMode(mode) {
@@ -103,7 +121,11 @@ export function setupCoopHud() {
       <button id="coop-leave" style="display:none">LEAVE</button>
       <button id="coop-mute" style="display:none">MUTE</button>
     </div>
-    <div id="coop-status"></div>
+    <div id="coop-status" aria-live="polite"></div>
+    <div class="coop-btn-row coop-code-row">
+      <button id="coop-reload" type="button" title="Reload the page and keep this session code">RELOAD (keeps your code)</button>
+      <button id="coop-newcode" type="button" title="Reload with a brand-new session code">NEW CODE</button>
+    </div>
     <div id="coop-active" style="display:none">
       <div id="coop-code-display"></div>
       <div id="coop-count">Players: 1</div>
@@ -171,7 +193,9 @@ export function setupCoopHud() {
     ownCode    = code;
     ownerToken = tok;
     _updateChip(code);
-    setOwnerToken(tok);
+    // Fix A: a solo device IS a session owner, so RAPID FIRE is buyable from the
+    // moment the code is claimed — not only once the LiveKit room join succeeds.
+    if (tok && isLightningEnabled()) activateWithCode(code, tok);
 
     // Start polling BEFORE auto-join so knock requests are visible even if
     // the room connection is slow or temporarily fails.
@@ -188,7 +212,6 @@ export function setupCoopHud() {
       // just the mute button; the JOIN row stays available so the host can still
       // join a friend's code.
       showMuteControl();
-      if (isLightningEnabled()) activateWithCode(code);
     } catch (e) {
       console.warn('[coop] auto-join own room failed', e);
       // Polling continues — host can still approve/deny
@@ -198,6 +221,26 @@ export function setupCoopHud() {
   joinBtn.addEventListener('click', handleJoin);
   leaveBtn.addEventListener('click', handleLeave);
   muteBtn.addEventListener('click', handleMute);
+  panel.querySelector('#coop-reload').addEventListener('click', (e) => { e.stopPropagation(); reloadKeepCode(); });
+  // NEW CODE strands anyone who has your current code, so it takes two taps.
+  const newCodeBtn = panel.querySelector('#coop-newcode');
+  let newCodeArmed = 0;
+  newCodeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (Date.now() < newCodeArmed) return reloadNewCode();
+    newCodeArmed = Date.now() + 3000;
+    newCodeBtn.textContent = 'SURE?';
+    setTimeout(() => { newCodeBtn.textContent = 'NEW CODE'; }, 3000);
+  });
+
+  // Fix D: we were in a friend's room before this refresh. The admission ticket
+  // was single-use, so say so and pre-fill their code instead of failing silently.
+  const friend = _ssGet(SS_FRIEND);
+  if (friend && /^[A-Z0-9]{1,8}$/.test(friend)) {
+    codeInput.value = friend;
+    setStatus(`Rejoin: enter your friend's code (${friend}) and press JOIN — they approve again`, '');
+    panel.style.display = 'flex';
+  }
 
   // Repaint from the transport's own truth whenever it changes (publish,
   // unpublish, mute, unmute, or the room going away).
@@ -227,6 +270,47 @@ function _randomCode() {
 // attempts (server permanently down), so the chip still shows.
 async function _claimUniqueCode() {
   const backend = getBackendUrl();
+
+  // Fix D: resume this tab's previous code if the server still has it live and
+  // the token matches. Expired session or mismatched token → a fresh code below.
+  // Only an ANSWER gives the code up: `taken` (token mismatch) or a fresh claim
+  // (the session expired). A 429, a 5xx or a network error is retried — players
+  // on one Wi-Fi share an IP, and losing the code to a rate limit would defeat
+  // the point.
+  const saved = _ssGet(SS_OWN);
+  if (saved?.code && saved?.ownerToken) {
+    for (let attempt = 0, delay = 1500; attempt < 6; attempt++, delay = Math.min(delay * 2, 8000)) {
+      try {
+        const res = await fetch(`${backend}/session/${saved.code}/claim`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ownerToken: saved.ownerToken }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.resumed && data.ownerToken) {
+            console.log(`[coop] resumed session ${saved.code}`);
+            return { code: saved.code, ownerToken: data.ownerToken };
+          }
+          if (!data.taken && data.ownerToken) {
+            // Expired server-side (or the server restarted) and nobody took the
+            // code since — we just re-claimed it fresh. Same code, new token.
+            console.log(`[coop] ${saved.code} had expired — re-claimed`);
+            _ssSet(SS_OWN, { code: saved.code, ownerToken: data.ownerToken });
+            return { code: saved.code, ownerToken: data.ownerToken };
+          }
+          console.log(`[coop] could not resume ${saved.code} (taken) — new code`);
+          break;
+        }
+        console.warn(`[coop] resume ${saved.code}: HTTP ${res.status} — retrying`);
+      } catch (e) {
+        console.warn('[coop] resume network error — retrying', e);
+      }
+      await new Promise((r) => setTimeout(r, delay));
+    }
+    _ssDel(SS_OWN);
+  }
+
   let delay = 0;
   for (let attempt = 0; attempt < 30; attempt++) {
     if (delay > 0) await new Promise(r => setTimeout(r, delay));
@@ -235,7 +319,10 @@ async function _claimUniqueCode() {
       const res = await fetch(`${backend}/session/${candidate}/claim`, { method: 'POST' });
       if (!res.ok) { delay = Math.min((delay || 1000) + 1000, 6000); continue; }
       const data = await res.json();
-      if (!data.taken) return { code: candidate, ownerToken: data.ownerToken };
+      if (!data.taken) {
+        _ssSet(SS_OWN, { code: candidate, ownerToken: data.ownerToken });
+        return { code: candidate, ownerToken: data.ownerToken };
+      }
       // Code already claimed — try a different candidate without delay
     } catch {
       // Network error (cold start, flaky connection) — back off and retry
@@ -276,10 +363,11 @@ async function handleJoin() {
     try {
       await joinSession(code, { name, mode: currentMode });
       joined = true;
+      _ssSet(SS_FRIEND, code);   // fix D: remembered for the rejoin prompt
       showJoined(code);
       setStatus('Connected!', 'ok');
       refreshCount();
-      if (isLightningEnabled()) activateWithCode(code);
+      if (isLightningEnabled()) activateWithCode(code, null); // dev transports only
     } catch (err) {
       console.error('[coop]', err);
       setStatus(err.message, 'err');
@@ -311,13 +399,13 @@ async function handleJoin() {
     setStatus('Connecting…', '');
     await joinSession(code, { name, mode: currentMode, admissionTicket });
     joined = true;
+    _ssSet(SS_FRIEND, code);     // fix D: remembered for the rejoin prompt
     showJoined(code);
     setStatus('Connected!', 'ok');
     refreshCount();
-    if (isLightningEnabled()) {
-      if (paymentToken) setPaymentToken(paymentToken);
-      activateWithCode(code);
-    }
+    // In a friend's session we read THEIR paidCount with the read-only token
+    // they handed us — never with our own ownerToken, which their session rejects.
+    if (isLightningEnabled()) activateWithCode(code, paymentToken);
   } catch (err) {
     console.error('[coop]', err);
     const msg = err.message || '';
@@ -497,12 +585,18 @@ export function denyJoinRequest(requestId) { return _denyRequest(requestId); }
 
 // ── LEAVE / MUTE ───────────────────────────────────────────────────────────────
 async function handleLeave() {
+  _ssDel(SS_FRIEND);
   _stopOwnerPolling();
   await leaveSession();
   joined = false;
   showDisconnected();
   setStatus('Left session', '');
-  if (isLightningEnabled()) deactivateLightning();
+  // Fix A: leaving drops you back to SOLO, where you still own your code — so
+  // rapid-fire points back at your own session instead of switching off for good.
+  if (isLightningEnabled()) {
+    if (ownCode && ownerToken) activateWithCode(ownCode, ownerToken);
+    else deactivateLightning();
+  }
 }
 
 async function handleMute() {
@@ -691,6 +785,16 @@ function injectStyles() {
     #coop-join { background: var(--ui-primary); color: var(--ui-panel-solid); }
     #coop-join:disabled { opacity: .5; cursor: default; }
     #coop-leave { background: var(--ui-danger-faint); color: var(--ui-danger); border: 1px solid var(--ui-danger); }
+    /* Fix D: the code controls are secondary — outlined, never filled. */
+    .coop-code-row { border-top: 1px solid var(--ui-primary-dim); padding-top: 8px; }
+    #coop-reload, #coop-newcode {
+      padding: 7px 8px; border-radius: 6px; cursor: pointer;
+      background: transparent; color: var(--ui-text);
+      border: 1px solid var(--ui-primary-line); font: 11px monospace; letter-spacing: .04em;
+    }
+    #coop-reload { flex: 1; }
+    #coop-reload:hover, #coop-newcode:hover { background: var(--ui-panel-chip); }
+    #coop-reload:focus-visible, #coop-newcode:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
     #coop-mute  {
       padding: 6px 8px;
       border-radius: 6px;

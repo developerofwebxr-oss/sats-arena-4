@@ -3,7 +3,9 @@ import { createScene } from './scene.js';
 import { watchForNewBuild } from './build-freshness.js';
 import { setupXR, recenterXRView, canRecenterXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
-import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge } from './hud.js';
+import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge,
+         rapidFireWhoCopy, payPageUrl } from './hud.js';
+import { getSessionCode } from './lightning.js';
 import { setupInput } from './input.js';
 import { setupShooter, setDoorTargetHitTest } from './shoot.js';
 import { setupMovement, recenterView } from './movement.js';
@@ -22,6 +24,7 @@ import {
   setupCoopHud, setCoopMode,
   coopLeave, coopToggleMute, isCoopMuted, isCoopJoined,
   onPendingRequests, approveJoinRequest, denyJoinRequest, getOwnCode,
+  reloadKeepCode, reloadNewCode,
 } from './net/coop-hud.js';
 import { setupPeerAvatars } from './net/peer-avatars.js';
 import { setupPosePublisher } from './net/pose-publisher.js';
@@ -30,7 +33,7 @@ import { setupMockDevPanel } from './net/mock-dev-panel.js';
 import { setupCompetition, updateCompetition, canCompete, proposeCompetition, isMatchActive } from './net/competition.js';
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
-import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
+import { setupSkinHud, setSwitchOverlay, refreshSkinHud, skinToast } from './skins/skin-hud.js';
 import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
          setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
 import { onCarnivorousReady, setupSnapperTarget, updateSnapper } from './skins/carnivorous-glb.js';
@@ -120,8 +123,11 @@ const vrMenu = setupVrMenu(scene, renderer, {
   canSwitchSkin:   () => (skinNet ? skinNet.canSwitch() : { ok: false, reason: 'not ready' }),
   requestSkin:     (id) => (skinNet ? skinNet.requestSwitch(id)
                                     : { ok: false, reason: 'not ready' }),
+  preloadSkins:    () => listSkins().forEach((s) => { try { s.preload?.(); } catch (e) { console.warn('[skins] preload', e); } }),
   isRapidFire, getRemainingSeconds,              // upgrade.js
   getAvailableCharges, activateCharge,           // hud.js — the ACTIVATE half of the pay flow
+  rapidFireWhoCopy, payPageUrl,                  // hud.js — the chooser's copy + pay.html address
+  getPayCode: getSessionCode,                    // lightning.js — the code pay.html must be given
 
   // ── co-op ─────────────────────────────────────────────────────────────────
   coopToggleMute,                                // coop-hud.js  — DOM MUTE button
@@ -131,6 +137,7 @@ const vrMenu = setupVrMenu(scene, renderer, {
   onPendingRequests,                             // coop-hud.js  — knock polling mirror
   approveJoinRequest,                            // coop-hud.js  — DOM ✓ on a knock card
   denyJoinRequest,                               // coop-hud.js  — DOM ✗ on a knock card
+  reloadKeepCode, reloadNewCode,                 // coop-hud.js  — RELOAD / NEW CODE (fix D)
 
   // ── exit ──────────────────────────────────────────────────────────────────
   coopLeave,                                     // coop-hud.js  — DOM LEAVE button
@@ -225,6 +232,9 @@ setupCompetition();
 skinNet = setupSkinNet({
   skins,
   onPauseChange: (on, name) => setSwitchOverlay(on, name),
+  // DOM toast for the flat page, in-world toast for the headset (the DOM one is
+  // not rendered while presenting).
+  onToast: (msg) => { skinToast(msg); vrMenu.toast(msg); },
 });
 setupSkinHud({ skins, net: skinNet });
 _exposeSkinDev(skins, skinNet);

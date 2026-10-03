@@ -52,14 +52,19 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
   }
 
   function finish() {
+    if (pending) console.log(`[skins] switch → ${pending.skinId} done in ${Math.round(performance.now() - pending.t0)}ms`);
     clearPending();
     resume();
   }
 
+  // Fix C: armed on EVERY switch, solo included. The solo path used to wait on
+  // whenReady() with no ceiling, so a world load that stalled (as it did inside
+  // a Quest immersive session) left the switch overlay up for good.
   function armTimeout() {
     if (pending?.timer) clearTimeout(pending.timer);
     pending.timer = setTimeout(() => {
-      console.warn('[skins] both-ready timed out — resuming to avoid a stuck pause');
+      console.warn(`[skins] switch → ${pending?.skinId} timed out — resuming to avoid a stuck pause`);
+      onToast?.('World is taking too long — try again');
       finish();
     }, READY_TIMEOUT_MS);
   }
@@ -91,7 +96,8 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
     if (skinId === skins.getActiveSkinId()) return { ok: false, reason: 'Already active' };
 
     const solo = !hasPeer();
-    pending = { skinId, selfReady: false, peerReady: false, role: 'host' };
+    pending = { skinId, selfReady: false, peerReady: false, role: 'host', t0: performance.now() };
+    console.log(`[skins] switch → ${skinId} start (${solo ? 'solo' : 'host'})`);
 
     pause(skinId);
     if (!solo) send('skin-switch', { skinId });
@@ -100,7 +106,11 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
     pending.selfReady = true;
 
     if (solo) {                 // nobody to wait for — but still wait for assets
-      Promise.resolve(getSkin(skinId)?.whenReady?.()).then(() => finish());
+      armTimeout();
+      Promise.resolve(getSkin(skinId)?.whenReady?.()).then(() => {
+        if (!pending || pending.skinId !== skinId) return; // superseded / timed out
+        finish();
+      });
       return { ok: true, leak, solo: true };
     }
 
@@ -132,7 +142,8 @@ export function setupSkinNet({ skins, onPauseChange, onToast }) {
         // Host told us to switch. Trust it (host authority) but validate the id.
         if (!hasSkin(msg.skinId)) return;
         if (pending) clearPending();
-        pending = { skinId: msg.skinId, selfReady: false, peerReady: false, role: 'peer' };
+        pending = { skinId: msg.skinId, selfReady: false, peerReady: false, role: 'peer', t0: performance.now() };
+        console.log(`[skins] switch → ${msg.skinId} start (peer)`);
         pause(msg.skinId);
         skins.applySkinLocal(msg.skinId);
         armTimeout(); // resume anyway if skin-go never arrives
