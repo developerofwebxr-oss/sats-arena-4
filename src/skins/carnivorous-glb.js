@@ -101,11 +101,28 @@ export function getSnapperTarget()     { return _snapperTarget; }
 export function getSnapper()           { return _snapper; }
 export function onCarnivorousReady(cb) { _readyCbs.push(cb); if (isCarnivorousReady()) cb(_state); }
 
+// Fix C: a hard ceiling on the whole load. Whatever stalls (network, decoder,
+// a yield that never comes back), the world resolves — to the panorama — rather
+// than leaving a LOADING row or a switch overlay up forever.
+const LOAD_WATCHDOG_MS = 30000;
+
 /** Idempotent. Starts (or returns) the load. */
 export function loadCarnivorous() {
   if (_promise) return _promise;
   _state.status = 'loading';
-  _promise = _load().then((s) => {
+  console.log('[carn] load start');
+  let watchdog;
+  // Not while validating: the seal check alone takes ~42 s by design (dev/?validate).
+  const timedOut = new Promise((resolve) => {
+    if (CARN_VALIDATE) return;
+    watchdog = setTimeout(() => {
+      console.warn(`[carn] load exceeded ${LOAD_WATCHDOG_MS / 1000}s → panorama fallback`);
+      resolve(buildPanorama({ reason: `load watchdog (${LOAD_WATCHDOG_MS / 1000}s)` }));
+    }, LOAD_WATCHDOG_MS);
+  });
+  _promise = Promise.race([_load(), timedOut]).then((s) => {
+    clearTimeout(watchdog);
+    console.log(`[carn] load done via ${s.source}`);
     _state = s;
     _readyCbs.forEach((cb) => { try { cb(_state); } catch (e) { console.warn('[carn] ready cb', e); } });
     return _state;
@@ -137,6 +154,7 @@ async function _load() {
     loader.setDRACOLoader(draco);
 
     const gltf = await loader.loadAsync(carnGlbUrl);
+    console.log(`[carn] GLB downloaded + decoded in ${Math.round(performance.now() - t0)}ms`);
     const root = gltf.scene;
     root.name = 'SatsArena_Carnivorous_v2';
 

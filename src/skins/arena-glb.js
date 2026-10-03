@@ -258,11 +258,21 @@ export function setArenaRenderContext(ctx) { _gl = ctx; }
  * the arena ready. When hidden we fall back to a macrotask, which still yields
  * (nothing is being rendered to stall) and lets the work finish.
  */
+// Pre-present fix C: the SAME suspension happens inside an immersive WebXR
+// session — Quest Browser stops firing window.requestAnimationFrame while the
+// headset is presenting (only the XR session's own rAF runs), and the document
+// is NOT hidden, so the check above never caught it. A load that ran in VR hung
+// here forever: the world never became ready and its row sat on LOADING. The
+// frame is now RACED against a timer, so a yield can be late but never lost.
 function yieldFrame() {
-  if (typeof requestAnimationFrame === 'function' && typeof document !== 'undefined' && !document.hidden) {
-    return new Promise((r) => requestAnimationFrame(() => r()));
-  }
-  return new Promise((r) => setTimeout(r, 0));
+  return new Promise((resolve) => {
+    let done = false;
+    const go = () => { if (!done) { done = true; resolve(); } };
+    if (typeof requestAnimationFrame === 'function' && typeof document !== 'undefined' && !document.hidden) {
+      requestAnimationFrame(go);
+    }
+    setTimeout(go, 32);
+  });
 }
 
 /** Shared with other GLB skins: same compileAsync + one-texture-per-frame warm. */

@@ -410,6 +410,10 @@ export function setupVrMenu(scene, renderer, deps) {
 
   function openMenu() {
     if (!renderer.xr.isPresenting) return; // headset VR/AR only
+    // Fix C: the flat WORLD picker starts every world's download when it opens;
+    // the headset had no equivalent, so a world never touched on the flat page
+    // was never downloaded at all. Opening the menu is the in-world signal.
+    deps.preloadSkins?.();
     placePanel();
     open = true;
     view = 'root';        // always open at the top level
@@ -974,7 +978,7 @@ export function setupVrMenu(scene, renderer, deps) {
     };
   }
 
-  return { updateVrMenu, handleControllerSelect, toggleMenu, isMenuOpen: () => open };
+  return { updateVrMenu, handleControllerSelect, toggleMenu, isMenuOpen: () => open, toast };
 }
 
 // ── Canvas helpers ───────────────────────────────────────────────────────────

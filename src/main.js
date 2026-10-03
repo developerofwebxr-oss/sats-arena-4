@@ -32,7 +32,7 @@ import { setupMockDevPanel } from './net/mock-dev-panel.js';
 import { setupCompetition, updateCompetition, canCompete, proposeCompetition, isMatchActive } from './net/competition.js';
 import { setupSkins } from './skins/skin-manager.js';
 import { setupSkinNet } from './skins/skin-net.js';
-import { setupSkinHud, setSwitchOverlay, refreshSkinHud } from './skins/skin-hud.js';
+import { setupSkinHud, setSwitchOverlay, refreshSkinHud, skinToast } from './skins/skin-hud.js';
 import { loadArena, onArenaReady, getArenaState, setArenaRenderContext,
          setupSatoshiTarget, getSatoshiTarget, getDoorArrow } from './skins/arena-glb.js';
 import { onCarnivorousReady, setupSnapperTarget, updateSnapper } from './skins/carnivorous-glb.js';
@@ -122,6 +122,7 @@ const vrMenu = setupVrMenu(scene, renderer, {
   canSwitchSkin:   () => (skinNet ? skinNet.canSwitch() : { ok: false, reason: 'not ready' }),
   requestSkin:     (id) => (skinNet ? skinNet.requestSwitch(id)
                                     : { ok: false, reason: 'not ready' }),
+  preloadSkins:    () => listSkins().forEach((s) => { try { s.preload?.(); } catch (e) { console.warn('[skins] preload', e); } }),
   isRapidFire, getRemainingSeconds,              // upgrade.js
   getAvailableCharges, activateCharge,           // hud.js — the ACTIVATE half of the pay flow
   rapidFireWhoCopy, payPageUrl,                  // hud.js — the chooser's copy + pay.html address
@@ -229,6 +230,9 @@ setupCompetition();
 skinNet = setupSkinNet({
   skins,
   onPauseChange: (on, name) => setSwitchOverlay(on, name),
+  // DOM toast for the flat page, in-world toast for the headset (the DOM one is
+  // not rendered while presenting).
+  onToast: (msg) => { skinToast(msg); vrMenu.toast(msg); },
 });
 setupSkinHud({ skins, net: skinNet });
 _exposeSkinDev(skins, skinNet);
