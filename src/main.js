@@ -4,7 +4,7 @@ import { watchForNewBuild } from './build-freshness.js';
 import { setupXR, recenterXRView, canRecenterXR } from './xr.js';
 import { spawnTargets, updateTargets } from './targets.js';
 import { createHUD, updateRapidFireHUD, getAvailableCharges, activateCharge,
-         rapidFireWhoCopy, payPageUrl } from './hud.js';
+         rapidFireWhoCopy } from './hud.js';
 import { getSessionCode } from './lightning.js';
 import { setupInput } from './input.js';
 import { setupShooter, setDoorTargetHitTest } from './shoot.js';
@@ -126,7 +126,7 @@ const vrMenu = setupVrMenu(scene, renderer, {
   preloadSkins:    () => listSkins().forEach((s) => { try { s.preload?.(); } catch (e) { console.warn('[skins] preload', e); } }),
   isRapidFire, getRemainingSeconds,              // upgrade.js
   getAvailableCharges, activateCharge,           // hud.js — the ACTIVATE half of the pay flow
-  rapidFireWhoCopy, payPageUrl,                  // hud.js — the chooser's copy + pay.html address
+  rapidFireWhoCopy,                              // hud.js — the chooser's "upgrades you / both" copy
   getPayCode: getSessionCode,                    // lightning.js — the code pay.html must be given
 
   // ── co-op ─────────────────────────────────────────────────────────────────

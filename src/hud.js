@@ -2,7 +2,7 @@
 // is import()ed at the call site rather than parsed on every page load.
 import { playReloadSound } from './audio.js';
 import { grantRapidFire, isRapidFire, getRemainingSeconds } from './upgrade.js';
-import { isLightningEnabled, getSessionCode, getPaidCount, isPaidCountKnown, createInvoice } from './lightning.js';
+import { isLightningEnabled, getSessionCode, getPaidCount, isPaidCountKnown, createInvoice, getBackendUrl } from './lightning.js';
 import { getScore } from './score.js';
 import { getParticipantCount } from './net/room.js';
 import { Z_MODAL } from './panel-layout.js';
@@ -48,9 +48,9 @@ let purchasing = false; // guard against double-taps
 
 let chooser;          // fix A: "pay here / pay from another device" panel
 let chooserWho;       // "upgrades you · 60 s" | "upgrades both players · 60 s"
-let chooserRemote;    // the other-device instructions, revealed on demand
-let chooserCode;
-let chooserUrl;
+let chooserInput;     // PAY FOR ANOTHER DEVICE: the other device's session code
+let chooserStatus;    // inline result line under it (not found, busy, …)
+let otherPaying = false; // guard: one other-device invoice request at a time
 
 function setUpgradeLoading(loading) {
   purchasing = loading;
@@ -164,20 +164,15 @@ function injectStyles() {
     .pm-qr-img { width: min(70vw, 45vh, 360px); height: min(70vw, 45vh, 360px); display: block; }
 
     /* Short landscape (a phone on its side): a single stack cannot fit 390px,
-       so the QR / the code instructions take a left column and the buttons
-       stack in the right one — CANCEL stays on screen without scrolling. */
+       so the QR takes a left column and the buttons stack in the right one —
+       CANCEL stays on screen without scrolling. */
     @media (orientation: landscape) and (max-height: 500px) {
       #pay-modal .pm-scroll {
         display: grid; grid-template-columns: auto minmax(0, 1fr);
         column-gap: 20px; row-gap: 8px; align-items: center; justify-items: center;
       }
       #pay-modal .pm-qr { grid-column: 1; grid-row: 1 / span 6; }
-      #pay-chooser.expanded .pm-scroll {
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-        column-gap: 20px; row-gap: 8px; align-items: center; justify-items: center;
-      }
-      #pay-chooser.expanded #pay-remote-info { grid-column: 2; grid-row: 1 / span 4; }
-      #pay-chooser.expanded .pm-cancel      { grid-column: 2; grid-row: 5; }
+      #pay-chooser .pm-scroll { padding-top: 8px; padding-bottom: 8px; }  /* fits 390px without scrolling */
     }
 
     /* Pay chooser (fix A): hover lifts the fill, keyboard focus gets a ring. */
@@ -437,11 +432,6 @@ export function rapidFireWhoCopy() {
   return getParticipantCount() >= 2 ? 'upgrades both players · 60 s' : 'upgrades you · 60 s';
 }
 
-/** The pay page for this build, e.g. https://…/sats-arena-4/pay.html */
-export function payPageUrl() {
-  return new URL(`${import.meta.env.BASE_URL}pay.html`, location.origin).href;
-}
-
 /**
  * The shared modal shell: full-viewport backdrop → box → scrolling content,
  * plus an always-reachable × in the box's top-right corner. A tap on the
@@ -519,38 +509,64 @@ function buildChooser() {
   orLine.textContent = '— or —';
   orLine.style.cssText = 'font-size: 12px; opacity: 0.5; letter-spacing: 0.2em;';
 
-  const remoteBtn = document.createElement('button');
-  remoteBtn.id = 'pay-remote';
-  remoteBtn.type = 'button';
-  remoteBtn.innerHTML = twoLine('PAY FROM ANOTHER DEVICE', 'phone · for headsets');
-  remoteBtn.style.cssText = btnCss('var(--ui-primary-bright)');
-  remoteBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    chooserRemote.style.display = 'flex';
-    remoteBtn.setAttribute('aria-expanded', 'true');
-    chooser.classList.add('expanded');
-  });
-  remoteBtn.setAttribute('aria-controls', 'pay-remote-info');
+  // ── PAY FOR ANOTHER DEVICE (SA2's flow) ──────────────────────────────────
+  // THIS device is the payer; the code typed is the OTHER device's (typically a
+  // headset, which cannot scan a QR). The invoice is for that session, so the
+  // payment upgrades that device — never this one: this device only ever polls
+  // its own session's counter.
+  const otherHead = document.createElement('div');
+  otherHead.textContent = 'PAY FOR ANOTHER DEVICE';
+  otherHead.style.cssText = 'font-size: 17px; letter-spacing: 0.1em; color: var(--ui-primary-bright); text-shadow: 0 0 8px var(--ui-primary-bright);';
 
-  // The instructions. Written with textContent: the code comes off the network.
-  chooserRemote = document.createElement('div');
-  chooserRemote.id = 'pay-remote-info';
-  chooserRemote.setAttribute('aria-live', 'polite');
-  chooserRemote.style.cssText = `
-    display: none; flex-direction: column; align-items: center; gap: 6px;
-    font-size: 13px; letter-spacing: 0.08em; color: var(--ui-primary-bright); line-height: 1.5;
+  const otherHelp = document.createElement('label');
+  otherHelp.htmlFor = 'pay-other-code';
+  otherHelp.textContent = 'enter the session code shown on the headset / other device';
+  otherHelp.style.cssText = 'font-size: 12px; letter-spacing: 0.06em; line-height: 1.4; color: var(--ui-primary-bright); opacity: 0.85; max-width: 300px;';
+
+  const otherRow = document.createElement('div');
+  otherRow.style.cssText = 'display: flex; gap: 8px; width: min(340px, 100%);';
+
+  // Same field behaviour as the co-op code input: text (not numeric),
+  // capitalised as you type, no autocorrect.
+  chooserInput = document.createElement('input');
+  chooserInput.id = 'pay-other-code';
+  chooserInput.type = 'text';
+  chooserInput.inputMode = 'text';
+  chooserInput.maxLength = 4;
+  chooserInput.autocomplete = 'off';
+  chooserInput.spellcheck = false;
+  chooserInput.translate = false;
+  chooserInput.setAttribute('autocapitalize', 'characters');
+  chooserInput.placeholder = 'CODE';
+  chooserInput.style.cssText = `
+    flex: 1; min-width: 0; padding: 10px; border-radius: 0;
+    font: 700 22px monospace; letter-spacing: 0.3em; text-align: center; text-transform: uppercase;
+    background: var(--ui-panel-chip); color: var(--ui-glow); border: 1px solid var(--ui-primary-line);
   `;
-  const l1 = document.createElement('div'); l1.textContent = 'on your phone, open';
-  chooserUrl = document.createElement('div');
-  chooserUrl.translate = false;
-  chooserUrl.style.cssText = 'font-weight: 700; word-break: break-all; max-width: 90vw; user-select: all;';
-  const l2 = document.createElement('div'); l2.textContent = 'and enter';
-  chooserCode = document.createElement('div');
-  chooserCode.translate = false;
-  chooserCode.style.cssText = 'font-size: 32px; font-weight: 700; letter-spacing: 0.3em; margin-right: -0.3em; color: var(--ui-glow); text-shadow: 0 0 10px var(--ui-glow);';
-  const l3 = document.createElement('div'); l3.textContent = 'rapid fire starts here once it is paid';
-  l3.style.opacity = '0.7';
-  chooserRemote.append(l1, chooserUrl, l2, chooserCode, l3);
+  chooserInput.addEventListener('input', () => {
+    const pos = chooserInput.selectionStart;
+    chooserInput.value = chooserInput.value.toUpperCase();
+    chooserInput.setSelectionRange(pos, pos);
+    chooserStatus.textContent = '';
+  });
+  chooserInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') payForOtherDevice(); });
+
+  const otherPay = document.createElement('button');
+  otherPay.id = 'pay-other';
+  otherPay.type = 'button';
+  otherPay.textContent = 'PAY';
+  otherPay.style.cssText = `
+    padding: 10px 22px; border-radius: 0; cursor: pointer; font: 700 15px monospace; letter-spacing: 0.12em;
+    background: transparent; color: var(--ui-primary-bright); border: 1px solid var(--ui-primary-bright);
+    text-shadow: 0 0 8px var(--ui-primary-bright);
+  `;
+  otherPay.addEventListener('click', (e) => { e.stopPropagation(); payForOtherDevice(); });
+  otherRow.append(chooserInput, otherPay);
+
+  chooserStatus = document.createElement('div');
+  chooserStatus.id = 'pay-other-status';
+  chooserStatus.setAttribute('aria-live', 'polite');
+  chooserStatus.style.cssText = 'font-size: 12px; min-height: 16px; letter-spacing: 0.06em; color: var(--ui-danger);';
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
@@ -563,20 +579,50 @@ function buildChooser() {
   `;
   cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeChooser(); cancelBtn.blur(); });
 
-  shell.scroll.append(title, chooserWho, hereBtn, orLine, remoteBtn, chooserRemote, cancelBtn);
+  shell.scroll.append(title, chooserWho, hereBtn, orLine, otherHead, otherHelp, otherRow, chooserStatus, cancelBtn);
   document.body.appendChild(chooser);
 }
 
 function openChooser() {
   if (purchasing || isRapidFire()) return;
   chooserWho.textContent = rapidFireWhoCopy();
-  chooserCode.textContent = getSessionCode() || '…';
-  chooserUrl.textContent = payPageUrl().replace(/^https?:\/\//, '');
-  chooserRemote.style.display = 'none';
-  chooser.classList.remove('expanded');
-  chooser.querySelector('#pay-remote').setAttribute('aria-expanded', 'false');
+  chooserInput.value = '';
+  chooserStatus.textContent = '';
   chooser.style.display = 'flex';
   chooser.querySelector('#pay-here').focus({ preventScroll: true });
+}
+
+// Create an invoice for ANOTHER device's session — the same POST pay.html
+// makes — and show it in the standard pay modal under that session's code.
+// The backend 404s an unknown/expired code, so no invoice is ever made for one.
+async function payForOtherDevice() {
+  if (otherPaying) return;
+  const code = chooserInput.value.trim().toUpperCase();
+  const say = (msg) => { chooserStatus.textContent = msg; };
+  if (!/^[A-Z0-9]{4}$/.test(code)) return say('enter the 4-character code');
+  if (code === getSessionCode()) return say("that's this device's code — use PAY HERE");
+
+  otherPaying = true;
+  chooserStatus.style.color = 'var(--ui-glow)';
+  say('creating invoice…');
+  try {
+    const res = await fetch(`${getBackendUrl()}/session/${code}/invoice`, { method: 'POST' });
+    chooserStatus.style.color = 'var(--ui-danger)';
+    if (res.status === 404) return say('session not found or expired — check the code');
+    if (res.status === 429) return say('too many tries — wait a minute and try again');
+    const inv = res.ok ? await res.json() : null;
+    if (!inv?.payment_request) return say('could not reach payment server — try again');
+    closeChooser();
+    await showPaymentModal(inv.payment_request, code);
+    // This device does not poll that session (it has no token for it); the
+    // other device does, and turns rapid-fire on there when this is paid.
+    payModalStatus.textContent = `pay in your wallet — rapid fire starts on ${code} once paid`;
+  } catch {
+    chooserStatus.style.color = 'var(--ui-danger)';
+    say('could not reach payment server — try again');
+  } finally {
+    otherPaying = false;
+  }
 }
 
 function closeChooser() {
