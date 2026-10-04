@@ -67,6 +67,16 @@ const SIDE_MARGIN = 12;  // ...or the right edge
 const Z_BASE     = 9000; // panels; the newest sits one above the older
 const Z_BUTTON   = 9100; // buttons ride above every panel as a safety net
 
+/**
+ * The modal layer — the pay chooser and the invoice modal. It sits above the
+ * WHOLE HUD (panels 9000+, the grid/buttons 9100, gyro 9050, tooltips 9600,
+ * competition 9400-9700, the world overlay/toast 9800-9900), so nothing from
+ * the HUD can paint over it or take a tap while it is open; its backdrop
+ * covers the viewport. Below only the boot splash (10000). It was 300 — under
+ * the grid — which is what left CANCEL behind WORLD/GYRO on a phone.
+ */
+export const Z_MODAL = 9950;
+
 /** @type {Array<{id:string, panel:HTMLElement, button:HTMLElement, seq:number}>} */
 const panels = [];
 
