@@ -229,8 +229,9 @@ export function setupVrMenu(scene, renderer, deps) {
     } else if (charges > 0) {
       out.push({ kind: 'item', id: 'rapid', label: 'RAPID FIRE', meta: `${charges} READY`, tone: 'glow' });
     } else {
+      const payCode = deps.getPayCode ? deps.getPayCode() : null;
       out.push({ kind: 'submenu', id: 'rapid-pay', label: 'RAPID FIRE', meta: '21 SATS', tone: 'glow',
-                 reason: deps.rapidFireWhoCopy ? deps.rapidFireWhoCopy() : null });
+                 reason: payCode ? `pay from your phone with code ${payCode}` : 'pay from your phone' });
     }
 
     // 3 ── CO-OP
@@ -301,14 +302,13 @@ export function setupVrMenu(scene, renderer, deps) {
     return out;
   }
 
-  // The in-world pay chooser (fix A). The same two choices as the DOM one, but
-  // "pay here" is honest about the headset: a QR on this panel cannot be scanned
-  // by anyone, so the other-device route is spelled out right here instead.
+  // The in-world pay chooser. A QR on this panel cannot be scanned by anyone,
+  // so the headset's half of the flow is the CODE: the player opens Rapid Fire
+  // on their phone, picks "Pay for another device" and types this code there.
   function buildRapidModel() {
     // Paid while reading this? The purchase is done — back to the top level.
     if (deps.isRapidFire && deps.isRapidFire()) { view = 'root'; return buildModel(); }
     const code = deps.getPayCode ? deps.getPayCode() : null;
-    const url  = deps.payPageUrl ? deps.payPageUrl().replace(/^https?:\/\//, '') : 'pay.html';
     return [
       { kind: 'header', code: deps.getOwnCode ? deps.getOwnCode() : null,
         status: statusLine(deps.isCoopJoined(), deps.getParticipantCount?.() || 0,
@@ -316,8 +316,8 @@ export function setupVrMenu(scene, renderer, deps) {
       { kind: 'section', label: 'RAPID FIRE · 21 SATS' },
       { kind: 'note', id: 'who', tone: 'accent',
         lines: [(deps.rapidFireWhoCopy ? deps.rapidFireWhoCopy() : '').toUpperCase()] },
-      { kind: 'note', id: 'pay-remote', tone: 'primary', title: 'PAY FROM ANOTHER DEVICE',
-        lines: ['on your phone, open', url, `and enter  ${code || '…'}`] },
+      { kind: 'note', id: 'pay-remote', tone: 'primary', title: 'ON YOUR PHONE',
+        lines: ['Rapid Fire → Pay for another device', '→ enter this code:'], big: code || '…' },
       { kind: 'item', id: 'pay-here', label: 'PAY HERE', tone: 'glow', state: 'unavailable',
         reason: "a QR can't be scanned inside a headset" },
       { kind: 'rule' },
@@ -362,7 +362,7 @@ export function setupVrMenu(scene, renderer, deps) {
         case 'section': h = LABEL_H + SECTION_GAP; break;
         case 'rule':    h = 20; break;
         case 'request': h = 84; break;
-        case 'note':    h = 16 + (e.title ? 34 : 0) + e.lines.length * 30; break;
+        case 'note':    h = 16 + (e.title ? 34 : 0) + e.lines.length * 30 + (e.big ? 76 : 0); break;
         default:        h = e.reason ? ROW_REASON : ROW_H; break;
       }
       laid.push({ ...e, y, h });
@@ -928,6 +928,14 @@ export function setupVrMenu(scene, renderer, deps) {
       ctx.fillStyle = hexA(colour, 0.9);
       ctx.fillText(line, PAD + 22, y + 15);
       y += 30;
+    }
+    if (r.big) {                      // the code to type, as big as the header's
+      ctx.font = `bold ${F_CODE}px monospace`;
+      ctx.fillStyle = T.glow;
+      ctx.textAlign = 'center';
+      ctx.shadowColor = T.glow; ctx.shadowBlur = 18;
+      ctx.fillText(spaced(r.big), CANVAS_W / 2, y + 36);
+      ctx.shadowBlur = 0;
     }
   }
 
