@@ -5,6 +5,7 @@ import { grantRapidFire, isRapidFire, getRemainingSeconds } from './upgrade.js';
 import { isLightningEnabled, getSessionCode, getPaidCount, isPaidCountKnown, createInvoice } from './lightning.js';
 import { getScore } from './score.js';
 import { getParticipantCount } from './net/room.js';
+import { Z_MODAL } from './panel-layout.js';
 
 /**
  * hud.js — all DOM overlays.
@@ -124,6 +125,60 @@ function injectStyles() {
     .hud-value { font-weight: 700; }
 
     #upgrade-btn { animation: lightning-pulse 1.4s ease-in-out infinite; }
+
+    /* ── Modal shell: pay chooser + invoice modal ─────────────────────────────
+       The backdrop is the whole viewport and sits at Z_MODAL (above every HUD
+       element), so the HUD can neither show through nor be tapped. The box is
+       sized to the viewport minus 12px + the safe area on every side, and its
+       content scrolls INSIDE it rather than off the screen edge. */
+    .pm-backdrop {
+      display: none; position: fixed; inset: 0; z-index: ${Z_MODAL};
+      background: var(--ui-panel-solid);   /* 0.95: the HUD does not show through */
+      align-items: center; justify-content: center;
+      padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+               max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      font-family: monospace; color: var(--ui-glow); text-align: center;
+      touch-action: manipulation;
+    }
+    .pm-box {
+      position: relative; display: flex; flex-direction: column;
+      max-width: 100%;
+      max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+      background: var(--ui-panel-solid); border: 1px solid var(--ui-glow-soft);
+      border-radius: 0;
+    }
+    .pm-scroll {
+      overflow-y: auto; overscroll-behavior: contain; min-height: 0;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 14px 48px 16px;
+    }
+    .pm-close {
+      position: absolute; top: 0; right: 0; z-index: 1;
+      width: 44px; height: 44px; padding: 0; border: 0; border-radius: 0;
+      background: transparent; color: var(--ui-glow);
+      font: 400 26px/44px monospace; cursor: pointer;
+      text-shadow: 0 0 8px var(--ui-glow);
+    }
+    .pm-close:hover { background: var(--ui-glow-soft); }
+    .pm-close:focus-visible { outline: 2px solid var(--ui-primary-bright); outline-offset: -2px; }
+    .pm-qr-img { width: min(70vw, 45vh, 360px); height: min(70vw, 45vh, 360px); display: block; }
+
+    /* Short landscape (a phone on its side): a single stack cannot fit 390px,
+       so the QR / the code instructions take a left column and the buttons
+       stack in the right one — CANCEL stays on screen without scrolling. */
+    @media (orientation: landscape) and (max-height: 500px) {
+      #pay-modal .pm-scroll {
+        display: grid; grid-template-columns: auto minmax(0, 1fr);
+        column-gap: 20px; row-gap: 8px; align-items: center; justify-items: center;
+      }
+      #pay-modal .pm-qr { grid-column: 1; grid-row: 1 / span 6; }
+      #pay-chooser.expanded .pm-scroll {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        column-gap: 20px; row-gap: 8px; align-items: center; justify-items: center;
+      }
+      #pay-chooser.expanded #pay-remote-info { grid-column: 2; grid-row: 1 / span 4; }
+      #pay-chooser.expanded .pm-cancel      { grid-column: 2; grid-row: 5; }
+    }
 
     /* Pay chooser (fix A): hover lifts the fill, keyboard focus gets a ring. */
     #pay-chooser button:hover { background: var(--ui-glow-soft) !important; }
@@ -387,20 +442,52 @@ export function payPageUrl() {
   return new URL(`${import.meta.env.BASE_URL}pay.html`, location.origin).href;
 }
 
+/**
+ * The shared modal shell: full-viewport backdrop → box → scrolling content,
+ * plus an always-reachable × in the box's top-right corner. A tap on the
+ * backdrop itself (not the box) closes, as does × — both exactly like CANCEL.
+ * Escape is handled once, at document level, below.
+ */
+function buildModalShell(id, label, onClose) {
+  const backdrop = document.createElement('div');
+  backdrop.id = id;
+  backdrop.className = 'pm-backdrop';
+  backdrop.setAttribute('role', 'dialog');
+  backdrop.setAttribute('aria-label', label);
+  backdrop.setAttribute('aria-modal', 'true');
+  backdrop.addEventListener('click', (e) => {
+    e.stopPropagation();                 // never reaches the game / panels' closers
+    if (e.target === backdrop) onClose();
+  });
+
+  const box = document.createElement('div');
+  box.className = 'pm-box';
+
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'pm-close';
+  close.textContent = '×';
+  close.setAttribute('aria-label', 'Close');
+  close.addEventListener('click', (e) => { e.stopPropagation(); onClose(); close.blur(); });
+
+  const scroll = document.createElement('div');
+  scroll.className = 'pm-scroll';
+
+  box.append(close, scroll);
+  backdrop.appendChild(box);
+  return { backdrop, scroll };
+}
+
+// Escape closes whichever modal is open (focus may be anywhere on the page).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  if (payModal?.style.display === 'flex') closePaymentModal();
+  if (chooser?.style.display === 'flex') closeChooser();
+});
+
 function buildChooser() {
-  chooser = document.createElement('div');
-  chooser.id = 'pay-chooser';
-  chooser.setAttribute('role', 'dialog');
-  chooser.setAttribute('aria-label', 'Rapid fire');
-  chooser.setAttribute('aria-modal', 'true');
-  chooser.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeChooser(); });
-  chooser.style.cssText = `
-    display: none; position: fixed; inset: 0; z-index: 300;
-    background: var(--ui-panel);
-    flex-direction: column; align-items: center; justify-content: center; gap: 14px;
-    font-family: monospace; color: var(--ui-glow); text-align: center; padding: 24px;
-  `;
-  chooser.addEventListener('click', (e) => e.stopPropagation());
+  const shell = buildModalShell('pay-chooser', 'Rapid fire', () => closeChooser());
+  chooser = shell.backdrop;
 
   const title = document.createElement('div');
   title.textContent = `RAPID FIRE · ${RAPID_FIRE_PRICE} SATS`;
@@ -441,6 +528,7 @@ function buildChooser() {
     e.stopPropagation();
     chooserRemote.style.display = 'flex';
     remoteBtn.setAttribute('aria-expanded', 'true');
+    chooser.classList.add('expanded');
   });
   remoteBtn.setAttribute('aria-controls', 'pay-remote-info');
 
@@ -466,6 +554,7 @@ function buildChooser() {
 
   const cancelBtn = document.createElement('button');
   cancelBtn.type = 'button';
+  cancelBtn.className = 'pm-cancel';
   cancelBtn.textContent = 'CANCEL';
   cancelBtn.style.cssText = `
     margin-top: 4px; padding: 10px 20px; background: transparent;
@@ -474,7 +563,7 @@ function buildChooser() {
   `;
   cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closeChooser(); cancelBtn.blur(); });
 
-  chooser.append(title, chooserWho, hereBtn, orLine, remoteBtn, chooserRemote, cancelBtn);
+  shell.scroll.append(title, chooserWho, hereBtn, orLine, remoteBtn, chooserRemote, cancelBtn);
   document.body.appendChild(chooser);
 }
 
@@ -484,6 +573,7 @@ function openChooser() {
   chooserCode.textContent = getSessionCode() || '…';
   chooserUrl.textContent = payPageUrl().replace(/^https?:\/\//, '');
   chooserRemote.style.display = 'none';
+  chooser.classList.remove('expanded');
   chooser.querySelector('#pay-remote').setAttribute('aria-expanded', 'false');
   chooser.style.display = 'flex';
   chooser.querySelector('#pay-here').focus({ preventScroll: true });
@@ -496,23 +586,8 @@ function closeChooser() {
 // ── Payment modal (QR) ──────────────────────────────────────────────────────
 // Shown when paying with real Lightning: QR + copyable invoice + waiting state.
 function buildPaymentModal() {
-  payModal = document.createElement('div');
-  payModal.id = 'pay-modal';
-  payModal.style.cssText = `
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: var(--ui-panel);
-    z-index: 300;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 14px;
-    font-family: monospace;
-    color: var(--ui-glow);
-    text-align: center;
-    padding: 24px;
-  `;
+  const shell = buildModalShell('pay-modal', 'Pay 21 sats', () => closePaymentModal());
+  payModal = shell.backdrop;
 
   const title = document.createElement('div');
   title.textContent = 'PAY 21 SATS';
@@ -523,6 +598,7 @@ function buildPaymentModal() {
 
   // White card behind the QR so it scans reliably.
   const qrCard = document.createElement('div');
+  qrCard.className = 'pm-qr';
   // NOT THEMED, on purpose: a Lightning QR needs a white quiet zone to scan
   // reliably. Tinting it to match a skin would trade money for decoration.
   qrCard.style.cssText = 'background:#fff; padding:12px; border-radius:6px; line-height:0;';
@@ -530,6 +606,7 @@ function buildPaymentModal() {
   payModalQr.width = 240;
   payModalQr.height = 240;
   payModalQr.alt = 'Lightning invoice QR';
+  payModalQr.className = 'pm-qr-img';   // min(70vw, 45vh, 360px): shrinks in landscape
   qrCard.appendChild(payModalQr);
 
   // Open in Wallet — a lightning: link so a phone opens its wallet directly
@@ -575,7 +652,8 @@ function buildPaymentModal() {
   `;
   cancelBtn.addEventListener('click', (e) => { e.stopPropagation(); closePaymentModal(); cancelBtn.blur(); });
 
-  payModal.append(title, payModalCode, qrCard, payModalOpenLink, payModalCopyBtn, payModalStatus, cancelBtn);
+  cancelBtn.className = 'pm-cancel';
+  shell.scroll.append(title, payModalCode, qrCard, payModalOpenLink, payModalCopyBtn, payModalStatus, cancelBtn);
   document.body.appendChild(payModal);
 }
 
@@ -592,7 +670,7 @@ async function showPaymentModal(invoice, code = getSessionCode()) {
   try {
     // Uppercase the bech32 invoice for QR alphanumeric mode → less dense, easier scan.
     const { default: QRCode } = await import('qrcode');
-    payModalQr.src = await QRCode.toDataURL(invoice.toUpperCase(), { margin: 1, width: 240 });
+    payModalQr.src = await QRCode.toDataURL(invoice.toUpperCase(), { margin: 1, width: 360 });
   } catch {
     payModalStatus.textContent = 'could not render QR — use Open in Wallet or Copy';
   }
